@@ -38,14 +38,18 @@
 namespace hnswlib {
 typedef unsigned int tableint;
 typedef unsigned int linklistsizeint;
-typedef std::
-    unordered_set<tableint, std::hash<tableint>, std::equal_to<>, vsag::AllocatorWrapper<tableint>>
-        reverselinklist;
 
 const static float THRESHOLD_ERROR = 1e-6;
 
 class HierarchicalNSW : public AlgorithmInterface<float> {
 private:
+    float max_ = 0;
+    float min_ = 1000000;
+    std::shared_ptr<int8_t[]> data_int8;
+    int sq_num_bits_ = -1;
+
+    std::vector<int64_t> norm_pre_compute;
+
     static const tableint MAX_LABEL_OPERATION_LOCKS = 65536;
     static const unsigned char DELETE_MARK = 0x01;
 
@@ -81,8 +85,8 @@ private:
     int* element_levels_;  // keeps level of each element
 
     bool use_reversed_edges_ = false;
-    reverselinklist** reversed_level0_link_list_{nullptr};
-    std::map<int, reverselinklist>** reversed_link_lists_{nullptr};
+    std::unordered_set<tableint>** reversed_level0_link_list_{nullptr};
+    std::map<int, std::unordered_set<tableint>>** reversed_link_lists_{nullptr};
 
     size_t data_size_{0};
 
@@ -96,7 +100,6 @@ private:
     std::default_random_engine update_probability_generator_;
 
     vsag::Allocator* allocator_;
-    std::shared_ptr<vsag::AllocatorWrapper<tableint>> reverse_link_list_allocator_;
 
     mutable std::atomic<long> metric_distance_computations{0};
     mutable std::atomic<long> metric_hops{0};
@@ -106,6 +109,8 @@ private:
 
     std::mutex deleted_elements_lock;               // lock for deleted_elements
     std::unordered_set<tableint> deleted_elements;  // contains internal ids of deleted elements
+
+    float alpha_;
 
 public:
     HierarchicalNSW(SpaceInterface* s) {
@@ -125,15 +130,19 @@ public:
                     vsag::Allocator* allocator,
                     size_t M = 16,
                     size_t ef_construction = 200,
+                    float alpha = 1.0,
                     bool use_reversed_edges = false,
                     size_t block_size_limit = 128 * 1024 * 1024,
+                    int sq_num_bits = -1,
                     size_t random_seed = 100,
                     bool allow_replace_deleted = false)
         : allocator_(allocator),
           link_list_locks_(max_elements),
           label_op_locks_(MAX_LABEL_OPERATION_LOCKS),
           allow_replace_deleted_(allow_replace_deleted),
-          use_reversed_edges_(use_reversed_edges) {
+          use_reversed_edges_(use_reversed_edges),
+          sq_num_bits_(sq_num_bits),
+          alpha_(alpha) {
         max_elements_ = max_elements;
         num_deleted_ = 0;
         data_size_ = s->get_data_size();
@@ -156,16 +165,18 @@ public:
         label_offset_ = size_links_level0_ + data_size_;
         offsetLevel0_ = 0;
 
-        reverse_link_list_allocator_.reset(new vsag::AllocatorWrapper<tableint>(allocator_));
-
         if (use_reversed_edges_) {
-            reversed_level0_link_list_ =
-                (reverselinklist**)allocator->Allocate(max_elements_ * sizeof(reverselinklist*));
-            memset(reversed_level0_link_list_, 0, max_elements_ * sizeof(reverselinklist*));
-            reversed_link_lists_ = (std::map<int, reverselinklist>**)allocator->Allocate(
-                max_elements_ * sizeof(std::map<int, reverselinklist>*));
-            memset(
-                reversed_link_lists_, 0, max_elements_ * sizeof(std::map<int, reverselinklist>*));
+            reversed_level0_link_list_ = (std::unordered_set<tableint>**)allocator->Allocate(
+                max_elements_ * sizeof(std::unordered_set<tableint>*));
+            memset(reversed_level0_link_list_,
+                   0,
+                   max_elements_ * sizeof(std::unordered_set<tableint>*));
+            reversed_link_lists_ =
+                (std::map<int, std::unordered_set<tableint>>**)allocator->Allocate(
+                    max_elements_ * sizeof(std::map<int, std::unordered_set<tableint>>*));
+            memset(reversed_link_lists_,
+                   0,
+                   max_elements_ * sizeof(std::map<int, std::unordered_set<tableint>>*));
         }
 
         data_level0_memory_ =
@@ -217,6 +228,389 @@ public:
         delete visited_list_pool_;
     }
 
+    double
+    INT8_InnerProduct_impl(const void* pVect1, const void* pVect2, size_t qty) const {
+        int8_t* vec1 = (int8_t*)pVect1;
+        int8_t* vec2 = (int8_t*)pVect2;
+        double res = 0;
+        for (size_t i = 0; i < qty; i++) {
+            res += vec1[i] * vec2[i];
+        }
+        return res;
+    }
+
+    double
+    INT8_InnerProduct512_AVX512_impl(const void* pVect1v,
+                                     const void* pVect2v,
+                                     size_t qty,
+                                     uint8_t* prefetch = nullptr) const {
+        __mmask32 mask = 0xFFFFFFFF;
+        __mmask64 mask64 = 0xFFFFFFFFFFFFFFFF;
+
+        int32_t cTmp[16];
+
+        int8_t* pVect1 = (int8_t*)pVect1v;
+        int8_t* pVect2 = (int8_t*)pVect2v;
+        const int8_t* pEnd1 = pVect1 + qty;
+
+        __m512i sum512 = _mm512_set1_epi32(0);
+
+        while (pVect1 < pEnd1) {
+            // sum512 = _mm512_dpbusd_epi32(sum512, _mm512_load_epi32(pVect1), _mm512_load_epi32(pVect2));
+            __m256i v1 = _mm256_maskz_loadu_epi8(mask, pVect1);
+            __m512i v1_512 = _mm512_cvtepi8_epi16(v1);
+            pVect1 += 32;
+            __m256i v2 = _mm256_maskz_loadu_epi8(mask, pVect2);
+            __m512i v2_512 = _mm512_cvtepi8_epi16(v2);
+            pVect2 += 32;
+            _mm_prefetch(prefetch, _MM_HINT_T0);
+            prefetch += 32;
+            sum512 = _mm512_add_epi32(sum512, _mm512_madd_epi16(v1_512, v2_512));
+        }
+
+        _mm512_mask_storeu_epi32(cTmp, mask64, sum512);
+        double res = 0;
+        for (int i = 0; i < 16; i++) {
+            res += cTmp[i];
+        }
+        return res;
+    }
+
+    double
+    INT8_IP(const void* pVect1v, const void* pVect2v, size_t qty) const {
+#ifdef ENABLE_AVX512
+        return INT8_InnerProduct512_AVX512_impl(pVect1v, pVect2v, qty);
+#else
+        return INT8_InnerProduct_impl(pVect1v, pVect2v, qty);
+#endif
+    }
+
+    double
+    INT8_L2(int64_t* norm1,
+            double norm2,
+            const void* pVect1v,
+            const void* pVect2v,
+            size_t qty,
+            uint8_t* prefetch = nullptr) const {
+        //        norm1 =
+        //            INT8_IP(static_cast<const int8_t*>(pVect1v), static_cast<const int8_t*>(pVect1v), qty);
+        //        norm2 =
+        //            INT8_IP(static_cast<const int8_t*>(pVect2v), static_cast<const int8_t*>(pVect2v), qty);
+
+        //        assert(norm1 == norm1_);
+        //        assert(norm2 == norm2_);
+
+        double innerProduct = INT8_InnerProduct512_AVX512_impl(pVect1v, pVect2v, qty, prefetch);
+
+        double l2Distance = *norm1 + norm2 - 2.0 * innerProduct;
+        return l2Distance;
+    }
+
+    void
+    compute_sq_interval() override {
+        int sample_num = std::min(10000, (int)cur_element_count_);
+        size_t dim = *(size_t*)dist_func_param_;
+        for (int i = 0; i < sample_num; i++) {
+            float* data = (float*)getDataByInternalId(i);
+            for (int d = 0; d < dim; d++) {
+                min_ = std::min(min_, data[d]);
+                max_ = std::max(max_, data[d]);
+            }
+        }
+    }
+
+    void
+    transform_to_int8(const float* data, int8_t* transformed_data) const override {
+        size_t dim = *(size_t*)dist_func_param_;
+
+        float delta;
+        int8_t scaled;
+        for (int d = 0; d < dim; d++) {
+            // TODO: max_ can be adjust to 0.5 to improve recall
+            delta = ((data[d] - min_) / (0.5 - min_));
+            if (delta < 0.0) {
+                delta = 0.0;
+            }
+            if (delta > 0.999) {
+                delta = 0.999;
+            }
+            scaled = delta * 255.0f - 128.0f;
+            transformed_data[d] = scaled;
+        }
+    }
+
+    void
+    transform_base() override {
+        compute_sq_interval();
+        size_t dim = *(size_t*)dist_func_param_;
+        data_int8.reset(new int8_t[cur_element_count_ * (dim + 8)]);
+        // norm_pre_compute.resize(cur_element_count_);
+        for (int i = 0; i < cur_element_count_; i++) {
+            auto* code = get_encoded_data(i, dim + 8);
+            transform_to_int8((float*)getDataByInternalId(i), code);
+            int64_t norm = INT8_IP(code, code, dim);
+            memcpy(code + dim, &norm, 8);
+        }
+    }
+
+    int32_t
+    INT4_L2_precompute(int32_t norm1,
+                       int32_t norm2,
+                       const void* p1_vec,
+                       const void* p2_vec,
+                       int dim) const override {
+        return norm1 + norm2 - 2 * INT4_IP(p1_vec, p2_vec, dim);
+    }
+
+    int32_t
+    INT4_L2(const void* p1_vec, const void* p2_vec, int dim) const override {
+#ifdef ENABLE_AVX512
+        return INT4_L2_avx512_impl(p1_vec, p2_vec, dim);
+#elif defined(__AVX2__)
+        return INT4_L2_avx2_impl(p1_vec, p2_vec, dim);
+#else
+        return INT4_L2_impl(p1_vec, p2_vec, dim);
+#endif
+    }
+
+    inline int32_t
+    reduce_add_i16x16(__m256i x) const {
+        // x: 16 * 16bits
+        auto sumh = _mm_add_epi16(_mm256_extracti128_si256(x, 0),   // 8 * 16bits
+                                  _mm256_extracti128_si256(x, 1));  // 8 * 16bits
+        // sumh: 8 * 16bits
+        auto tmp = _mm256_cvtepi16_epi32(sumh);
+        // tmp:  8 * 32bits
+        auto sumhh = _mm_add_epi32(_mm256_extracti128_si256(tmp, 0),   // 4 * 32bits
+                                   _mm256_extracti128_si256(tmp, 1));  // 4 * 32bits
+        // sumhh: 4 * 32bits
+        auto tmp2 = _mm_hadd_epi32(sumhh, sumhh);
+        // tmp2:  2 * 32bits
+
+        return _mm_extract_epi32(tmp2, 0) + _mm_extract_epi32(tmp2, 1);
+    }
+
+    int32_t
+    INT4_L2_avx2_impl(const void* p1_vec, const void* p2_vec, int dim) const override {
+        int8_t* x = (int8_t*)p1_vec;
+        int8_t* y = (int8_t*)p2_vec;
+        __m256i sum = _mm256_setzero_si256();
+        __m256i mask = _mm256_set1_epi8(0xf);
+        for (int d = 0; d < dim / 2; d += 32) {
+            auto xx = _mm256_loadu_si256((__m256i*)(x + d));
+            auto yy = _mm256_loadu_si256((__m256i*)(y + d));
+            auto xx1 = _mm256_and_si256(xx, mask);                        // 32 * 8bits
+            auto xx2 = _mm256_and_si256(_mm256_srli_epi16(xx, 4), mask);  // 32 * 8bits
+            auto yy1 = _mm256_and_si256(yy, mask);
+            auto yy2 = _mm256_and_si256(_mm256_srli_epi16(yy, 4), mask);
+            auto d1 = _mm256_sub_epi8(xx1, yy1);  // 32 * 8bits
+            auto d2 = _mm256_sub_epi8(xx2, yy2);
+            d1 = _mm256_abs_epi8(d1);  // 32 * 8bits
+            d2 = _mm256_abs_epi8(d2);
+            sum = _mm256_add_epi16(
+                sum, _mm256_maddubs_epi16(d1, d1));  // _mm256_maddubs_epi16(d1, d1): 16 * 16bits
+            sum = _mm256_add_epi16(sum, _mm256_maddubs_epi16(d2, d2));  // sum1: 16 * 16bits
+        }
+        alignas(256) int16_t temp[16];
+        _mm256_store_si256((__m256i*)temp, sum);
+        int32_t result = 0;
+        for (int i = 0; i < 16; ++i) {
+            result += temp[i];
+        }
+        return result;
+    }
+
+    int32_t
+    INT4_L2_avx512_impl(const void* p1_vec, const void* p2_vec, int dim) const override {
+        int d = 0;
+        int8_t* x = (int8_t*)p1_vec;
+        int8_t* y = (int8_t*)p2_vec;
+        __m512i sum = _mm512_setzero_si512();
+        __m512i mask = _mm512_set1_epi8(0xf);
+        for (d = 0; d < dim / 2; d += 64) {
+            auto xx = _mm512_loadu_si512((__m512i*)(x + d));
+            auto yy = _mm512_loadu_si512((__m512i*)(y + d));
+            if (d + 64 >= dim / 2) {
+                __m512i mask_overflow = _mm512_setr_epi32(0xffffffff,
+                                                          0xffffffff,
+                                                          0xffffffff,
+                                                          0xffffffff,
+                                                          0xffffffff,
+                                                          0xffffffff,
+                                                          0xffffffff,
+                                                          0xffffffff,
+                                                          0,
+                                                          0,
+                                                          0,
+                                                          0,
+                                                          0,
+                                                          0,
+                                                          0,
+                                                          0);
+                xx = _mm512_and_si512(xx, mask_overflow);
+                yy = _mm512_and_si512(yy, mask_overflow);
+            }
+            auto xx1 = _mm512_and_si512(xx, mask);                        // 64 * 8bits
+            auto xx2 = _mm512_and_si512(_mm512_srli_epi16(xx, 4), mask);  // 64 * 8bits
+            auto yy1 = _mm512_and_si512(yy, mask);
+            auto yy2 = _mm512_and_si512(_mm512_srli_epi16(yy, 4), mask);
+            auto d1 = _mm512_sub_epi8(xx1, yy1);  // 64 * 8bits
+            auto d2 = _mm512_sub_epi8(xx2, yy2);
+            d1 = _mm512_abs_epi8(d1);  // 64 * 8bits
+            d2 = _mm512_abs_epi8(d2);
+            sum = _mm512_add_epi16(
+                sum, _mm512_maddubs_epi16(d1, d1));  // _mm512_maddubs_epi16(d1, d1): 32 * 16bits
+            sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(d2, d2));  // sum1: 32 * 16bits
+        }
+        alignas(512) int16_t temp[32];
+        _mm512_store_si512((__m512i*)temp, sum);
+        int32_t result = 0;
+        for (int i = 0; i < 32; ++i) {
+            result += temp[i];
+        }
+        return result;
+    }
+
+    int32_t
+    INT4_IP(const void* p1_vec, const void* p2_vec, int dim) const override {
+#ifdef ENABLE_AVX512
+        return INT4_IP_avx512_impl(p1_vec, p2_vec, dim);
+#else
+        return INT4_IP_impl(p1_vec, p2_vec, dim);
+#endif
+    }
+
+    int32_t
+    INT4_IP_avx512_impl(const void* p1_vec, const void* p2_vec, int dim) const override {
+        int d = 0;
+        int8_t* x = (int8_t*)p1_vec;
+        int8_t* y = (int8_t*)p2_vec;
+        __m512i sum = _mm512_setzero_si512();
+        __m512i mask = _mm512_set1_epi8(0xf);
+        for (d = 0; d < dim / 2; d += 64) {
+            auto xx = _mm512_loadu_si512((__m512i*)(x + d));
+            auto yy = _mm512_loadu_si512((__m512i*)(y + d));
+            if (d + 64 >= dim / 2) {
+                __m512i mask_overflow = _mm512_setr_epi32(0xffffffff,
+                                                          0xffffffff,
+                                                          0xffffffff,
+                                                          0xffffffff,
+                                                          0xffffffff,
+                                                          0xffffffff,
+                                                          0xffffffff,
+                                                          0xffffffff,
+                                                          0,
+                                                          0,
+                                                          0,
+                                                          0,
+                                                          0,
+                                                          0,
+                                                          0,
+                                                          0);
+                xx = _mm512_and_si512(xx, mask_overflow);
+                yy = _mm512_and_si512(yy, mask_overflow);
+            }
+            auto xx1 = _mm512_and_si512(xx, mask);                        // 64 * 8bits
+            auto xx2 = _mm512_and_si512(_mm512_srli_epi16(xx, 4), mask);  // 64 * 8bits
+            auto yy1 = _mm512_and_si512(yy, mask);
+            auto yy2 = _mm512_and_si512(_mm512_srli_epi16(yy, 4), mask);
+
+            sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(xx1, yy1));
+            sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(xx2, yy2));
+        }
+        alignas(512) int16_t temp[32];
+        _mm512_store_si512((__m512i*)temp, sum);
+        int32_t result = 0;
+        for (int i = 0; i < 32; ++i) {
+            result += temp[i];
+        }
+        return result;
+    }
+
+    int32_t
+    INT4_IP_impl(const void* p1_vec, const void* p2_vec, int dim) const override {
+        int8_t* x = (int8_t*)p1_vec;
+        int8_t* y = (int8_t*)p2_vec;
+        int32_t sum = 0;
+        for (int d = 0; d < dim / 2; ++d) {
+            {
+                int32_t xx = x[d] & 15;
+                int32_t yy = y[d] & 15;
+                sum += xx * yy;
+            }
+            {
+                int32_t xx = (x[d] >> 4) & 15;
+                int32_t yy = (y[d] >> 4) & 15;
+                sum += xx * yy;
+            }
+        }
+        return sum;
+    }
+
+    int32_t
+    INT4_L2_impl(const void* p1_vec, const void* p2_vec, int dim) const override {
+        int8_t* x = (int8_t*)p1_vec;
+        int8_t* y = (int8_t*)p2_vec;
+        int32_t sum = 0;
+        for (int d = 0; d < dim / 2; ++d) {
+            {
+                int32_t xx = x[d] & 15;
+                int32_t yy = y[d] & 15;
+                sum += (xx - yy) * (xx - yy);
+            }
+            {
+                int32_t xx = (x[d] >> 4) & 15;
+                int32_t yy = (y[d] >> 4) & 15;
+                sum += (xx - yy) * (xx - yy);
+            }
+        }
+        return sum;
+    }
+
+    inline int8_t*
+    get_encoded_data(tableint internal_id, size_t code_size) const override {
+        return data_int8.get() + internal_id * code_size;
+    }
+
+    void
+    transform_to_int4(const float* from, int8_t* to) const override {
+        size_t dim = *(size_t*)dist_func_param_;
+        float delta;
+        uint8_t scaled;
+        for (int d = 0; d < dim; ++d) {
+            delta = ((from[d] - min_) / (0.3 - min_));
+            if (delta < 0.0) {
+                delta = 0.0;
+            }
+            if (delta > 0.999) {
+                delta = 0.999;
+            }
+            scaled = 15 * delta;
+            if (d & 1) {
+                to[d / 2] |= scaled << 4;
+            } else {
+                to[d / 2] = 0;
+                to[d / 2] |= scaled;
+            }
+        }
+    }
+
+    void
+    transform_base_int4() override {
+        compute_sq_interval();
+        size_t dim = *(size_t*)dist_func_param_;
+        size_t code_size = dim / 2;
+
+        data_int8.reset(new int8_t[cur_element_count_ * (code_size + 8)]);
+        // norm_pre_compute.resize(cur_element_count_);
+        for (int i = 0; i < cur_element_count_; ++i) {
+            auto* code = get_encoded_data(i, code_size + 8);
+            transform_to_int4((float*)getDataByInternalId(i), code);
+            int64_t norm = INT4_IP(code, code, dim);
+            memcpy(code + dim, &norm, 8);
+        }
+    }
+
     float
     getDistanceByLabel(labeltype label, const void* data_point) override {
         std::unique_lock<std::mutex> lock_table(label_lookup_lock);
@@ -242,8 +636,8 @@ public:
 
     struct CompareByFirst {
         constexpr bool
-        operator()(std::pair<float, tableint> const& a,
-                   std::pair<float, tableint> const& b) const noexcept {
+        operator()(std::pair<float, tableint> const& a, std::pair<float, tableint> const& b) const
+            noexcept {
             return a.first < b.first;
         }
     };
@@ -279,23 +673,19 @@ public:
         return (labeltype*)(data_level0_memory_->getElementPtr(internal_id, label_offset_));
     }
 
-    inline reverselinklist&
+    inline std::unordered_set<tableint>&
     getEdges(tableint internal_id, int level = 0) {
         if (level != 0) {
             auto& edge_map_ptr = reversed_link_lists_[internal_id];
-            if (edge_map_ptr == nullptr) {
-                edge_map_ptr = new std::map<int, reverselinklist>();
+            if (edge_map_ptr ==
+                nullptr) {  // TODO: Subsequent changes to memory allocation here will use vsag::allocate.
+                edge_map_ptr = new std::map<int, std::unordered_set<tableint>>();
             }
-            auto& edge_map = *edge_map_ptr;
-            if (edge_map.find(level) == edge_map.end()) {
-                edge_map.insert(
-                    std::make_pair(level, reverselinklist(*reverse_link_list_allocator_.get())));
-            }
-            return edge_map.at(level);
+            return (*edge_map_ptr)[level];
         } else {
             auto& edge_ptr = reversed_level0_link_list_[internal_id];
             if (edge_ptr == nullptr) {
-                edge_ptr = new reverselinklist(*reverse_link_list_allocator_.get());
+                edge_ptr = new std::unordered_set<tableint>();
             }
             return *edge_ptr;
         }
@@ -532,10 +922,51 @@ public:
                             CompareByFirst>
             candidate_set;
 
+        double norm2 = 0;
+        std::shared_ptr<int8_t[]> query_int8;
+        const void* transformed_query;
+        size_t dim = *(size_t*)dist_func_param_;
+        size_t code_size = 0;
+
+        if (sq_num_bits_ == 8) {
+            code_size = dim;
+        } else if (sq_num_bits_ == 4) {
+            code_size = dim / 2;
+        }
+        if (sq_num_bits_ == 8) {
+            query_int8.reset(new int8_t[code_size]);
+            transform_to_int8((const float*)data_point, query_int8.get());
+            transformed_query = (const void*)query_int8.get();
+            norm2 = INT8_IP(query_int8.get(), query_int8.get(), dim);
+        }
+        if (sq_num_bits_ == 4) {
+            query_int8.reset(new int8_t[code_size]);
+            transform_to_int4((const float*)data_point, query_int8.get());
+            transformed_query = (const void*)query_int8.get();
+            norm2 = INT4_IP(query_int8.get(), query_int8.get(), dim);
+        }
+
         float lowerBound;
+        float dist;
         if ((!has_deletions || !isMarkedDeleted(ep_id)) &&
             ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(ep_id)))) {
-            float dist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
+            auto* codes = get_encoded_data(ep_id, code_size + 8);
+            if (sq_num_bits_ == 8) {
+                dist = INT8_L2(((int64_t*)(codes + code_size)),
+                               norm2,
+                               (const void*)codes,
+                               transformed_query,
+                               dim);
+            } else if (sq_num_bits_ == 4) {
+                dist = INT4_L2_precompute(*((int64_t*)(codes + code_size)),
+                                          norm2,
+                                          (const void*)codes,
+                                          transformed_query,
+                                          dim);
+            } else {
+                dist = fstdistfunc_(
+                    (const float*)data_point, getDataByInternalId(ep_id), dist_func_param_);
+            }
             lowerBound = dist;
             top_candidates.emplace(dist, ep_id);
             candidate_set.emplace(-dist, ep_id);
@@ -564,36 +995,43 @@ public:
                 metric_distance_computations += size;
             }
 
-            auto vector_data_ptr = data_level0_memory_->getElementPtr((*(data + 1)), offsetData_);
+            auto vector_data_ptr = (const void*)get_encoded_data(*(data + 1), code_size + 8);
 #ifdef USE_SSE
             _mm_prefetch((char*)(visited_array + *(data + 1)), _MM_HINT_T0);
-            _mm_prefetch((char*)(visited_array + *(data + 1) + 64), _MM_HINT_T0);
             _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
-            _mm_prefetch((char*)(data + 2), _MM_HINT_T0);
 #endif
 
             for (size_t j = 1; j <= size; j++) {
                 int candidate_id = *(data + j);
                 size_t pre_l = std::min(j, size - 2);
                 auto vector_data_ptr =
-                    data_level0_memory_->getElementPtr((*(data + pre_l + 1)), offsetData_);
+                    (uint8_t*)get_encoded_data(*(data + pre_l + 1), code_size + 8);
 #ifdef USE_SSE
                 _mm_prefetch((char*)(visited_array + *(data + pre_l + 1)), _MM_HINT_T0);
-                _mm_prefetch(vector_data_ptr, _MM_HINT_T0);  ////////////
+                _mm_prefetch((void*)vector_data_ptr, _MM_HINT_T0);
 #endif
                 if (!(visited_array[candidate_id] == visited_array_tag)) {
                     visited_array[candidate_id] = visited_array_tag;
-
-                    char* currObj1 = (getDataByInternalId(candidate_id));
-                    float dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
-
+                    auto* codes = get_encoded_data(candidate_id, code_size + 8);
+                    if (sq_num_bits_ == 8) {
+                        dist = INT8_L2(((int64_t*)(codes + code_size)),
+                                       norm2,
+                                       (const void*)codes,
+                                       transformed_query,
+                                       dim,
+                                       vector_data_ptr);
+                    } else if (sq_num_bits_ == 4) {
+                        dist = INT4_L2_precompute(*((int64_t*)(codes + code_size)),
+                                                  norm2,
+                                                  (const void*)codes,
+                                                  transformed_query,
+                                                  dim);
+                    } else {
+                        char* currObj1 = (getDataByInternalId(candidate_id));
+                        dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
+                    }
                     if (top_candidates.size() < ef || lowerBound > dist) {
                         candidate_set.emplace(-dist, candidate_id);
-                        auto vector_data_ptr = data_level0_memory_->getElementPtr(
-                            candidate_set.top().second, offsetLevel0_);
-#ifdef USE_SSE
-                        _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
-#endif
 
                         if ((!has_deletions || !isMarkedDeleted(candidate_id)) &&
                             ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id))))
@@ -607,6 +1045,12 @@ public:
                     }
                 }
             }
+
+            vector_data_ptr =
+                (const void*)get_encoded_data(candidate_set.top().second, code_size + 8);
+#ifdef USE_SSE
+            _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
+#endif
         }
 
         visited_list_pool_->releaseVisitedList(vl);
@@ -733,15 +1177,16 @@ public:
             if (return_list.size() >= M)
                 break;
             std::pair<float, tableint> curent_pair = queue_closest.top();
-            float floato_query = -curent_pair.first;
+            float floato_query = -curent_pair.first;  // d(p', p), p -> current node
             queue_closest.pop();
             bool good = true;
 
             for (std::pair<float, tableint> second_pair : return_list) {
-                float curdist = fstdistfunc_(getDataByInternalId(second_pair.second),
-                                             getDataByInternalId(curent_pair.second),
-                                             dist_func_param_);
-                if (curdist < floato_query) {
+                float curdist = fstdistfunc_(
+                    getDataByInternalId(second_pair.second),  // p* -> current neighbors
+                    getDataByInternalId(curent_pair.second),  // p' -> to be inserted
+                    dist_func_param_);
+                if (alpha_ * curdist < floato_query) {  // alpha_ * d(p', p*) < d(p', p)
                     good = false;
                     break;
                 }
@@ -915,8 +1360,10 @@ public:
                 "Not enough memory: resizeIndex failed to allocate base layer");
 
         if (use_reversed_edges_) {
-            auto reversed_level0_link_list_new = (reverselinklist**)allocator_->Reallocate(
-                reversed_level0_link_list_, new_max_elements * sizeof(reverselinklist*));
+            auto reversed_level0_link_list_new =
+                (std::unordered_set<tableint>**)allocator_->Reallocate(
+                    reversed_level0_link_list_,
+                    new_max_elements * sizeof(std::unordered_set<tableint>*));
             if (reversed_level0_link_list_new == nullptr) {
                 throw std::runtime_error(
                     "Not enough memory: resizeIndex failed to allocate reversed_level0_link_list_");
@@ -925,10 +1372,12 @@ public:
 
             memset(reversed_level0_link_list_ + max_elements_,
                    0,
-                   (new_max_elements - max_elements_) * sizeof(reverselinklist*));
+                   (new_max_elements - max_elements_) * sizeof(std::unordered_set<tableint>*));
 
-            auto reversed_link_lists_new = (std::map<int, reverselinklist>**)allocator_->Reallocate(
-                reversed_link_lists_, new_max_elements * sizeof(std::map<int, reverselinklist>*));
+            auto reversed_link_lists_new =
+                (std::map<int, std::unordered_set<tableint>>**)allocator_->Reallocate(
+                    reversed_link_lists_,
+                    new_max_elements * sizeof(std::map<int, std::unordered_set<tableint>>*));
             if (reversed_link_lists_new == nullptr) {
                 throw std::runtime_error(
                     "Not enough memory: resizeIndex failed to allocate reversed_link_lists_");
@@ -936,7 +1385,8 @@ public:
             reversed_link_lists_ = reversed_link_lists_new;
             memset(reversed_link_lists_ + max_elements_,
                    0,
-                   (new_max_elements - max_elements_) * sizeof(std::map<int, reverselinklist>*));
+                   (new_max_elements - max_elements_) *
+                       sizeof(std::map<int, std::unordered_set<tableint>>*));
         }
 
         // Reallocate all other layers
@@ -1048,7 +1498,6 @@ public:
 
         // output.write(data_level0_memory_, cur_element_count_ * size_data_per_element_);
         size += data_level0_memory_->getSize();
-        size += maxM0_ * sizeof(uint32_t) * max_elements_;
         for (size_t i = 0; i < cur_element_count_; i++) {
             unsigned int link_list_size =
                 element_levels_[i] > 0 ? size_links_per_element_ * element_levels_[i] : 0;
@@ -1056,7 +1505,7 @@ public:
             size += sizeof(link_list_size);
             if (link_list_size) {
                 // output.write(link_lists_[i], link_list_size);
-                size += link_list_size * 2;  // record the size of reversed link list
+                size += link_list_size;
             }
         }
         // output.close();

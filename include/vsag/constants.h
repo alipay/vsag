@@ -45,6 +45,7 @@ extern const char* const PARAMETER_DIM;
 extern const char* const PARAMETER_METRIC_TYPE;
 extern const char* const PARAMETER_USE_CONJUGATE_GRAPH;
 extern const char* const PARAMETER_USE_CONJUGATE_GRAPH_SEARCH;
+extern const char* const PARAMETER_ALPHA;
 
 extern const char* const DISKANN_PARAMETER_L;
 extern const char* const DISKANN_PARAMETER_R;
@@ -66,6 +67,7 @@ extern const char* const HNSW_PARAMETER_M;
 extern const char* const HNSW_PARAMETER_CONSTRUCTION;
 extern const char* const HNSW_PARAMETER_USE_STATIC;
 extern const char* const HNSW_PARAMETER_REVERSED_EDGES;
+extern const char* const PARAMETER_USE_EXTRA_PQ_FILE;
 
 // statstic key
 extern const char* const STATSTIC_MEMORY;

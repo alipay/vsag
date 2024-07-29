@@ -42,17 +42,37 @@ const static uint32_t GENERATE_SEARCH_K = 50;
 const static uint32_t GENERATE_SEARCH_L = 400;
 const static float GENERATE_OMEGA = 0.51;
 
+class Filter : public hnswlib::BaseFilterFunctor {
+public:
+    Filter(BitsetPtr bitset) : bitset_(bitset) {
+    }
+
+    bool
+    operator()(hnswlib::labeltype id) override {
+        int64_t bit_index = id & ROW_ID_MASK;
+        return not bitset_->Test(bit_index);
+    }
+
+private:
+    BitsetPtr bitset_;
+};
+
 HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
            int M,
            int ef_construction,
            bool use_static,
            bool use_reversed_edges,
            bool use_conjugate_graph,
+           int sq_num_bits,
+           float alpha,
+           std::string extra_file,
            Allocator* allocator)
     : space(std::move(space_interface)),
       use_static_(use_static),
       use_conjugate_graph_(use_conjugate_graph),
-      use_reversed_edges_(use_reversed_edges) {
+      use_reversed_edges_(use_reversed_edges),
+      pq_code_file(std::move(extra_file)),
+      sq_num_bits_(sq_num_bits) {
     dim_ = *((size_t*)space->get_dist_func_param());
 
     M = std::min(std::max(M, MINIMAL_M), MAXIMAL_M);
@@ -66,9 +86,9 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
     }
 
     if (not allocator) {
-        allocator = DefaultAllocator::Instance();
+        allocator_ = std::make_shared<DefaultAllocator>();
+        allocator = allocator_.get();
     }
-    allocator_ = allocator;
 
     if (!use_static_) {
         alg_hnsw =
@@ -77,8 +97,10 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
                                                        allocator,
                                                        M,
                                                        ef_construction,
+                                                       alpha,
                                                        use_reversed_edges_,
-                                                       Options::Instance().block_size_limit());
+                                                       Options::Instance().block_size_limit(),
+                                                       sq_num_bits);
     } else {
         if (dim_ % 4 != 0) {
             throw std::runtime_error("cannot build static hnsw while dim % 4 != 0");
@@ -91,6 +113,10 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
             ef_construction,
             Options::Instance().block_size_limit());
     }
+}
+
+HNSW::~HNSW() {
+    alg_hnsw.reset();
 }
 
 tl::expected<std::vector<int64_t>, Error>
@@ -108,12 +134,13 @@ HNSW::build(const DatasetPtr& base) {
                        fmt::format("base.dim({}) must be equal to index.dim({})", base_dim, dim_));
 
         int64_t num_elements = base->GetNumElements();
-        int64_t max_elements = alg_hnsw->getMaxElements();
-        if (max_elements < num_elements) {
-            logger::debug("max_elements={}, num_elements={}", max_elements, num_elements);
-            max_elements = num_elements;
+        int64_t max_elements_;
+        max_elements_ = alg_hnsw->getMaxElements();
+        if (max_elements_ < num_elements) {
+            logger::debug("max_elements_={}, num_elements={}", max_elements_, num_elements);
+            max_elements_ = num_elements;
             // noexcept even cannot alloc memory
-            alg_hnsw->resizeIndex(max_elements);
+            alg_hnsw->resizeIndex(max_elements_);
         }
 
         auto ids = base->GetIds();
@@ -121,6 +148,7 @@ HNSW::build(const DatasetPtr& base) {
         std::vector<int64_t> failed_ids;
         {
             SlowTaskTimer t("hnsw graph");
+#pragma omp parallel for
             for (int64_t i = 0; i < num_elements; ++i) {
                 // noexcept runtime
                 if (!alg_hnsw->addPoint((const void*)(vectors + i * dim_), ids[i])) {
@@ -131,9 +159,22 @@ HNSW::build(const DatasetPtr& base) {
         }
 
         if (use_static_) {
-            SlowTaskTimer t("hnsw pq", 1000);
+            SlowTaskTimer t("hnsw pq", 10);
+            logger::info("start encode pq");
             auto* hnsw = static_cast<hnswlib::StaticHierarchicalNSW*>(alg_hnsw.get());
-            hnsw->encode_hnsw_data();
+            hnsw->encode_hnsw_data(pq_code_file);
+        }
+
+        if (sq_num_bits_ != -1) {
+            SlowTaskTimer t(fmt::format("sq transform to () bits", sq_num_bits_), 10);
+            logger::info("start transform sq");
+            if (sq_num_bits_ == 8) {
+                alg_hnsw->transform_base();
+            } else if (sq_num_bits_ == 4) {
+                alg_hnsw->transform_base_int4();
+            } else {
+                throw std::invalid_argument(fmt::format("invalid sq_num_bits()", sq_num_bits_));
+            }
         }
 
         return failed_ids;
@@ -157,22 +198,19 @@ HNSW::add(const DatasetPtr& base) {
                        fmt::format("base.dim({}) must be equal to index.dim({})", base_dim, dim_));
 
         int64_t num_elements = base->GetNumElements();
-        int64_t max_elements = alg_hnsw->getMaxElements();
-        size_t require_size = num_elements + alg_hnsw->getCurrentElementCount();
-        if (require_size > max_elements) {
-            while (require_size > max_elements) {
-                if (max_elements > EXPANSION_NUM) {
-                    max_elements += EXPANSION_NUM;
-                } else {
-                    max_elements *= 2;
-                }
-            }
-            logger::debug("num_elements={}, index.num_elements={}, max_elements_={}",
+        int64_t max_elements_ = alg_hnsw->getMaxElements();
+        if (num_elements + alg_hnsw->getCurrentElementCount() > max_elements_) {
+            logger::debug("num_elements={}, index.num_elements, max_elements_={}",
                           num_elements,
                           alg_hnsw->getCurrentElementCount(),
-                          max_elements);
+                          max_elements_);
+            if (max_elements_ > EXPANSION_NUM) {
+                max_elements_ += EXPANSION_NUM;
+            } else {
+                max_elements_ *= 2;
+            }
             // noexcept even cannot alloc memory
-            alg_hnsw->resizeIndex(max_elements);
+            alg_hnsw->resizeIndex(max_elements_);
         }
 
         auto ids = base->GetIds();
@@ -193,26 +231,12 @@ HNSW::add(const DatasetPtr& base) {
     }
 }
 
-template <typename FilterType>
-tl::expected<DatasetPtr, Error>
-HNSW::knn_search_internal(const DatasetPtr& query,
-                          int64_t k,
-                          const std::string& parameters,
-                          const FilterType& filter_obj) const {
-    if (filter_obj) {
-        BitsetOrCallbackFilter filter(filter_obj);
-        return this->knn_search(query, k, parameters, &filter);
-    } else {
-        return this->knn_search(query, k, parameters, nullptr);
-    }
-};
-
 tl::expected<DatasetPtr, Error>
 HNSW::knn_search(const DatasetPtr& query,
                  int64_t k,
                  const std::string& parameters,
-                 hnswlib::BaseFilterFunctor* filter_ptr) const {
-    SlowTaskTimer t("hnsw knnsearch", 20);
+                 BitsetPtr invalid) const {
+    SlowTaskTimer t("hnsw knnsearch", 1000);
 
     // cannot perform search on empty index
     if (empty_index_) {
@@ -238,12 +262,18 @@ HNSW::knn_search(const DatasetPtr& query,
         auto params = HnswSearchParameters::FromJson(parameters);
         alg_hnsw->setEf(std::max(params.ef_search, k));
 
+        // check filter
+        std::shared_ptr<Filter> filter = nullptr;
+        if (invalid != nullptr) {
+            filter = std::make_shared<Filter>(invalid);
+        }
+
         // perform search
         std::priority_queue<std::pair<float, size_t>> results;
         double time_cost;
         try {
             Timer t(time_cost);
-            results = alg_hnsw->searchKnn((const void*)(vector), k, filter_ptr);
+            results = alg_hnsw->searchKnn((const void*)(vector), k, filter.get());
         } catch (const std::runtime_error& e) {
             LOG_ERROR_AND_RETURNS(ErrorType::INTERNAL_ERROR,
                                   "failed to perofrm knn_search(internalError): ",
@@ -275,13 +305,9 @@ HNSW::knn_search(const DatasetPtr& query,
         }
 
         // return result
-        int64_t* ids = (int64_t*)allocator_->Allocate(sizeof(int64_t) * results.size());
-        float* dists = (float*)allocator_->Allocate(sizeof(float) * results.size());
-        result->Dim(results.size())
-            ->NumElements(1)
-            ->Ids(ids)
-            ->Distances(dists)
-            ->Owner(true, allocator_);
+        int64_t* ids = new int64_t[results.size()];
+        float* dists = new float[results.size()];
+        result->Dim(results.size())->NumElements(1)->Ids(ids)->Distances(dists);
         for (int64_t j = results.size() - 1; j >= 0; --j) {
             dists[j] = results.top().first;
             ids[j] = results.top().second;
@@ -336,17 +362,18 @@ HNSW::range_search(const DatasetPtr& query,
         auto params = HnswSearchParameters::FromJson(parameters);
         alg_hnsw->setEf(params.ef_search);
 
+        // check filter
+        std::shared_ptr<Filter> filter = nullptr;
+        if (invalid != nullptr) {
+            filter = std::make_shared<Filter>(invalid);
+        }
+
         // perform search
         std::priority_queue<std::pair<float, size_t>> results;
         double time_cost;
         try {
             Timer timer(time_cost);
-            if (invalid) {
-                BitsetOrCallbackFilter filter(invalid);
-                results = alg_hnsw->searchRange((const void*)(vector), radius, &filter);
-            } else {
-                results = alg_hnsw->searchRange((const void*)(vector), radius, nullptr);
-            }
+            results = alg_hnsw->searchRange((const void*)(vector), radius, filter.get());
         } catch (std::runtime_error& e) {
             LOG_ERROR_AND_RETURNS(ErrorType::INTERNAL_ERROR,
                                   "failed to perofrm range_search(internalError): ",
@@ -369,13 +396,9 @@ HNSW::range_search(const DatasetPtr& query,
         if (limited_size >= 1) {
             target_size = std::min((size_t)limited_size, target_size);
         }
-        int64_t* ids = (int64_t*)allocator_->Allocate(sizeof(int64_t) * target_size);
-        float* dists = (float*)allocator_->Allocate(sizeof(float) * target_size);
-        result->Dim(target_size)
-            ->NumElements(1)
-            ->Ids(ids)
-            ->Distances(dists)
-            ->Owner(true, allocator_);
+        int64_t* ids = new int64_t[target_size];
+        float* dists = new float[target_size];
+        result->Dim(target_size)->NumElements(1)->Ids(ids)->Distances(dists);
         for (int64_t j = results.size() - 1; j >= 0; --j) {
             if (j < target_size) {
                 dists[j] = results.top().first;
@@ -492,6 +515,14 @@ HNSW::deserialize(const BinarySet& binary_set) {
             Binary b_cg = binary_set.Get(CONJUGATE_GRAPH_DATA);
             if (not conjugate_graph_->Deserialize(b_cg).has_value()) {
                 throw std::runtime_error("error in deserialize conjugate graph");
+            }
+        }
+        if (sq_num_bits_ != -1) {
+            SlowTaskTimer t1("sq transform", 1000);
+            if (sq_num_bits_ == 8) {
+                alg_hnsw->transform_base();
+            } else if (sq_num_bits_ == 4) {
+                alg_hnsw->transform_base_int4();
             }
         }
     } catch (const std::runtime_error& e) {
@@ -611,7 +642,7 @@ HNSW::feedback(const DatasetPtr& query,
         }
     }
 
-    auto result = this->knn_search(query, k, parameters, nullptr);
+    auto result = this->knn_search(query, k, parameters);
     if (result.has_value()) {
         return this->feedback(*result, global_optimum_tag_id, k);
     } else {
@@ -648,7 +679,7 @@ HNSW::feedback(const DatasetPtr& result, int64_t global_optimum_tag_id, int64_t 
 }
 
 tl::expected<DatasetPtr, Error>
-HNSW::brute_force(const DatasetPtr& query, int64_t k) {
+HNSW::brute_force(const DatasetPtr& query, int64_t k) const {
     try {
         CHECK_ARGUMENT(k > 0, fmt::format("k({}) must be greater than 0", k));
         CHECK_ARGUMENT(query->GetNumElements() == 1,
@@ -658,9 +689,9 @@ HNSW::brute_force(const DatasetPtr& query, int64_t k) {
             fmt::format("query.dim({}) must be equal to index.dim({})", query->GetDim(), dim_));
 
         auto result = Dataset::Make();
-        int64_t* ids = (int64_t*)allocator_->Allocate(sizeof(int64_t) * k);
-        float* dists = (float*)allocator_->Allocate(sizeof(float) * k);
-        result->Ids(ids)->Distances(dists)->NumElements(k)->Owner(true, allocator_);
+        int64_t* ids = new int64_t[k];
+        float* dists = new float[k];
+        result->Ids(ids)->Distances(dists)->NumElements(k);
 
         auto vector = query->GetFloat32Vectors();
         std::priority_queue<std::pair<float, hnswlib::labeltype>> bf_result =
@@ -728,8 +759,7 @@ HNSW::pretrain(const std::vector<int64_t>& base_tag_ids,
                                                 "use_conjugate_graph": true
                                             }}
                                         }})",
-                                                   vsag::GENERATE_SEARCH_L),
-                                       nullptr);
+                                                   vsag::GENERATE_SEARCH_L));
 
         for (int i = 0; i < result.value()->GetDim(); i++) {
             topk_neighbor_tag_id = result.value()->GetIds()[i];

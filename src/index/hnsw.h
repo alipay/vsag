@@ -36,31 +36,6 @@
 #include "vsag/readerset.h"
 
 namespace vsag {
-class BitsetOrCallbackFilter : public hnswlib::BaseFilterFunctor {
-public:
-    BitsetOrCallbackFilter(const std::function<bool(int64_t)>& func) : func_(func) {
-        is_bitset_filter_ = false;
-    }
-
-    BitsetOrCallbackFilter(const BitsetPtr& bitset) : bitset_(bitset) {
-        is_bitset_filter_ = true;
-    }
-
-    bool
-    operator()(hnswlib::labeltype id) override {
-        if (is_bitset_filter_) {
-            int64_t bit_index = id & ROW_ID_MASK;
-            return not bitset_->Test(bit_index);
-        } else {
-            return not func_(id);
-        }
-    }
-
-private:
-    std::function<bool(int64_t)> func_;
-    BitsetPtr bitset_;
-    bool is_bitset_filter_ = false;
-};
 
 class HNSW : public Index {
 public:
@@ -70,7 +45,12 @@ public:
          bool use_static = false,
          bool use_reversed_edges = false,
          bool use_conjugate_graph = false,
+         int sq_num_bits = -1,
+         float alpha = 1.0,
+         std::string extra_file = "",
          Allocator* allocator = nullptr);
+
+    ~HNSW();
 
     tl::expected<std::vector<int64_t>, Error>
     Build(const DatasetPtr& base) override {
@@ -91,16 +71,8 @@ public:
     KnnSearch(const DatasetPtr& query,
               int64_t k,
               const std::string& parameters,
-              const std::function<bool(int64_t)>& filter) const override {
-        SAFE_CALL(return this->knn_search_internal(query, k, parameters, filter));
-    }
-
-    tl::expected<DatasetPtr, Error>
-    KnnSearch(const DatasetPtr& query,
-              int64_t k,
-              const std::string& parameters,
               BitsetPtr invalid = nullptr) const override {
-        SAFE_CALL(return this->knn_search_internal(query, k, parameters, invalid));
+        SAFE_CALL(return this->knn_search(query, k, parameters, invalid));
     }
 
     tl::expected<DatasetPtr, Error>
@@ -131,6 +103,11 @@ public:
     CalcDistanceById(const float* vector, int64_t id) const override {
         SAFE_CALL(return alg_hnsw->getDistanceByLabel(id, vector));
     };
+
+    tl::expected<DatasetPtr, Error>
+    BruteForce(const DatasetPtr& query, int64_t k) const override {
+        SAFE_CALL(return this->brute_force(query, k));
+    }
 
 public:
     tl::expected<BinarySet, Error>
@@ -189,18 +166,11 @@ private:
     tl::expected<bool, Error>
     remove(int64_t id);
 
-    template <typename FilterType>
-    tl::expected<DatasetPtr, Error>
-    knn_search_internal(const DatasetPtr& query,
-                        int64_t k,
-                        const std::string& parameters,
-                        const FilterType& filter_obj) const;
-
     tl::expected<DatasetPtr, Error>
     knn_search(const DatasetPtr& query,
                int64_t k,
                const std::string& parameters,
-               hnswlib::BaseFilterFunctor* filter_ptr) const;
+               BitsetPtr invalid = nullptr) const;
 
     tl::expected<DatasetPtr, Error>
     range_search(const DatasetPtr& query,
@@ -219,7 +189,7 @@ private:
     feedback(const DatasetPtr& result, int64_t global_optimum_tag_id, int64_t k);
 
     tl::expected<DatasetPtr, Error>
-    brute_force(const DatasetPtr& query, int64_t k);
+    brute_force(const DatasetPtr& query, int64_t k) const;
 
     tl::expected<uint32_t, Error>
     pretrain(const std::vector<int64_t>& base_tag_ids, uint32_t k, const std::string& parameters);
@@ -253,8 +223,10 @@ private:
     bool use_static_ = false;
     bool empty_index_ = false;
     bool use_reversed_edges_ = false;
+    int sq_num_bits_ = -1;
 
-    Allocator* allocator_ = nullptr;
+    std::shared_ptr<Allocator> allocator_ = nullptr;
+    std::string pq_code_file;
 
     mutable std::mutex stats_mutex_;
     mutable std::map<std::string, WindowResultQueue> result_queues_;

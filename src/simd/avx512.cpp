@@ -26,7 +26,8 @@ float
 L2SqrSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_ptr) {
     float* pVect1 = (float*)pVect1v;
     float* pVect2 = (float*)pVect2v;
-    size_t qty = *((size_t*)qty_ptr);
+    size_t qty = 960;
+    float* prefetch = (float*)qty_ptr;
     float PORTABLE_ALIGN64 TmpRes[16];
     size_t qty16 = qty >> 4;
 
@@ -42,6 +43,8 @@ L2SqrSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_p
         pVect2 += 16;
         diff = _mm512_sub_ps(v1, v2);
         // sum = _mm512_fmadd_ps(diff, diff, sum);
+        _mm_prefetch(prefetch, _MM_HINT_T0);
+        prefetch += 16;
         sum = _mm512_add_ps(sum, _mm512_mul_ps(diff, diff));
     }
 

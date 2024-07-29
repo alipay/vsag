@@ -258,6 +258,97 @@ public:
     virtual bool
     isValidLabel(labeltype label) = 0;
 
+    virtual void
+    compute_sq_interval() {
+        throw std::runtime_error("un-support int8 transform");
+    }
+
+    virtual void
+    transform_to_int8(const float* data, int8_t* transformed_data) const {
+        throw std::runtime_error("un-support int8 transform");
+    }
+
+    virtual void
+    transform_base() {
+        throw std::runtime_error("un-support int8 transform");
+    }
+    // virtual double
+    // INT8_L2(
+    //     int64_t* norm1, double norm2, const void* pVect1v, const void* pVect2v, size_t qty) const {
+    //     throw std::runtime_error("un-support int8 transform");
+    // }
+
+    // virtual double
+    // INT8_IP(const void* pVect1v, const void* pVect2v, size_t qty) const {
+    //     throw std::runtime_error("un-support int8 transform");
+    // }
+
+    // virtual double
+    // INT8_InnerProduct_impl(const void* pVect1, const void* pVect2, size_t qty) const {
+    //     throw std::runtime_error("un-support int8 transform");
+    // }
+
+    // virtual double
+    // INT8_InnerProduct512_AVX512_impl(const void* pVect1v, const void* pVect2v, size_t qty) const {
+    //     throw std::runtime_error("un-support int8 transform");
+    // }
+
+    virtual int32_t
+    INT4_L2(const void* p1_vec, const void* p2_vec, int dim) const {
+        throw std::runtime_error("un-support int4 transform");
+    }
+
+    virtual int32_t
+    INT4_L2_precompute(
+        int32_t norm1, int32_t norm2, const void* p1_vec, const void* p2_vec, int dim) const {
+        throw std::runtime_error("un-support int4 transform");
+    }
+
+    virtual int32_t
+    INT4_L2_impl(const void* p1_vec, const void* p2_vec, int dim) const {
+        throw std::runtime_error("un-support int4 transform");
+    }
+
+    virtual int32_t
+    INT4_L2_avx2_impl(const void* p1_vec, const void* p2_vec, int dim) const {
+        throw std::runtime_error("un-support int4 transform");
+    }
+
+    virtual int32_t
+    INT4_IP(const void* p1_vec, const void* p2_vec, int dim) const {
+        throw std::runtime_error("un-support int4 transform");
+    }
+
+    virtual int32_t
+    INT4_IP_avx512_impl(const void* p1_vec, const void* p2_vec, int dim) const {
+        throw std::runtime_error("un-support int4 transform");
+    }
+
+    virtual int32_t
+    INT4_IP_impl(const void* p1_vec, const void* p2_vec, int dim) const {
+        throw std::runtime_error("un-support int4 transform");
+    }
+
+    virtual int32_t
+    INT4_L2_avx512_impl(const void* p1_vec, const void* p2_vec, int dim) const {
+        throw std::runtime_error("un-support int4 transform");
+    }
+
+    virtual int8_t*
+    get_encoded_data(uint32_t internal_id, size_t code_size) const {
+        throw std::runtime_error("un-support int4 transform");
+    }
+
+    virtual void
+    transform_to_int4(const float* from, int8_t* to) const {
+        throw std::runtime_error("un-support int4 transform");
+    }
+
+    virtual void
+    transform_base_int4() {
+        throw std::runtime_error("un-support int4 transform");
+    }
+
     virtual ~AlgorithmInterface() {
     }
 };

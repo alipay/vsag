@@ -46,6 +46,7 @@ const char* const PARAMETER_DIM = "dim";
 const char* const PARAMETER_METRIC_TYPE = "metric_type";
 const char* const PARAMETER_USE_CONJUGATE_GRAPH = "use_conjugate_graph";
 const char* const PARAMETER_USE_CONJUGATE_GRAPH_SEARCH = "use_conjugate_graph_search";
+const char* const PARAMETER_ALPHA = "alpha";
 
 const char* const DISKANN_PARAMETER_L = "ef_construction";
 const char* const DISKANN_PARAMETER_R = "max_degree";
@@ -61,6 +62,7 @@ const char* const DISKANN_PARAMETER_BEAM_SEARCH = "beam_search";
 const char* const DISKANN_PARAMETER_IO_LIMIT = "io_limit";
 const char* const DISKANN_PARAMETER_EF_SEARCH = "ef_search";
 const char* const DISKANN_PARAMETER_REORDER = "use_reorder";
+const char* const PARAMETER_USE_EXTRA_PQ_FILE = "extra_file";
 
 const char* const HNSW_PARAMETER_EF_RUNTIME = "ef_search";
 const char* const HNSW_PARAMETER_M = "max_degree";

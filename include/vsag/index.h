@@ -181,6 +181,11 @@ public:
         throw std::runtime_error("Index doesn't support get distance by id");
     };
 
+    virtual tl::expected<DatasetPtr, Error>
+    BruteForce(const DatasetPtr& query, int64_t k) const {
+        throw std::runtime_error("Index doesn't support BruteForce");
+    }
+
 public:
     // [serialize/deserialize with binaryset]
 

@@ -189,8 +189,8 @@ public:
 
     struct CompareByFirst {
         constexpr bool
-        operator()(std::pair<float, tableint> const& a,
-                   std::pair<float, tableint> const& b) const noexcept {
+        operator()(std::pair<float, tableint> const& a, std::pair<float, tableint> const& b) const
+            noexcept {
             return a.first < b.first;
         }
     };
@@ -350,7 +350,7 @@ public:
                 visited_array[candidate_id] = visited_array_tag;
                 char* currObj1 = (getDataByInternalId(candidate_id));
 
-                float dist1 = fstdistfunc_(data_point, currObj1, dist_func_param_);
+                float dist1 = fstdistfunc_(data_point, currObj1, (void*)tmp_data_ptr3);
                 if (top_candidates.size() < ef_construction_ || lowerBound > dist1) {
                     candidateSet.emplace(-dist1, candidate_id);
                     auto tmp_data_ptr4 = getDataByInternalId(candidateSet.top().second);
@@ -485,16 +485,40 @@ public:
                         }
                         if (!top_candidates.empty())
                             lowerBoundcan = top_candidates.top().first;
-                    } else {
+                    } else if (ef >= 0) {
                         char* currObj1 = (getDataByInternalId(candidate_id));
                         float dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
                         candidate_set.emplace(-dist, candidate_id);
                         if (!has_deletions || !isMarkedDeleted(candidate_id)) {
-                            top_candidates.emplace(dist, candidate_id);
-                            answers.emplace(dist, candidate_id);
+                            if (top_candidates.size() < ef || dist < lowerBoundcan) {
+                                top_candidates.emplace(dist, candidate_id);
+                            }
+                            if (dist < lowerBound) {
+                                answers.emplace(dist, candidate_id);
+                            }
                         }
                         if (top_candidates.size() > ef)
                             top_candidates.pop();
+                        if (answers.size() > k)
+                            answers.pop();
+
+                        if (!answers.empty())
+                            lowerBound = answers.top().first;
+                        if (!top_candidates.empty())
+                            lowerBoundcan = top_candidates.top().first;
+                    } else {
+                        if (top_candidates.size() < ef || lowerBoundcan > res[j]) {
+                            candidate_set.emplace(-res[j], candidate_id);
+                            if (res[j] < lowerBoundcan) {
+                                top_candidates.emplace(res[j], candidate_id);
+                            }
+                            if (res[j] < lowerBound) {
+                                answers.emplace(res[j], candidate_id);
+                            }
+                        }
+                        if (top_candidates.size() > ef) {
+                            top_candidates.pop();
+                        }
                         if (answers.size() > k)
                             answers.pop();
 
@@ -1947,6 +1971,7 @@ public:
     void
     load_product_codebook(const char* filename) {
         std::ifstream in(filename, std::ios::binary);
+        assert(in.good());
         in.read((char*)&pq_chunk, sizeof(unsigned));
         in.read((char*)&pq_cluster, sizeof(unsigned));
         in.read((char*)&pq_sub_dim, sizeof(unsigned));
@@ -2059,40 +2084,46 @@ public:
     }
 
     void
-    encode_hnsw_data(size_t chunk_size = 0, size_t cluster_size = 256) {
-        size_t vec_dim = *((size_t*)dist_func_param_);
-        if (chunk_size == 0) {
-            chunk_size = vec_dim;
-            if (chunk_size > 512 && chunk_size % 8 == 0) {
-                pq_chunk = chunk_size / 8;
-                pq_sub_dim = 8;
-            } else {
-                pq_chunk = chunk_size / 4;
-                pq_sub_dim = 4;
-            }
-        } else {
-            pq_chunk = chunk_size;
-            pq_sub_dim = vec_dim / pq_chunk;
-        }
-        pq_dim = vec_dim;
-        pq_cluster = cluster_size;
-        if (cur_element_count_ < pq_train_bound)
-            pq_train_bound = cur_element_count_;
-        auto pq_training_data = std::shared_ptr<float[]>(new float[pq_train_bound * vec_dim]);
-        for (size_t i = 0; i < pq_train_bound; i++) {
-            memcpy(pq_training_data.get() + i * vec_dim, getDataByInternalId(i), data_size_);
-        }
-        // generate code book;
-        pq_book.resize(pq_chunk);
-        for (int i = 0; i < pq_chunk; i++) {
-            pq_book[i].resize(pq_cluster);
-            for (int j = 0; j < pq_cluster; j++) {
-                pq_book[i][j].resize(pq_sub_dim);
-            }
-        }
+    encode_hnsw_data(const std::string& pq_code_file = "",
+                     size_t chunk_size = 0,
+                     size_t cluster_size = 256) {
+        //        if(pq_code_file==""){
+        //            size_t vec_dim = *((size_t*)dist_func_param_);
+        //            if (chunk_size == 0) {
+        //                chunk_size = vec_dim;
+        //                if (chunk_size > 512 && chunk_size % 8 == 0) {
+        //                    pq_chunk = chunk_size / 8;
+        //                    pq_sub_dim = 8;
+        //                } else {
+        //                    pq_chunk = chunk_size / 4;
+        //                    pq_sub_dim = 4;
+        //                }
+        //            } else {
+        //                pq_chunk = chunk_size;
+        //                pq_sub_dim = vec_dim / pq_chunk;
+        //            }
+        //            pq_dim = vec_dim;
+        //            pq_cluster = cluster_size;
+        //            if (cur_element_count_ < pq_train_bound)
+        //                pq_train_bound = cur_element_count_;
+        //            auto pq_training_data = std::shared_ptr<float[]>(new float[pq_train_bound * vec_dim]);
+        //            for (size_t i = 0; i < pq_train_bound; i++) {
+        //                memcpy(pq_training_data.get() + i * vec_dim, getDataByInternalId(i), data_size_);
+        //            }
+        //            // generate code book;
+        //            pq_book.resize(pq_chunk);
+        //            for (int i = 0; i < pq_chunk; i++) {
+        //                pq_book[i].resize(pq_cluster);
+        //                for (int j = 0; j < pq_cluster; j++) {
+        //                    pq_book[i][j].resize(pq_sub_dim);
+        //                }
+        //            }
+        //            diskann::generate_pq_pivots(
+        //                pq_training_data.get(), pq_train_bound, vec_dim, pq_cluster, pq_chunk, 12, pq_book);
+        //        }
+        //        else
+        load_product_codebook(pq_code_file.c_str());
 
-        diskann::generate_pq_pivots(
-            pq_training_data.get(), pq_train_bound, vec_dim, pq_cluster, pq_chunk, 12, pq_book);
         is_trained_pq = true;
         encode_hnsw_data_with_codebook(0, cur_element_count_);
     }

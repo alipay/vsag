@@ -76,12 +76,34 @@ CreateHnswParameters::FromJson(const std::string& json_string) {
     obj.use_static = params[INDEX_HNSW].contains(HNSW_PARAMETER_USE_STATIC) &&
                      params[INDEX_HNSW][HNSW_PARAMETER_USE_STATIC];
 
+    if (params[INDEX_HNSW].contains(PARAMETER_USE_EXTRA_PQ_FILE)) {
+        obj.extra_file = params[INDEX_HNSW][PARAMETER_USE_EXTRA_PQ_FILE];
+    } else {
+        obj.extra_file = "";
+    }
+
     // set obj.use_conjugate_graph
     if (params[INDEX_HNSW].contains(PARAMETER_USE_CONJUGATE_GRAPH)) {
         obj.use_conjugate_graph = params[INDEX_HNSW][PARAMETER_USE_CONJUGATE_GRAPH];
     } else {
         obj.use_conjugate_graph = false;
     }
+
+    if (params[INDEX_HNSW].contains("sq_num_bits")) {
+        obj.sq_num_bits = params[INDEX_HNSW]["sq_num_bits"];
+    } else {
+        obj.sq_num_bits = -1;
+    }
+
+    // set obj.alpha
+    if (params[INDEX_HNSW].contains(PARAMETER_ALPHA)) {
+        obj.alpha = params[INDEX_HNSW][PARAMETER_ALPHA];
+        CHECK_ARGUMENT((0.8 <= obj.alpha) and (obj.alpha <= 2.0),
+                       fmt::format("alpha({}) must in range[0.8, 2.0]", obj.alpha));
+    } else {
+        obj.alpha = 1;
+    }
+
     return obj;
 }
 

@@ -203,7 +203,7 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -Werror=suggest-override")
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0")
 elseif (CMAKE_BUILD_TYPE STREQUAL "Release")
-  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ofast")
+  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ofast -g")
 endif ()
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
@@ -243,10 +243,14 @@ if (ENABLE_TSAN)
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=thread")
 endif ()
 
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx512f -mavx512pf -mavx512er -mavx512cd -mavx512vl -mavx512bw -mavx512dq -mavx512ifma -mavx512vbmi")
+add_definitions (-DENABLE_AVX512=1)
+
 # sources
 add_subdirectory (src)
 add_subdirectory (mockimpl)
 add_subdirectory (examples/cpp)
+add_subdirectory (experiment)
 
 # tests
 if (ENABLE_TESTS)

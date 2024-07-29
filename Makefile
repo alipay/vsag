@@ -1,8 +1,8 @@
 
 CMAKE_GENERATOR ?= "Unix Makefiles"
 CMAKE_INSTALL_PREFIX ?= "/usr/local/"
-COMPILE_JOBS ?= 4
-VSAG_CMAKE_ARGS = -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} -DNUM_BUILDING_JOBS=${COMPILE_JOBS} -DENABLE_TESTS=1 -DENABLE_PYBINDS=1 -G ${CMAKE_GENERATOR} -S. -Bbuild
+COMPILE_JOBS ?= 32
+VSAG_CMAKE_ARGS = -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} -DNUM_BUILDING_JOBS=${COMPILE_JOBS} -DENABLE_TESTS=1 -DENABLE_PYBINDS=1 -G ${CMAKE_GENERATOR} -S.
 UT_FILTER = ""
 ifdef CASE
   UT_FILTER = $(CASE)
@@ -22,18 +22,13 @@ help:                   ## Show the help.
 
 .PHONY: debug
 debug:                  ## Build vsag with debug options.
-	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Debug -DENABLE_CCACHE=ON
+	cmake ${VSAG_CMAKE_ARGS} -Bbuild -DCMAKE_BUILD_TYPE=Debug -DENABLE_CCACHE=ON
 	cmake --build build --parallel ${COMPILE_JOBS}
 
 .PHONY: release
 release:                ## Build vsag with release options.
-	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Release
-	cmake --build build --parallel ${COMPILE_JOBS}
-
-.PHONY: distribution
-distribution:           ## Build vsag with distribution options.
-	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Release -DENABLE_CXX11_ABI=off -DENABLE_LIBCXX=off
-	cmake --build build --parallel ${COMPILE_JOBS}
+	cmake ${VSAG_CMAKE_ARGS} -Bbuild-release -DCMAKE_BUILD_TYPE=Release
+	cmake --build build-release --parallel ${COMPILE_JOBS}
 
 .PHONY: fmt
 fmt:                    ## Format codes.
@@ -74,13 +69,10 @@ test_tsan: tsan         ## Run unit tests with ThreadSanitizer option.
 	./build/tests/functests -d yes ${UT_FILTER} --allow-running-no-tests ${UT_SHARD}
 	./build/mockimpl/tests_mockimpl -d yes ${UT_FILTER} --allow-running-no-tests ${UT_SHARD}
 
-.PHONY: cov     # Build unit tests with code coverage enabled.
-cov:
+.PHONY: test_cov
+test_cov:               ## Build and run unit tests with code coverage enabled.
 	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Debug -DENABLE_COVERAGE=ON -DENABLE_CCACHE=ON
 	cmake --build build --parallel ${COMPILE_JOBS}
-
-.PHONY: test_cov
-test_cov: cov            ## Build and run unit tests with code coverage enabled.
 	./build/tests/unittests -d yes ${UT_FILTER} --allow-running-no-tests ${UT_SHARD}
 	./build/tests/functests -d yes ${UT_FILTER} --allow-running-no-tests ${UT_SHARD}
 	./build/mockimpl/tests_mockimpl -d yes ${UT_FILTER} --allow-running-no-tests ${UT_SHARD}
@@ -90,6 +82,7 @@ test_cov: cov            ## Build and run unit tests with code coverage enabled.
 .PHONY: clean
 clean:                  ## Clear build/ directory.
 	rm -rf build/*
+	rm -rf build-release/*
 
 .PHONY: install
 install:                ## Build and install the release version of vsag.

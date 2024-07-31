@@ -4,6 +4,7 @@ include(FetchContent)
 FetchContent_Declare(
     nlohmann_json
     URL https://github.com/nlohmann/json/archive/refs/tags/v3.11.3.tar.gz
+        https://vsagcache.oss-rg-china-mainland.aliyuncs.com/nlohmann_json/v3.11.3.tar.gz
     URL_HASH MD5=d603041cbc6051edbaa02ebb82cf0aa9
 )
 

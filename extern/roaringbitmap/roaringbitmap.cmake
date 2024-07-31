@@ -2,6 +2,7 @@ include(FetchContent)
 FetchContent_Declare(
 		roaringbitmap
 		URL https://github.com/RoaringBitmap/CRoaring/archive/refs/tags/v3.0.1.tar.gz
+		    https://vsagcache.oss-rg-china-mainland.aliyuncs.com/roaringbitmap/v3.0.1.tar.gz
 		URL_HASH MD5=463db911f97d5da69393d4a3190f9201
 )
 

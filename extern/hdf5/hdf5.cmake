@@ -7,6 +7,7 @@ set(install_dir ${CMAKE_CURRENT_BINARY_DIR}/${name}/install)
 ExternalProject_Add(
     ${name}
     URL https://github.com/HDFGroup/hdf5/archive/refs/tags/hdf5_1.14.4.tar.gz
+        https://vsagcache.oss-rg-china-mainland.aliyuncs.com/hdf5/hdf5_1.14.4.tar.gz
     URL_HASH MD5=fdea52afcce07ed6c3e2a36e7fa11f21
     DOWNLOAD_NAME hdf5_1.14.4.tar.gz
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/${name}

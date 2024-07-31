@@ -4,6 +4,7 @@ include(FetchContent)
 FetchContent_Declare(
     fmt
     URL https://github.com/fmtlib/fmt/archive/refs/tags/10.2.1.tar.gz
+        https://vsagcache.oss-rg-china-mainland.aliyuncs.com/fmt/10.2.1.tar.gz
     URL_HASH MD5=dc09168c94f90ea890257995f2c497a5
 )
 

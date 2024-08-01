@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <system_error>
 #include "windows_customizations.h"
+#include <stdint.h>
 
 #ifndef _WINDOWS
 #define __FUNCSIG__ __PRETTY_FUNCTION__

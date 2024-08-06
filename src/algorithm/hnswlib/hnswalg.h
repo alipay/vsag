@@ -499,6 +499,11 @@ public:
         for (d = 0; d < dim / 2; d += 64) {
             auto xx = _mm512_loadu_si512((__m512i*)(x + d));
             auto yy = _mm512_loadu_si512((__m512i*)(y + d));
+
+            if (prefetch) {
+                _mm_prefetch(prefetch + d, _MM_HINT_T0);
+            }
+
             if (d + 64 >= dim / 2) {
                 __m512i mask_overflow = _mm512_setr_epi32(0xffffffff,
                                                           0xffffffff,
@@ -523,8 +528,6 @@ public:
             auto xx2 = _mm512_and_si512(_mm512_srli_epi16(xx, 4), mask);  // 64 * 8bits
             auto yy1 = _mm512_and_si512(yy, mask);
             auto yy2 = _mm512_and_si512(_mm512_srli_epi16(yy, 4), mask);
-            //            _mm_prefetch(prefetch, _MM_HINT_T0);
-            //            prefetch += 64;
 
             sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(xx1, yy1));
             sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(xx2, yy2));
@@ -931,6 +934,21 @@ public:
         std::iota(try_pos.begin(), try_pos.end(), 1);
         std::iota(try_pls.begin(), try_pls.end(), 1);
 
+        bool have_optimized = true;
+        if (have_optimized) {
+            if (sq_num_bits_ == 4) {
+                try_pos.assign({3});
+                try_pls.assign({9});
+            } else if (sq_num_bits_ == 8) {
+                try_pos.assign({5});
+                try_pls.assign({12});
+            } else {
+                try_pos.assign({1});
+                try_pls.assign({1});
+            }
+        }
+
+        this->ef_ = 80;
         printf("=============Start optimization=============\n");
         this->po_ = 1;
         this->pl_ = 1;
@@ -1215,11 +1233,11 @@ public:
             }
             dist_cmp += count_no_visited;
 
-//            auto vector_data_ptr = (const void*)get_encoded_data(*(data + 1), code_size + 8);
-//#ifdef USE_SSE
-//            _mm_prefetch((char*)(visited_array + *(data + 1)), _MM_HINT_T0);
-//            _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
-//#endif
+            //            auto vector_data_ptr = (const void*)get_encoded_data(*(data + 1), code_size + 8);
+            //#ifdef USE_SSE
+            //            _mm_prefetch((char*)(visited_array + *(data + 1)), _MM_HINT_T0);
+            //            _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
+            //#endif
 
             for (size_t j = 0; j < count_no_visited; j++) {
                 int candidate_id = to_be_visited[j];
@@ -1227,7 +1245,7 @@ public:
                     auto vector_data_ptr =
                         (uint8_t*)get_encoded_data(to_be_visited[j + this->po_], code_size + 8);
 #ifdef USE_SSE
-//                    _mm_prefetch((char*)(visited_array + to_be_visited[j + this->po_]), _MM_HINT_T0);
+                    //                    _mm_prefetch((char*)(visited_array + to_be_visited[j + this->po_]), _MM_HINT_T0);
                     mem_prefetch(vector_data_ptr, this->pl_);
 #endif
                 }
@@ -1239,11 +1257,8 @@ public:
                                    transformed_query,
                                    dim);
                 } else if (sq_num_bits_ == 4) {
-                    dist = INT4_L2_precompute(*((int64_t*)(codes + code_size)),
-                                              norm2,
-                                              codes,
-                                              transformed_query,
-                                              dim);
+                    dist = INT4_L2_precompute(
+                        *((int64_t*)(codes + code_size)), norm2, codes, transformed_query, dim);
                 } else {
                     char* currObj1 = (getDataByInternalId(candidate_id));
                     dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
@@ -1263,11 +1278,11 @@ public:
                 }
             }
 
-//            vector_data_ptr =
-//                (const void*)get_encoded_data(candidate_set.top().second, code_size + 8);
-//#ifdef USE_SSE
-//            _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
-//#endif
+            //            vector_data_ptr =
+            //                (const void*)get_encoded_data(candidate_set.top().second, code_size + 8);
+            //#ifdef USE_SSE
+            //            _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
+            //#endif
         }
 
         visited_list_pool_->releaseVisitedList(vl);
@@ -2607,48 +2622,17 @@ public:
         if (cur_element_count_ == 0)
             return result;
 
-        tableint currObj = enterpoint_node_;
-        float curdist =
-            fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
-
-        for (int level = maxlevel_; level > 0; level--) {
-            bool changed = true;
-            while (changed) {
-                changed = false;
-                unsigned int* data;
-
-                data = (unsigned int*)get_linklist(currObj, level);
-                int size = getListCount(data);
-                metric_hops++;
-                metric_distance_computations += size;
-
-                tableint* datal = (tableint*)(data + 1);
-                for (int i = 0; i < size; i++) {
-                    tableint cand = datal[i];
-                    if (cand < 0 || cand > max_elements_)
-                        throw std::runtime_error("cand error");
-                    float d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
-
-                    if (d < curdist) {
-                        curdist = d;
-                        currObj = cand;
-                        changed = true;
-                    }
-                }
-            }
-        }
-
         std::priority_queue<std::pair<float, tableint>,
                             std::vector<std::pair<float, tableint>>,
                             CompareByFirst>
             top_candidates;
         std::pair<uint32_t, uint32_t> counts;
         if (num_deleted_) {
-            std::tie(top_candidates, counts) =
-                searchBaseLayerST<true, true>(currObj, query_data, std::max(ef_, k), isIdAllowed);
+            std::tie(top_candidates, counts) = searchBaseLayerST<true, true>(
+                enterpoint_node_, query_data, std::max(ef_, k), isIdAllowed);
         } else {
-            std::tie(top_candidates, counts) =
-                searchBaseLayerST<false, true>(currObj, query_data, std::max(ef_, k), isIdAllowed);
+            std::tie(top_candidates, counts) = searchBaseLayerST<false, true>(
+                enterpoint_node_, query_data, std::max(ef_, k), isIdAllowed);
         }
 
         while (top_candidates.size() > 0) {

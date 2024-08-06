@@ -111,6 +111,8 @@ private:
     std::unordered_set<tableint> deleted_elements;  // contains internal ids of deleted elements
 
     float alpha_;
+    uint32_t po_;
+    uint32_t pl_;
 
 public:
     HierarchicalNSW(SpaceInterface* s) {
@@ -143,6 +145,9 @@ public:
           use_reversed_edges_(use_reversed_edges),
           sq_num_bits_(sq_num_bits),
           alpha_(alpha) {
+        this->po_ = 1;
+        this->pl_ = 1;
+
         max_elements_ = max_elements;
         num_deleted_ = 0;
         data_size_ = s->get_data_size();
@@ -269,7 +274,7 @@ public:
             __m512i v2_512 = _mm512_cvtepi8_epi16(v2);
             pVect2 += 32;
             //            _mm_prefetch(prefetch, _MM_HINT_T0);
-//            prefetch += 32;
+            //            prefetch += 32;
             sum512 = _mm512_add_epi32(sum512, _mm512_madd_epi16(v1_512, v2_512));
         }
 
@@ -364,7 +369,7 @@ public:
                        const void* p1_vec,
                        const void* p2_vec,
                        int dim,
-                       uint8_t* prefetch = nullptr) const {
+                       uint8_t* prefetch = nullptr) const override {
         uint32_t norm3 = INT4_IP_avx512_impl(p1_vec, p2_vec, dim, prefetch);
         return norm1 + norm2 - 2 * norm3;
     }
@@ -482,7 +487,9 @@ public:
     }
 
     int32_t
-    INT4_IP_avx512_impl(const void* p1_vec, const void* p2_vec, int dim,
+    INT4_IP_avx512_impl(const void* p1_vec,
+                        const void* p2_vec,
+                        int dim,
                         uint8_t* prefetch = nullptr) const {
         int d = 0;
         int8_t* x = (int8_t*)p1_vec;
@@ -516,7 +523,8 @@ public:
             auto xx2 = _mm512_and_si512(_mm512_srli_epi16(xx, 4), mask);  // 64 * 8bits
             auto yy1 = _mm512_and_si512(yy, mask);
             auto yy2 = _mm512_and_si512(_mm512_srli_epi16(yy, 4), mask);
-            _mm_prefetch(prefetch, _MM_HINT_T0);
+            //            _mm_prefetch(prefetch, _MM_HINT_T0);
+            //            prefetch += 64;
 
             sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(xx1, yy1));
             sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(xx2, yy2));
@@ -605,7 +613,8 @@ public:
         size_t code_size = dim / 2;
 
         struct AlignedDeleter {
-            void operator()(int8_t * ptr) {
+            void
+            operator()(int8_t* ptr) {
                 free(ptr);
             }
         };
@@ -910,6 +919,197 @@ public:
         return top_candidates;
     }
 
+    void
+    optimize() override {
+        constexpr static size_t kTryPos = 10;
+        constexpr static size_t kTryPls = 20;
+        constexpr static size_t sample_points_num = 1000;
+        constexpr static size_t k = 10;
+        size_t dim = *(size_t*)dist_func_param_;
+        size_t code_size = dim / (8 / sq_num_bits_);
+
+        std::vector<int> try_pos(std::min(kTryPos, M_));
+        std::vector<int> try_pls(std::min(kTryPls, (size_t)(code_size / 64)));
+        std::iota(try_pos.begin(), try_pos.end(), 1);
+        std::iota(try_pls.begin(), try_pls.end(), 1);
+
+        printf("=============Start optimization=============\n");
+        this->po_ = 1;
+        this->pl_ = 1;
+        auto st = std::chrono::high_resolution_clock::now();
+        for (int i = 0; i < sample_points_num; ++i) {
+            searchKnn(getDataByInternalId(i), k);
+        }
+        auto ed = std::chrono::high_resolution_clock::now();
+        float baseline_ela = std::chrono::duration<double>(ed - st).count();
+
+        float min_ela = std::numeric_limits<float>::max();
+        int best_po = 0, best_pl = 0;
+        for (auto try_po : try_pos) {
+            for (auto try_pl : try_pls) {
+                this->po_ = try_po;
+                this->pl_ = try_pl;
+                auto st = std::chrono::high_resolution_clock::now();
+                for (int i = 0; i < sample_points_num; ++i) {
+                    searchKnn(getDataByInternalId(i), k);
+                }
+
+                auto ed = std::chrono::high_resolution_clock::now();
+                auto ela = std::chrono::duration<double>(ed - st).count();
+                if (ela < min_ela) {
+                    min_ela = ela;
+                    best_po = try_po;
+                    best_pl = try_pl;
+                }
+                printf("try po = %d, pl = %d, gaining %.2f%% improvement\n",
+                       try_po,
+                       try_pl,
+                       100.0 * (baseline_ela / ela - 1));
+            }
+        }
+
+        printf(
+            "settint best po = %d, best pl = %d\n"
+            "gaining %.2f%% performance improvement\n"
+            "=============Done optimization=============\n",
+            best_po,
+            best_pl,
+            100.0 * (baseline_ela / min_ela - 1));
+        this->po_ = best_po;
+        this->pl_ = best_pl;
+    }
+
+    inline void
+    prefetch_L1(const void* address) const {
+#if defined(__SSE2__)
+        _mm_prefetch((const char*)address, _MM_HINT_T0);
+#else
+        __builtin_prefetch(address, 0, 3);
+#endif
+    }
+
+    inline void
+    mem_prefetch(unsigned char* ptr, const int num_lines) const {
+        switch (num_lines) {
+            default:
+                [[fallthrough]];
+            case 28:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 27:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 26:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 25:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 24:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 23:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 22:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 21:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 20:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 19:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 18:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 17:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 16:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 15:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 14:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 13:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 12:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 11:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 10:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 9:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 8:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 7:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 6:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 5:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 4:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 3:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 2:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 1:
+                prefetch_L1(ptr);
+                ptr += 64;
+                [[fallthrough]];
+            case 0:
+                break;
+        }
+    }
+
     template <bool has_deletions, bool collect_metrics = false>
     std::pair<std::priority_queue<std::pair<float, tableint>,
                                   std::vector<std::pair<float, tableint>>,
@@ -1014,12 +1214,14 @@ public:
             for (size_t j = 1; j <= size; j++) {
                 int candidate_id = *(data + j);
                 size_t pre_l = std::min(j, size - 2);
-                auto vector_data_ptr =
-                    (uint8_t*)get_encoded_data(*(data + pre_l + 1), code_size + 8);
+                if (pre_l + this->po_ <= size) {
+                    auto vector_data_ptr =
+                        (uint8_t*)get_encoded_data(*(data + pre_l + this->po_), code_size + 8);
 #ifdef USE_SSE
-                _mm_prefetch((char*)(visited_array + *(data + pre_l + 1)), _MM_HINT_T0);
-                _mm_prefetch((void*)vector_data_ptr, _MM_HINT_T0);
+                    _mm_prefetch((char*)(visited_array + *(data + pre_l + this->po_)), _MM_HINT_T0);
+                    mem_prefetch(vector_data_ptr, this->pl_);
 #endif
+                }
                 if (!(visited_array[candidate_id] == visited_array_tag)) {
                     visited_array[candidate_id] = visited_array_tag;
                     auto* codes = get_encoded_data(candidate_id, code_size + 8);
@@ -1029,14 +1231,14 @@ public:
                                        (const void*)codes,
                                        transformed_query,
                                        dim,
-                                       vector_data_ptr);
+                                       (uint8_t*)vector_data_ptr);
                     } else if (sq_num_bits_ == 4) {
                         dist = INT4_L2_precompute(*((int64_t*)(codes + code_size)),
                                                   norm2,
                                                   codes,
                                                   transformed_query,
                                                   dim,
-                                                  vector_data_ptr);
+                                                  (uint8_t*)vector_data_ptr);
                     } else {
                         char* currObj1 = (getDataByInternalId(candidate_id));
                         dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
@@ -1065,8 +1267,8 @@ public:
         }
 
         visited_list_pool_->releaseVisitedList(vl);
-//        top_candidates.push({10000, dist_cmp});
-//        top_candidates.push({20000, hops});
+        //        top_candidates.push({10000, dist_cmp});
+        //        top_candidates.push({20000, hops});
         return {top_candidates, {dist_cmp, hops}};
     }
 
@@ -2449,7 +2651,8 @@ public:
 
         while (top_candidates.size() > 0) {
             std::pair<float, tableint> rez = top_candidates.top();
-            float dist = fstdistfunc_(query_data, getDataByInternalId(rez.second), dist_func_param_);
+            float dist =
+                fstdistfunc_(query_data, getDataByInternalId(rez.second), dist_func_param_);
             result.push(std::pair<float, labeltype>(dist, getExternalLabel(rez.second)));
             top_candidates.pop();
             if (result.size() > k) {

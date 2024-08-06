@@ -364,6 +364,14 @@ int search(std::vector<uint32_t> efs, uint32_t k = 10) {
             }}
         }}
         )";
+
+    auto single_query = vsag::Dataset::Make();
+    single_query->NumElements(1)->Dim(expected_dim)->Owner(false);
+    vsag::DatasetPtr ann_result;
+    single_query->Float32Vectors(query->GetFloat32Vectors() + 100 * expected_dim);
+    auto result = index->Test(single_query);
+    logger->Info(fmt::format("sq: {}, time: {}", sq_num_bits, result->first));
+
     for (auto ef_search : efs) {
         logger->Debug(fmt::format("====Search with ef {}====", ef_search));
         auto search_parameters = fmt::format(search_parameters_json, ef_search);
@@ -371,6 +379,7 @@ int search(std::vector<uint32_t> efs, uint32_t k = 10) {
 
         double total_time_cost = 0;
         double recall = 0;
+        double avg_dist_cmp = 0, avg_hop = 0;
         for (int i = 0; i < query_npts; i++) {
             auto single_query = vsag::Dataset::Make();
             single_query->NumElements(1)->Dim(expected_dim)->Owner(false);
@@ -383,12 +392,19 @@ int search(std::vector<uint32_t> efs, uint32_t k = 10) {
             }
             total_time_cost += time_cost;
             recall += calculate_recall(ann_result, gt_data + i * gt_dim, k);
+            assert(ann_result->GetDim() == k + 2);
+            assert(ann_result->GetDistances()[k] - 10000000 < 1e4);
+            assert(ann_result->GetDistances()[k + 1] - 20000000 < 1e4);
+            avg_dist_cmp += ann_result->GetIds()[k];
+            avg_hop += ann_result->GetIds()[k + 1];
         }
         recall /= query_npts;
-        logger->Info(fmt::format("recall: {:.4f}, QPS: {:.1f}, time cost: {:.2f} ms",
-                                  recall,
-                                  query_npts / (total_time_cost / 1000),
-                                  (total_time_cost) / query_npts));
+        logger->Info(fmt::format("recall: {:.4f}, QPS: {:.1f}, time cost: {:.2f} ms, avg_dist_cmp: {:.2f}, avg_hop: {:.2f}",
+                                 recall,
+                                 query_npts / (total_time_cost / 1000),
+                                 total_time_cost / query_npts,
+                                 avg_dist_cmp / query_npts,
+                                 avg_hop / query_npts));
     }
 
 
@@ -411,17 +427,16 @@ int main() {
 
     // search
     std::vector<uint32_t> efs = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
-    // efs.resize(1000, 40);
-    for (int round = 0; round < 3; round++) {
-        sq_num_bits = 8;
-        // if (round == 0) {
-        //     sq_num_bits = 4;
-        // } else if (round == 1) {
-        //     sq_num_bits = 8;
-        // } else {
-        //     sq_num_bits = -1;
-        // }
-        // use_static = (round == 2);
+//    efs.resize(1000, 80);
+    for (int round = 0; round < 2; round++) {
+         if (round == 0) {
+             sq_num_bits = 4;
+         } else if (round == 1) {
+             sq_num_bits = 8;
+         } else {
+             sq_num_bits = -1;
+         }
+         use_static = (round == 2);
         search(efs);
     }
 }

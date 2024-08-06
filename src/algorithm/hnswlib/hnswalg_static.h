@@ -189,8 +189,8 @@ public:
 
     struct CompareByFirst {
         constexpr bool
-        operator()(std::pair<float, tableint> const& a, std::pair<float, tableint> const& b) const
-            noexcept {
+        operator()(std::pair<float, tableint> const& a,
+                   std::pair<float, tableint> const& b) const noexcept {
             return a.first < b.first;
         }
     };

@@ -239,6 +239,11 @@ public:
         return res;
     }
 
+    int32_t
+    INT8_IP_TEST(const void* p1_vec, const void* p2_vec, int dim) const override {
+        return INT8_IP(p1_vec, p2_vec, dim);
+    }
+
     double
     INT8_InnerProduct512_AVX512_impl(const void* pVect1v,
                                      const void* pVect2v,
@@ -263,8 +268,8 @@ public:
             __m256i v2 = _mm256_maskz_loadu_epi8(mask, pVect2);
             __m512i v2_512 = _mm512_cvtepi8_epi16(v2);
             pVect2 += 32;
-            _mm_prefetch(prefetch, _MM_HINT_T0);
-            prefetch += 32;
+            //            _mm_prefetch(prefetch, _MM_HINT_T0);
+//            prefetch += 32;
             sum512 = _mm512_add_epi32(sum512, _mm512_madd_epi16(v1_512, v2_512));
         }
 
@@ -358,8 +363,10 @@ public:
                        int32_t norm2,
                        const void* p1_vec,
                        const void* p2_vec,
-                       int dim) const override {
-        return norm1 + norm2 - 2 * INT4_IP(p1_vec, p2_vec, dim);
+                       int dim,
+                       uint8_t* prefetch = nullptr) const {
+        uint32_t norm3 = INT4_IP_avx512_impl(p1_vec, p2_vec, dim, prefetch);
+        return norm1 + norm2 - 2 * norm3;
     }
 
     int32_t
@@ -394,30 +401,24 @@ public:
     INT4_L2_avx2_impl(const void* p1_vec, const void* p2_vec, int dim) const override {
         int8_t* x = (int8_t*)p1_vec;
         int8_t* y = (int8_t*)p2_vec;
-        __m256i sum = _mm256_setzero_si256();
+        __m256i sum1 = _mm256_setzero_si256(), sum2 = _mm256_setzero_si256();
         __m256i mask = _mm256_set1_epi8(0xf);
-        for (int d = 0; d < dim / 2; d += 32) {
-            auto xx = _mm256_loadu_si256((__m256i*)(x + d));
-            auto yy = _mm256_loadu_si256((__m256i*)(y + d));
-            auto xx1 = _mm256_and_si256(xx, mask);                        // 32 * 8bits
-            auto xx2 = _mm256_and_si256(_mm256_srli_epi16(xx, 4), mask);  // 32 * 8bits
+        for (int i = 0; i < dim; i += 64) {
+            auto xx = _mm256_loadu_si256((__m256i*)(x + i / 2));
+            auto yy = _mm256_loadu_si256((__m256i*)(y + i / 2));
+            auto xx1 = _mm256_and_si256(xx, mask);
+            auto xx2 = _mm256_and_si256(_mm256_srli_epi16(xx, 4), mask);
             auto yy1 = _mm256_and_si256(yy, mask);
             auto yy2 = _mm256_and_si256(_mm256_srli_epi16(yy, 4), mask);
-            auto d1 = _mm256_sub_epi8(xx1, yy1);  // 32 * 8bits
+            auto d1 = _mm256_sub_epi8(xx1, yy1);
             auto d2 = _mm256_sub_epi8(xx2, yy2);
-            d1 = _mm256_abs_epi8(d1);  // 32 * 8bits
+            d1 = _mm256_abs_epi8(d1);
             d2 = _mm256_abs_epi8(d2);
-            sum = _mm256_add_epi16(
-                sum, _mm256_maddubs_epi16(d1, d1));  // _mm256_maddubs_epi16(d1, d1): 16 * 16bits
-            sum = _mm256_add_epi16(sum, _mm256_maddubs_epi16(d2, d2));  // sum1: 16 * 16bits
+            sum1 = _mm256_add_epi16(sum1, _mm256_maddubs_epi16(d1, d1));
+            sum2 = _mm256_add_epi16(sum2, _mm256_maddubs_epi16(d2, d2));
         }
-        alignas(256) int16_t temp[16];
-        _mm256_store_si256((__m256i*)temp, sum);
-        int32_t result = 0;
-        for (int i = 0; i < 16; ++i) {
-            result += temp[i];
-        }
-        return result;
+        sum1 = _mm256_add_epi32(sum1, sum2);
+        return reduce_add_i16x16(sum1);
     }
 
     int32_t
@@ -481,7 +482,8 @@ public:
     }
 
     int32_t
-    INT4_IP_avx512_impl(const void* p1_vec, const void* p2_vec, int dim) const override {
+    INT4_IP_avx512_impl(const void* p1_vec, const void* p2_vec, int dim,
+                        uint8_t* prefetch = nullptr) const {
         int d = 0;
         int8_t* x = (int8_t*)p1_vec;
         int8_t* y = (int8_t*)p2_vec;
@@ -514,6 +516,7 @@ public:
             auto xx2 = _mm512_and_si512(_mm512_srli_epi16(xx, 4), mask);  // 64 * 8bits
             auto yy1 = _mm512_and_si512(yy, mask);
             auto yy2 = _mm512_and_si512(_mm512_srli_epi16(yy, 4), mask);
+            _mm_prefetch(prefetch, _MM_HINT_T0);
 
             sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(xx1, yy1));
             sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(xx2, yy2));
@@ -585,7 +588,7 @@ public:
             if (delta > 0.999) {
                 delta = 0.999;
             }
-            scaled = 15 * delta;
+            scaled = 16 * delta;
             if (d & 1) {
                 to[d / 2] |= scaled << 4;
             } else {
@@ -601,13 +604,19 @@ public:
         size_t dim = *(size_t*)dist_func_param_;
         size_t code_size = dim / 2;
 
-        data_int8.reset(new int8_t[cur_element_count_ * (code_size + 8)]);
+        struct AlignedDeleter {
+            void operator()(int8_t * ptr) {
+                free(ptr);
+            }
+        };
+        void* ptr = std::aligned_alloc(4096, cur_element_count_ * (code_size + 8));
+        data_int8 = std::shared_ptr<int8_t[]>(static_cast<int8_t*>(ptr), AlignedDeleter());
         // norm_pre_compute.resize(cur_element_count_);
         for (int i = 0; i < cur_element_count_; ++i) {
             auto* code = get_encoded_data(i, code_size + 8);
             transform_to_int4((float*)getDataByInternalId(i), code);
             int64_t norm = INT4_IP(code, code, dim);
-            memcpy(code + dim, &norm, 8);
+            memcpy(code + code_size, &norm, 8);
         }
     }
 
@@ -636,8 +645,8 @@ public:
 
     struct CompareByFirst {
         constexpr bool
-        operator()(std::pair<float, tableint> const& a, std::pair<float, tableint> const& b) const
-            noexcept {
+        operator()(std::pair<float, tableint> const& a,
+                   std::pair<float, tableint> const& b) const noexcept {
             return a.first < b.first;
         }
     };
@@ -902,9 +911,10 @@ public:
     }
 
     template <bool has_deletions, bool collect_metrics = false>
-    std::priority_queue<std::pair<float, tableint>,
-                        std::vector<std::pair<float, tableint>>,
-                        CompareByFirst>
+    std::pair<std::priority_queue<std::pair<float, tableint>,
+                                  std::vector<std::pair<float, tableint>>,
+                                  CompareByFirst>,
+              std::pair<uint32_t, uint32_t>>
     searchBaseLayerST(tableint ep_id,
                       const void* data_point,
                       size_t ef,
@@ -958,11 +968,8 @@ public:
                                transformed_query,
                                dim);
             } else if (sq_num_bits_ == 4) {
-                dist = INT4_L2_precompute(*((int64_t*)(codes + code_size)),
-                                          norm2,
-                                          (const void*)codes,
-                                          transformed_query,
-                                          dim);
+                dist = INT4_L2_precompute(
+                    *((int64_t*)(codes + code_size)), norm2, codes, transformed_query, dim);
             } else {
                 dist = fstdistfunc_(
                     (const float*)data_point, getDataByInternalId(ep_id), dist_func_param_);
@@ -976,7 +983,8 @@ public:
         }
 
         visited_array[ep_id] = visited_array_tag;
-
+        uint32_t hops = 0;
+        uint32_t dist_cmp = 0;
         while (!candidate_set.empty()) {
             std::pair<float, tableint> current_node_pair = candidate_set.top();
 
@@ -994,6 +1002,8 @@ public:
                 metric_hops++;
                 metric_distance_computations += size;
             }
+            hops++;
+            dist_cmp += size;
 
             auto vector_data_ptr = (const void*)get_encoded_data(*(data + 1), code_size + 8);
 #ifdef USE_SSE
@@ -1023,9 +1033,10 @@ public:
                     } else if (sq_num_bits_ == 4) {
                         dist = INT4_L2_precompute(*((int64_t*)(codes + code_size)),
                                                   norm2,
-                                                  (const void*)codes,
+                                                  codes,
                                                   transformed_query,
-                                                  dim);
+                                                  dim,
+                                                  vector_data_ptr);
                     } else {
                         char* currObj1 = (getDataByInternalId(candidate_id));
                         dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
@@ -1054,7 +1065,9 @@ public:
         }
 
         visited_list_pool_->releaseVisitedList(vl);
-        return top_candidates;
+//        top_candidates.push({10000, dist_cmp});
+//        top_candidates.push({20000, hops});
+        return {top_candidates, {dist_cmp, hops}};
     }
 
     template <bool has_deletions, bool collect_metrics = false>
@@ -2425,22 +2438,26 @@ public:
                             std::vector<std::pair<float, tableint>>,
                             CompareByFirst>
             top_candidates;
+        std::pair<uint32_t, uint32_t> counts;
         if (num_deleted_) {
-            top_candidates =
+            std::tie(top_candidates, counts) =
                 searchBaseLayerST<true, true>(currObj, query_data, std::max(ef_, k), isIdAllowed);
         } else {
-            top_candidates =
+            std::tie(top_candidates, counts) =
                 searchBaseLayerST<false, true>(currObj, query_data, std::max(ef_, k), isIdAllowed);
         }
 
-        while (top_candidates.size() > k) {
-            top_candidates.pop();
-        }
         while (top_candidates.size() > 0) {
             std::pair<float, tableint> rez = top_candidates.top();
-            result.push(std::pair<float, labeltype>(rez.first, getExternalLabel(rez.second)));
+            float dist = fstdistfunc_(query_data, getDataByInternalId(rez.second), dist_func_param_);
+            result.push(std::pair<float, labeltype>(dist, getExternalLabel(rez.second)));
             top_candidates.pop();
+            if (result.size() > k) {
+                result.pop();
+            }
         }
+        result.push({10000000, counts.first});
+        result.push({20000000, counts.second});
         return result;
     }
 

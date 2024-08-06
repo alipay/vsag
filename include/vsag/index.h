@@ -171,6 +171,11 @@ public:
         throw std::runtime_error("Index doesn't support feedback");
     };
 
+    virtual tl::expected<std::pair<double, uint32_t>, Error>
+    Test(const DatasetPtr& query) {
+        throw std::runtime_error("Index doesn't support test");
+    }
+
     /**
      * Calculate the distance between the query and the vector of the given ID.
      *

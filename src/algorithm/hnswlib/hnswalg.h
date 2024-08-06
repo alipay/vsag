@@ -921,15 +921,13 @@ public:
 
     void
     optimize() override {
-        constexpr static size_t kTryPos = 10;
-        constexpr static size_t kTryPls = 20;
-        constexpr static size_t sample_points_num = 1000;
+        constexpr static size_t sample_points_num = 5000;
         constexpr static size_t k = 10;
         size_t dim = *(size_t*)dist_func_param_;
         size_t code_size = dim / (8 / sq_num_bits_);
 
-        std::vector<int> try_pos(std::min(kTryPos, M_));
-        std::vector<int> try_pls(std::min(kTryPls, (size_t)(code_size / 64)));
+        std::vector<int> try_pos(5);
+        std::vector<int> try_pls(15);
         std::iota(try_pos.begin(), try_pos.end(), 1);
         std::iota(try_pls.begin(), try_pls.end(), 1);
 
@@ -1185,6 +1183,7 @@ public:
         visited_array[ep_id] = visited_array_tag;
         uint32_t hops = 0;
         uint32_t dist_cmp = 0;
+        std::vector<int> to_be_visited(M_ * 2);
         while (!candidate_set.empty()) {
             std::pair<float, tableint> current_node_pair = candidate_set.top();
 
@@ -1193,6 +1192,8 @@ public:
                 break;
             }
             candidate_set.pop();
+            int* data2 = (int*)get_linklist0(candidate_set.top().second);
+            _mm_prefetch((char*)(data2), _MM_HINT_T0);
 
             tableint current_node_id = current_node_pair.second;
             int* data = (int*)get_linklist0(current_node_id);
@@ -1203,72 +1204,73 @@ public:
                 metric_distance_computations += size;
             }
             hops++;
-            dist_cmp += size;
 
-            auto vector_data_ptr = (const void*)get_encoded_data(*(data + 1), code_size + 8);
-#ifdef USE_SSE
-            _mm_prefetch((char*)(visited_array + *(data + 1)), _MM_HINT_T0);
-            _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
-#endif
-
+            uint32_t count_no_visited = 0;
             for (size_t j = 1; j <= size; j++) {
                 int candidate_id = *(data + j);
-                size_t pre_l = std::min(j, size - 2);
-                if (pre_l + this->po_ <= size) {
+                if (!(visited_array[candidate_id] == visited_array_tag)) {
+                    to_be_visited[count_no_visited++] = candidate_id;
+                }
+                visited_array[candidate_id] = visited_array_tag;
+            }
+            dist_cmp += count_no_visited;
+
+//            auto vector_data_ptr = (const void*)get_encoded_data(*(data + 1), code_size + 8);
+//#ifdef USE_SSE
+//            _mm_prefetch((char*)(visited_array + *(data + 1)), _MM_HINT_T0);
+//            _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
+//#endif
+
+            for (size_t j = 0; j < count_no_visited; j++) {
+                int candidate_id = to_be_visited[j];
+                if (j + this->po_ <= count_no_visited) {
                     auto vector_data_ptr =
-                        (uint8_t*)get_encoded_data(*(data + pre_l + this->po_), code_size + 8);
+                        (uint8_t*)get_encoded_data(to_be_visited[j + this->po_], code_size + 8);
 #ifdef USE_SSE
-                    _mm_prefetch((char*)(visited_array + *(data + pre_l + this->po_)), _MM_HINT_T0);
+//                    _mm_prefetch((char*)(visited_array + to_be_visited[j + this->po_]), _MM_HINT_T0);
                     mem_prefetch(vector_data_ptr, this->pl_);
 #endif
                 }
-                if (!(visited_array[candidate_id] == visited_array_tag)) {
-                    visited_array[candidate_id] = visited_array_tag;
-                    auto* codes = get_encoded_data(candidate_id, code_size + 8);
-                    if (sq_num_bits_ == 8) {
-                        dist = INT8_L2(((int64_t*)(codes + code_size)),
-                                       norm2,
-                                       (const void*)codes,
-                                       transformed_query,
-                                       dim,
-                                       (uint8_t*)vector_data_ptr);
-                    } else if (sq_num_bits_ == 4) {
-                        dist = INT4_L2_precompute(*((int64_t*)(codes + code_size)),
-                                                  norm2,
-                                                  codes,
-                                                  transformed_query,
-                                                  dim,
-                                                  (uint8_t*)vector_data_ptr);
-                    } else {
-                        char* currObj1 = (getDataByInternalId(candidate_id));
-                        dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
-                    }
-                    if (top_candidates.size() < ef || lowerBound > dist) {
-                        candidate_set.emplace(-dist, candidate_id);
+                auto* codes = get_encoded_data(candidate_id, code_size + 8);
+                if (sq_num_bits_ == 8) {
+                    dist = INT8_L2(((int64_t*)(codes + code_size)),
+                                   norm2,
+                                   (const void*)codes,
+                                   transformed_query,
+                                   dim);
+                } else if (sq_num_bits_ == 4) {
+                    dist = INT4_L2_precompute(*((int64_t*)(codes + code_size)),
+                                              norm2,
+                                              codes,
+                                              transformed_query,
+                                              dim);
+                } else {
+                    char* currObj1 = (getDataByInternalId(candidate_id));
+                    dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
+                }
+                if (top_candidates.size() < ef || lowerBound > dist) {
+                    candidate_set.emplace(-dist, candidate_id);
 
-                        if ((!has_deletions || !isMarkedDeleted(candidate_id)) &&
-                            ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id))))
-                            top_candidates.emplace(dist, candidate_id);
+                    if ((!has_deletions || !isMarkedDeleted(candidate_id)) &&
+                        ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id))))
+                        top_candidates.emplace(dist, candidate_id);
 
-                        if (top_candidates.size() > ef)
-                            top_candidates.pop();
+                    if (top_candidates.size() > ef)
+                        top_candidates.pop();
 
-                        if (!top_candidates.empty())
-                            lowerBound = top_candidates.top().first;
-                    }
+                    if (!top_candidates.empty())
+                        lowerBound = top_candidates.top().first;
                 }
             }
 
-            vector_data_ptr =
-                (const void*)get_encoded_data(candidate_set.top().second, code_size + 8);
-#ifdef USE_SSE
-            _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
-#endif
+//            vector_data_ptr =
+//                (const void*)get_encoded_data(candidate_set.top().second, code_size + 8);
+//#ifdef USE_SSE
+//            _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
+//#endif
         }
 
         visited_list_pool_->releaseVisitedList(vl);
-        //        top_candidates.push({10000, dist_cmp});
-        //        top_candidates.push({20000, hops});
         return {top_candidates, {dist_cmp, hops}};
     }
 

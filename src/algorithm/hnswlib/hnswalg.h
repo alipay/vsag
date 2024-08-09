@@ -113,6 +113,8 @@ private:
     float alpha_;
     uint32_t po_;
     uint32_t pl_;
+    uint32_t p_round_;
+    float p_rate_;
 
 public:
     HierarchicalNSW(SpaceInterface* s) {
@@ -147,6 +149,8 @@ public:
           alpha_(alpha) {
         this->po_ = 1;
         this->pl_ = 1;
+        this->p_rate_ = 1;
+        this->p_round_ = 20;
 
         max_elements_ = max_elements;
         num_deleted_ = 0;
@@ -363,15 +367,28 @@ public:
         }
     }
 
-    int32_t
+
+    std::vector<int32_t>
+    INT4_L2_batch(std::vector<int32_t>& n1_vec,
+                  std::vector<int32_t>& n2_vec,
+                  std::vector<const void*>& p1_vec,
+                  std::vector<const void*>& p2_vec,
+                  int dim,
+                  int size) {
+        std::vector<int32_t> ret(size);
+        for (int i = 0; i < size; i++) {
+            ret[i] = INT4_L2_precompute(n1_vec[i], n2_vec[i], p1_vec[i], p2_vec[i], dim);
+        }
+        return ret;
+    }
+
+    inline int32_t
     INT4_L2_precompute(int32_t norm1,
                        int32_t norm2,
                        const void* p1_vec,
                        const void* p2_vec,
-                       int dim,
-                       uint8_t* prefetch = nullptr) const override {
-        uint32_t norm3 = INT4_IP_avx512_impl(p1_vec, p2_vec, dim, prefetch);
-        return norm1 + norm2 - 2 * norm3;
+                       int dim) const {
+        return norm1 + norm2 - 2 * INT4_IP_avx512_impl(p1_vec, p2_vec, dim);
     }
 
     int32_t
@@ -486,12 +503,11 @@ public:
 #endif
     }
 
-    int32_t
-    INT4_IP_avx512_impl(const void* p1_vec,
-                        const void* p2_vec,
-                        int dim,
-                        uint8_t* prefetch = nullptr) const {
+    inline int32_t
+    INT4_IP_avx512_impl(const void* p1_vec, const void* p2_vec, int dim) const {
         int d = 0;
+        alignas(512) int16_t temp[32];
+        int result = 0;
         int8_t* x = (int8_t*)p1_vec;
         int8_t* y = (int8_t*)p2_vec;
         __m512i sum = _mm512_setzero_si512();
@@ -500,9 +516,9 @@ public:
             auto xx = _mm512_loadu_si512((__m512i*)(x + d));
             auto yy = _mm512_loadu_si512((__m512i*)(y + d));
 
-            if (prefetch) {
-                _mm_prefetch(prefetch + d, _MM_HINT_T0);
-            }
+//            if (prefetch) {
+//                _mm_prefetch(prefetch + d, _MM_HINT_T0);
+//            }
 
             if (d + 64 >= dim / 2) {
                 __m512i mask_overflow = _mm512_setr_epi32(0xffffffff,
@@ -531,10 +547,20 @@ public:
 
             sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(xx1, yy1));
             sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(xx2, yy2));
+//
+//            if (d / 64 == this->p_round_ and NB != -10000) {
+//                result = 0;
+//                _mm512_store_si512((__m512i*)temp, sum);
+//                for (int i = 0; i < 32; ++i) {
+//                    result += temp[i];
+//                }
+//                if (result + (dim / 2 - d) * 225 * this->p_rate_ < NB) {
+//                    return 0;
+//                }
+//            }
         }
-        alignas(512) int16_t temp[32];
+        result = 0;
         _mm512_store_si512((__m512i*)temp, sum);
-        int32_t result = 0;
         for (int i = 0; i < 32; ++i) {
             result += temp[i];
         }
@@ -924,7 +950,7 @@ public:
 
     void
     optimize() override {
-        constexpr static size_t sample_points_num = 5000;
+        constexpr static size_t sample_points_num = 10000;
         constexpr static size_t k = 10;
         size_t dim = *(size_t*)dist_func_param_;
         size_t code_size = dim / (8 / sq_num_bits_);
@@ -933,6 +959,8 @@ public:
         std::vector<int> try_pls(15);
         std::iota(try_pos.begin(), try_pos.end(), 1);
         std::iota(try_pls.begin(), try_pls.end(), 1);
+        std::vector<float> try_p_rates = {0.5, 0.6, 0.7, 0.8, 0.9};
+        std::vector<uint32_t> try_p_rounds = {2, 3, 4, 5, 6, 7, 8, 9};
 
         bool have_optimized = true;
         if (have_optimized) {
@@ -946,12 +974,17 @@ public:
                 try_pos.assign({1});
                 try_pls.assign({1});
             }
+
+            this->p_rate_ = 1;
+            this->p_round_ = 20;
         }
 
-        this->ef_ = 80;
         printf("=============Start optimization=============\n");
+        this->ef_ = 80;
         this->po_ = 1;
         this->pl_ = 1;
+        this->p_rate_ = 1;
+        this->p_round_ = 20;
         auto st = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < sample_points_num; ++i) {
             searchKnn(getDataByInternalId(i), k);
@@ -991,8 +1024,43 @@ public:
             best_po,
             best_pl,
             100.0 * (baseline_ela / min_ela - 1));
-        this->po_ = best_po;
-        this->pl_ = best_pl;
+
+        baseline_ela = min_ela;
+        return ;
+
+        float best_p_rate = 1;
+        int best_p_round = 20;
+        for (auto try_p_round : try_p_rounds) {
+            for (auto try_p_rate : try_p_rates) {
+                this->p_round_ = try_p_round;
+                this->p_rate_ = try_p_rate;
+                auto st = std::chrono::high_resolution_clock::now();
+                for (int i = 0; i < sample_points_num; ++i) {
+                    searchKnn(getDataByInternalId(i), k);
+                }
+                auto ed = std::chrono::high_resolution_clock::now();
+                auto ela = std::chrono::duration<double>(ed - st).count();
+                if (ela < min_ela) {
+                    min_ela = ela;
+                    best_p_rate = try_p_rate;
+                    best_p_round = try_p_round;
+                }
+                printf("try p_rate = %.2f, p_round = %d, gaining %.2f%% improvement\n",
+                       try_p_rate,
+                       try_p_round,
+                       100.0 * (baseline_ela / ela - 1));
+            }
+        }
+        this->p_round_ = best_p_round;
+        this->p_rate_ = best_p_rate;
+
+        printf(
+            "settint best p_rate = %.2f, best p_round = %d\n"
+            "gaining %.2f%% performance improvement\n"
+            "=============Done optimization=============\n",
+            best_p_rate,
+            best_p_round,
+            100.0 * (baseline_ela / min_ela - 1));
     }
 
     inline void
@@ -1126,6 +1194,29 @@ public:
         }
     }
 
+    uint32_t
+    visit(std::pair<float, tableint>& current_node_pair,
+          std::pair<float, tableint>& next_node_pair,
+          vl_type* visited_array,
+          vl_type visited_array_tag,
+          std::vector<int>& to_be_visited) const {
+        int* data2 = (int*)get_linklist0(next_node_pair.second);
+        _mm_prefetch((char*)(data2), _MM_HINT_T0);
+
+        int* data = (int*)get_linklist0(current_node_pair.second);
+        size_t size = getListCount((linklistsizeint*)data);
+
+        uint32_t count_no_visited = 0;
+        for (size_t j = 1; j <= size; j++) {
+            int candidate_id = *(data + j);
+            if (!(visited_array[candidate_id] == visited_array_tag)) {
+                to_be_visited[count_no_visited++] = candidate_id;
+            }
+            visited_array[candidate_id] = visited_array_tag;
+        }
+        return count_no_visited;
+    }
+
     template <bool has_deletions, bool collect_metrics = false>
     std::pair<std::priority_queue<std::pair<float, tableint>,
                                   std::vector<std::pair<float, tableint>>,
@@ -1174,35 +1265,38 @@ public:
 
         float lowerBound;
         float dist;
-        if ((!has_deletions || !isMarkedDeleted(ep_id)) &&
-            ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(ep_id)))) {
-            auto* codes = get_encoded_data(ep_id, code_size + 8);
-            if (sq_num_bits_ == 8) {
-                dist = INT8_L2(((int64_t*)(codes + code_size)),
-                               norm2,
-                               (const void*)codes,
-                               transformed_query,
-                               dim);
-            } else if (sq_num_bits_ == 4) {
-                dist = INT4_L2_precompute(
-                    *((int64_t*)(codes + code_size)), norm2, codes, transformed_query, dim);
-            } else {
-                dist = fstdistfunc_(
-                    (const float*)data_point, getDataByInternalId(ep_id), dist_func_param_);
-            }
-            lowerBound = dist;
-            top_candidates.emplace(dist, ep_id);
-            candidate_set.emplace(-dist, ep_id);
+        auto* codes = get_encoded_data(ep_id, code_size + 8);
+        if (sq_num_bits_ == 8) {
+            dist = INT8_L2(((int64_t*)(codes + code_size)),
+                           norm2,
+                           (const void*)codes,
+                           transformed_query,
+                           dim);
+        } else if (sq_num_bits_ == 4) {
+            dist = INT4_L2_precompute(
+                *((int64_t*)(codes + code_size)), norm2, codes, transformed_query, dim);
         } else {
-            lowerBound = std::numeric_limits<float>::max();
-            candidate_set.emplace(-lowerBound, ep_id);
+            dist = fstdistfunc_(
+                (const float*)data_point, getDataByInternalId(ep_id), dist_func_param_);
         }
+        lowerBound = dist;
+        top_candidates.emplace(dist, ep_id);
+        candidate_set.emplace(-dist, ep_id);
 
         visited_array[ep_id] = visited_array_tag;
         uint32_t hops = 0;
         uint32_t dist_cmp = 0;
         std::vector<int> to_be_visited(M_ * 2);
+        int batch_size = 4;
+
+//        std::vector<int32_t> dist_vec(batch_size);
+//        std::vector<int32_t> n1_vec(batch_size);
+//        std::vector<int32_t> n2_vec(batch_size);
+//        std::vector<const void*> p1_vec(batch_size);
+//        std::vector<const void*> p2_vec(batch_size);
+
         while (!candidate_set.empty()) {
+            hops++;
             std::pair<float, tableint> current_node_pair = candidate_set.top();
 
             if ((-current_node_pair.first) > lowerBound &&
@@ -1210,34 +1304,10 @@ public:
                 break;
             }
             candidate_set.pop();
-            int* data2 = (int*)get_linklist0(candidate_set.top().second);
-            _mm_prefetch((char*)(data2), _MM_HINT_T0);
-
-            tableint current_node_id = current_node_pair.second;
-            int* data = (int*)get_linklist0(current_node_id);
-            size_t size = getListCount((linklistsizeint*)data);
-            //                bool cur_node_deleted = isMarkedDeleted(current_node_id);
-            if (collect_metrics) {
-                metric_hops++;
-                metric_distance_computations += size;
-            }
-            hops++;
-
-            uint32_t count_no_visited = 0;
-            for (size_t j = 1; j <= size; j++) {
-                int candidate_id = *(data + j);
-                if (!(visited_array[candidate_id] == visited_array_tag)) {
-                    to_be_visited[count_no_visited++] = candidate_id;
-                }
-                visited_array[candidate_id] = visited_array_tag;
-            }
+            std::pair<float, tableint> next_node_pair = candidate_set.top();
+            uint32_t count_no_visited = visit(
+                current_node_pair, next_node_pair, visited_array, visited_array_tag, to_be_visited);
             dist_cmp += count_no_visited;
-
-            //            auto vector_data_ptr = (const void*)get_encoded_data(*(data + 1), code_size + 8);
-            //#ifdef USE_SSE
-            //            _mm_prefetch((char*)(visited_array + *(data + 1)), _MM_HINT_T0);
-            //            _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
-            //#endif
 
             for (size_t j = 0; j < count_no_visited; j++) {
                 int candidate_id = to_be_visited[j];
@@ -1245,10 +1315,15 @@ public:
                     auto vector_data_ptr =
                         (uint8_t*)get_encoded_data(to_be_visited[j + this->po_], code_size + 8);
 #ifdef USE_SSE
-                    //                    _mm_prefetch((char*)(visited_array + to_be_visited[j + this->po_]), _MM_HINT_T0);
                     mem_prefetch(vector_data_ptr, this->pl_);
 #endif
                 }
+//                for (int k = 0; k < batch_size; k++) {
+//                }
+//                INT4_L2_batch(n1_vec, n2_vec, p1_vec, p2_vec, batch_size);
+//                for (int k = 0; k < batch_size; k++) {
+//
+//                }
                 auto* codes = get_encoded_data(candidate_id, code_size + 8);
                 if (sq_num_bits_ == 8) {
                     dist = INT8_L2(((int64_t*)(codes + code_size)),
@@ -1266,9 +1341,7 @@ public:
                 if (top_candidates.size() < ef || lowerBound > dist) {
                     candidate_set.emplace(-dist, candidate_id);
 
-                    if ((!has_deletions || !isMarkedDeleted(candidate_id)) &&
-                        ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id))))
-                        top_candidates.emplace(dist, candidate_id);
+                    top_candidates.emplace(dist, candidate_id);
 
                     if (top_candidates.size() > ef)
                         top_candidates.pop();
@@ -1277,12 +1350,6 @@ public:
                         lowerBound = top_candidates.top().first;
                 }
             }
-
-            //            vector_data_ptr =
-            //                (const void*)get_encoded_data(candidate_set.top().second, code_size + 8);
-            //#ifdef USE_SSE
-            //            _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
-            //#endif
         }
 
         visited_list_pool_->releaseVisitedList(vl);
@@ -2633,6 +2700,10 @@ public:
         } else {
             std::tie(top_candidates, counts) = searchBaseLayerST<false, true>(
                 enterpoint_node_, query_data, std::max(ef_, k), isIdAllowed);
+        }
+
+        while (ef_ >= 50 and top_candidates.size() > ef_ / 2) {
+            top_candidates.pop();
         }
 
         while (top_candidates.size() > 0) {

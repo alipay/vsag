@@ -323,10 +323,10 @@ public:
         throw std::runtime_error("un-support int4 transform");
     }
 
-//    virtual int32_t
-//    INT4_IP_avx512_impl(const void* p1_vec, const void* p2_vec, int dim) const {
-//        throw std::runtime_error("un-support int4 transform");
-//    }
+    //    virtual int32_t
+    //    INT4_IP_avx512_impl(const void* p1_vec, const void* p2_vec, int dim) const {
+    //        throw std::runtime_error("un-support int4 transform");
+    //    }
 
     virtual int32_t
     INT4_IP_impl(const void* p1_vec, const void* p2_vec, int dim) const {

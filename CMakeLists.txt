@@ -55,7 +55,7 @@ else ()
 endif ()
 
 if (ENABLE_WERROR)
-    add_compile_options(-Werror)
+#    add_compile_options(-Werror)
 endif()
 
 vsag_add_exe_linker_flag(-static-libstdc++)

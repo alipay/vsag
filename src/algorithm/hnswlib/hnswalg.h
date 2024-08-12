@@ -30,6 +30,7 @@
 #include <random>
 #include <stdexcept>
 #include <unordered_set>
+#include <sys/mman.h>
 
 #include "../../default_allocator.h"
 #include "hnswlib.h"
@@ -1023,6 +1024,17 @@ public:
 
     inline void
     mem_prefetch(unsigned char* ptr, const int num_lines) const {
+        prefetch_L1(ptr);
+        prefetch_L1(ptr + 64);
+        prefetch_L1(ptr + 128);
+        prefetch_L1(ptr + 192);
+        prefetch_L1(ptr + 256);
+        prefetch_L1(ptr + 320);
+        prefetch_L1(ptr + 384);
+        prefetch_L1(ptr + 448);
+        prefetch_L1(ptr + 512);
+        return ;
+
         switch (num_lines) {
             default:
                 [[fallthrough]];
@@ -1151,6 +1163,7 @@ public:
           std::vector<int>& to_be_visited) const {
         int* data2 = (int*)get_linklist0(next_node_pair.second);
         _mm_prefetch((char*)(data2), _MM_HINT_T0);
+        _mm_prefetch(visited_array + *(data2 + 1), _MM_HINT_T0);
 
         int* data = (int*)get_linklist0(current_node_pair.second);
         size_t size = getListCount((linklistsizeint*)data);

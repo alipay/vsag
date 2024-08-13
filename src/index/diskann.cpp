@@ -197,7 +197,8 @@ DiskANN::DiskANN(diskann::Metric metric,
 
     R_ = std::min(MAXIMAL_R, std::max(MINIMAL_R, R_));
 
-    // When the length of the vector is too long, set sector_len_ to the size of storing a vector along with its linkage list.
+    // When the length of the vector is too long, set sector_len_ to the size of storing a vector
+    // along with its linkage list.
     sector_len_ =
         std::max(MINIMAL_SECTOR_LEN,
                  (size_t)(dim * sizeof(float) + (R_ * GRAPH_SLACK + 1) * sizeof(uint32_t)) *
@@ -740,7 +741,8 @@ DiskANN::GetStats() const {
 int64_t
 DiskANN::GetEstimateBuildMemory(const int64_t num_elements) const {
     int64_t estimate_memory_usage = 0;
-    // Memory usage of graph (1.365 is the relaxation factor used by DiskANN during graph construction.)
+    // Memory usage of graph (1.365 is the relaxation factor used by DiskANN during graph
+    // construction.)
     estimate_memory_usage +=
         (num_elements * R_ * sizeof(uint32_t) + num_elements * (R_ + 1) * sizeof(uint32_t)) *
         GRAPH_SLACK;

@@ -52,4 +52,4 @@ private:
     roaring::Roaring r_;
 };
 
-}  //namespace vsag
+}  // namespace vsag

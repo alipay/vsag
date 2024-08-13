@@ -185,7 +185,8 @@ public:
                 block_lens_.back() = new_last_block_size;
             }
 
-            // If the current number of blocks is less than the number of complete blocks needed, proceed with padding.
+            // If the current number of blocks is less than the number of complete blocks needed,
+            // proceed with padding.
             while (blocks_.size() < new_full_blocks) {
                 blocks_.push_back(static_cast<char*>(allocator_->Allocate(block_size_)));
                 block_lens_.push_back(block_size_);

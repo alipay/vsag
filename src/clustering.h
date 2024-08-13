@@ -5,8 +5,8 @@
 
 namespace vsag {
 /** Class for the clustering parameters. Can be passed to the
-* constructor of the Clustering object.
-*/
+ * constructor of the Clustering object.
+ */
 
 typedef int64_t idx_t;
 struct ClusteringParameters {
@@ -40,25 +40,25 @@ struct ClusteringIterationStats {
 };
 
 /** K-means clustering based on assignment - centroid update iterations
-*
-* The clustering is based on an Index object that assigns training
-* points to the centroids. Therefore, at each iteration the centroids
-* are added to the index.
-*
-* On output, the centoids table is set to the latest version
-* of the centroids and they are also added to the index. If the
-* centroids table it is not empty on input, it is also used for
-* initialization.
-*
-*/
+ *
+ * The clustering is based on an Index object that assigns training
+ * points to the centroids. Therefore, at each iteration the centroids
+ * are added to the index.
+ *
+ * On output, the centoids table is set to the latest version
+ * of the centroids and they are also added to the index. If the
+ * centroids table it is not empty on input, it is also used for
+ * initialization.
+ *
+ */
 struct Clustering : ClusteringParameters {
     size_t d;  ///< dimension of the vectors
     size_t k;  ///< nb of centroids
 
     /** centroids (k * d)
-    * if centroids are set on input to train, they will be used as
-    * initialization
-    */
+     * if centroids are set on input to train, they will be used as
+     * initialization
+     */
     std::vector<float> centroids;
 
     /// stats at every iteration of clustering
@@ -68,22 +68,22 @@ struct Clustering : ClusteringParameters {
     Clustering(int d, int k, const ClusteringParameters& cp);
 
     /** run k-means training
-    *
-    * @param x          training vectors, size n * d
-    * @param index      index used for assignment
-    * @param x_weights  weight associated to each vector: NULL or size n
-    */
+     *
+     * @param x          training vectors, size n * d
+     * @param index      index used for assignment
+     * @param x_weights  weight associated to each vector: NULL or size n
+     */
     virtual void
     train(idx_t n, const float* x, const float* x_weights = nullptr);
 
     /** run with encoded vectors
-    *
-    * win addition to train()'s parameters takes a codec as parameter
-    * to decode the input vectors.
-    *
-    * @param codec      codec used to decode the vectors (nullptr =
-    *                   vectors are in fact floats)     *
-    */
+     *
+     * win addition to train()'s parameters takes a codec as parameter
+     * to decode the input vectors.
+     *
+     * @param codec      codec used to decode the vectors (nullptr =
+     *                   vectors are in fact floats)     *
+     */
     void
     train_encoded(idx_t nx, const uint8_t* x_in, const float* weights = nullptr);
 

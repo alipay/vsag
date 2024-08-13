@@ -16,6 +16,7 @@
 
 #include <assert.h>
 #include <stdlib.h>
+#include <sys/mman.h>
 
 #include <atomic>
 #include <cstdint>
@@ -30,7 +31,6 @@
 #include <random>
 #include <stdexcept>
 #include <unordered_set>
-#include <sys/mman.h>
 
 #include "../../default_allocator.h"
 #include "hnswlib.h"
@@ -267,7 +267,8 @@ public:
         __m512i sum512 = _mm512_set1_epi32(0);
 
         while (pVect1 < pEnd1) {
-            // sum512 = _mm512_dpbusd_epi32(sum512, _mm512_load_epi32(pVect1), _mm512_load_epi32(pVect2));
+            // sum512 = _mm512_dpbusd_epi32(sum512, _mm512_load_epi32(pVect1),
+            // _mm512_load_epi32(pVect2));
             __m256i v1 = _mm256_maskz_loadu_epi8(mask, pVect1);
             __m512i v1_512 = _mm512_cvtepi8_epi16(v1);
             pVect1 += 32;
@@ -304,9 +305,11 @@ public:
             size_t qty,
             uint8_t* prefetch = nullptr) const {
         //        norm1 =
-        //            INT8_IP(static_cast<const int8_t*>(pVect1v), static_cast<const int8_t*>(pVect1v), qty);
+        //            INT8_IP(static_cast<const int8_t*>(pVect1v), static_cast<const
+        //            int8_t*>(pVect1v), qty);
         //        norm2 =
-        //            INT8_IP(static_cast<const int8_t*>(pVect2v), static_cast<const int8_t*>(pVect2v), qty);
+        //            INT8_IP(static_cast<const int8_t*>(pVect2v), static_cast<const
+        //            int8_t*>(pVect2v), qty);
 
         //        assert(norm1 == norm1_);
         //        assert(norm2 == norm2_);
@@ -362,19 +365,6 @@ public:
             int64_t norm = INT8_IP(code, code, dim);
             memcpy(code + dim, &norm, 8);
         }
-    }
-
-    std::vector<int32_t>
-    INT4_L2_batch(std::vector<int32_t>& n1_vec,
-                  double norm2,
-                  std::vector<const void*>& p1_vec,
-                  const void* query,
-                  int size) const {
-        std::vector<int32_t> ret(size);
-        for (int i = 0; i < size; i++) {
-            ret[i] = INT4_L2_precompute(n1_vec[i], norm2, p1_vec[i], query, 960);
-        }
-        return ret;
     }
 
     inline int32_t
@@ -716,8 +706,8 @@ public:
     getEdges(tableint internal_id, int level = 0) {
         if (level != 0) {
             auto& edge_map_ptr = reversed_link_lists_[internal_id];
-            if (edge_map_ptr ==
-                nullptr) {  // TODO: Subsequent changes to memory allocation here will use vsag::allocate.
+            if (edge_map_ptr == nullptr) {  // TODO: Subsequent changes to memory allocation here
+                                            // will use vsag::allocate.
                 edge_map_ptr = new std::map<int, std::unordered_set<tableint>>();
             }
             return (*edge_map_ptr)[level];
@@ -894,7 +884,8 @@ public:
                 data = (int*)get_linklist0(curNodeNum);
             } else {
                 data = (int*)get_linklist(curNodeNum, layer);
-                //                    data = (int *) (link_lists_[curNodeNum] + (layer - 1) * size_links_per_element_);
+                //                    data = (int *) (link_lists_[curNodeNum] + (layer - 1) *
+                //                    size_links_per_element_);
             }
             size_t size = getListCount((linklistsizeint*)data);
             tableint* datal = (tableint*)(data + 1);
@@ -970,6 +961,9 @@ public:
         this->ef_ = 80;
         this->po_ = 1;
         this->pl_ = 1;
+        int best_po = 1;
+        int best_pl = 1;
+        // baseline
         auto st = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < sample_points_num; ++i) {
             searchKnn(getDataByInternalId(i), k);
@@ -977,8 +971,8 @@ public:
         auto ed = std::chrono::high_resolution_clock::now();
         float baseline_ela = std::chrono::duration<double>(ed - st).count();
 
+        // try
         float min_ela = std::numeric_limits<float>::max();
-        int best_po = 0, best_pl = 0;
         for (auto try_po : try_pos) {
             for (auto try_pl : try_pls) {
                 this->po_ = try_po;
@@ -1002,6 +996,7 @@ public:
             }
         }
 
+        // result
         printf(
             "settint best po = %d, best pl = %d\n"
             "gaining %.2f%% performance improvement\n"
@@ -1024,17 +1019,6 @@ public:
 
     inline void
     mem_prefetch(unsigned char* ptr, const int num_lines) const {
-        prefetch_L1(ptr);
-        prefetch_L1(ptr + 64);
-        prefetch_L1(ptr + 128);
-        prefetch_L1(ptr + 192);
-        prefetch_L1(ptr + 256);
-        prefetch_L1(ptr + 320);
-        prefetch_L1(ptr + 384);
-        prefetch_L1(ptr + 448);
-        prefetch_L1(ptr + 512);
-        return ;
-
         switch (num_lines) {
             default:
                 [[fallthrough]];
@@ -1531,7 +1515,9 @@ public:
                 }
             }
 
-            // If cur_c is already present in the neighboring connections of `selectedNeighbors[idx]` then no need to modify any connections or run the heuristics.
+            // If cur_c is already present in the neighboring connections of
+            // `selectedNeighbors[idx]` then no need to modify any connections or run the
+            // heuristics.
             if (!is_cur_c_present) {
                 if (sz_link_list_other < m_curmax) {
                     data[sz_link_list_other] = cur_c;
@@ -1570,9 +1556,8 @@ public:
                     // Nearest K:
                     /*int indx = -1;
                     for (int j = 0; j < sz_link_list_other; j++) {
-                        float d = fstdistfunc_(getDataByInternalId(data[j]), getDataByInternalId(rez[idx]), dist_func_param_);
-                        if (d > d_max) {
-                            indx = j;
+                        float d = fstdistfunc_(getDataByInternalId(data[j]),
+                    getDataByInternalId(rez[idx]), dist_func_param_); if (d > d_max) { indx = j;
                             d_max = d;
                         }
                     }
@@ -2194,8 +2179,8 @@ public:
     }
 
     /*
-    * Marks an element with the given label deleted, does NOT really change the current graph.
-    */
+     * Marks an element with the given label deleted, does NOT really change the current graph.
+     */
     void
     markDelete(labeltype label) {
         // lock all operations with element by label
@@ -2213,9 +2198,10 @@ public:
     }
 
     /*
-    * Uses the last 16 bits of the memory for the linked list size to store the mark,
-    * whereas maxM0_ has to be limited to the lower 16 bits, however, still large enough in almost all cases.
-    */
+     * Uses the last 16 bits of the memory for the linked list size to store the mark,
+     * whereas maxM0_ has to be limited to the lower 16 bits, however, still large enough in almost
+     * all cases.
+     */
     void
     markDeletedInternal(tableint internalId) {
         assert(internalId < cur_element_count_);
@@ -2233,11 +2219,11 @@ public:
     }
 
     /*
-    * Removes the deleted mark of the node, does NOT really change the current graph.
-    *
-    * Note: the method is not safe to use when replacement of deleted elements is enabled,
-    *  because elements marked as deleted can be completely removed by addPoint
-    */
+     * Removes the deleted mark of the node, does NOT really change the current graph.
+     *
+     * Note: the method is not safe to use when replacement of deleted elements is enabled,
+     *  because elements marked as deleted can be completely removed by addPoint
+     */
     void
     unmarkDelete(labeltype label) {
         // lock all operations with element by label
@@ -2255,8 +2241,8 @@ public:
     }
 
     /*
-    * Remove the deleted mark of the node.
-    */
+     * Remove the deleted mark of the node.
+     */
     void
     unmarkDeletedInternal(tableint internalId) {
         assert(internalId < cur_element_count_);
@@ -2274,8 +2260,8 @@ public:
     }
 
     /*
-    * Checks the first 16 bits of the memory to see if the element is marked deleted.
-    */
+     * Checks the first 16 bits of the memory to see if the element is marked deleted.
+     */
     bool
     isMarkedDeleted(tableint internalId) const {
         unsigned char* ll_cur = ((unsigned char*)get_linklist0(internalId)) + 2;
@@ -2293,8 +2279,8 @@ public:
     }
 
     /*
-    * Adds point.
-    */
+     * Adds point.
+     */
     bool
     addPoint(const void* data_point, labeltype label) override {
         std::lock_guard<std::mutex> lock_label(getLabelOpMutex(label));
@@ -2412,8 +2398,8 @@ public:
         std::lock_guard<std::mutex> lock(global);
         {
             // Swap the connection relationship corresponding to the label to be deleted with the
-            // last element, and modify the information in label_lookup_. By swapping the two points,
-            // fill the void left by the deletion.
+            // last element, and modify the information in label_lookup_. By swapping the two
+            // points, fill the void left by the deletion.
             std::unique_lock<std::mutex> lock_table(label_lookup_lock);
             auto iter = label_lookup_.find(label);
             if (iter == label_lookup_.end()) {
@@ -2659,10 +2645,15 @@ public:
             top_candidates.pop();
         }
 
+        float dist = 0;
         while (top_candidates.size() > 0) {
             std::pair<float, tableint> rez = top_candidates.top();
-            float dist =
-                fstdistfunc_(query_data, getDataByInternalId(rez.second), dist_func_param_);
+            if (ef_ <= 20) {
+                dist = rez.first;
+            } else {
+                dist = fstdistfunc_(query_data, getDataByInternalId(rez.second), dist_func_param_);
+            }
+
             result.push(std::pair<float, labeltype>(dist, getExternalLabel(rez.second)));
             top_candidates.pop();
             if (result.size() > k) {

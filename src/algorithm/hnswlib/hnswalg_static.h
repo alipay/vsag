@@ -323,7 +323,8 @@ public:
                 data = (int*)get_linklist0(curNodeNum);
             } else {
                 data = (int*)get_linklist(curNodeNum, layer);
-                //                    data = (int *) (linkLists_[curNodeNum] + (layer - 1) * size_links_per_element_);
+                //                    data = (int *) (linkLists_[curNodeNum] + (layer - 1) *
+                //                    size_links_per_element_);
             }
             size_t size = getListCount((linklistsizeint*)data);
             tableint* datal = (tableint*)(data + 1);
@@ -426,7 +427,8 @@ public:
         while (!candidate_set.empty()) {
             std::pair<float, tableint> current_node_pair = candidate_set.top();
 
-            // When the smallest object in S has its distance larger than the largest in R, terminate the algorithm.
+            // When the smallest object in S has its distance larger than the largest in R,
+            // terminate the algorithm.
             if ((-current_node_pair.first) > top_candidates.top().first &&
                 (top_candidates.size() == ef || has_deletions == false)) {
                 break;
@@ -459,7 +461,8 @@ public:
             pq_scan(ids.data(), res.data(), dist_map, ids.size());
             for (size_t j = 0; j < not_vis_count; j++) {
                 int candidate_id = ids[j];
-                // If the result set is not full, then calculate the exact distance. (i.e., assume the distance threshold to be infinity)
+                // If the result set is not full, then calculate the exact distance. (i.e., assume
+                // the distance threshold to be infinity)
                 if (answers.size() < k) {
                     char* currObj1 = (getDataByInternalId(candidate_id));
                     float dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
@@ -586,7 +589,8 @@ public:
         while (!candidate_set.empty()) {
             std::pair<float, tableint> current_node_pair = candidate_set.top();
 
-            // When the smallest object in S has its distance larger than the largest in R, terminate the algorithm.
+            // When the smallest object in S has its distance larger than the largest in R,
+            // terminate the algorithm.
             if ((-current_node_pair.first) > top_candidates.top().first &&
                 (top_candidates.size() == ef || has_deletions == false)) {
                 break;
@@ -608,7 +612,8 @@ public:
                 if (!(visited_array[candidate_id] == visited_array_tag)) {
                     visited_array[candidate_id] = visited_array_tag;
 
-                    // If the KNN set is not full, then calculate the exact distance. (i.e., assume the distance threshold to be infinity)
+                    // If the KNN set is not full, then calculate the exact distance. (i.e., assume
+                    // the distance threshold to be infinity)
                     if (answers.size() < k) {
                         char* currObj1 = (getDataByInternalId(candidate_id));
                         float dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
@@ -684,9 +689,8 @@ public:
     //        float lowerBound;
     //        if ((!has_deletions || !isMarkedDeleted(ep_id)) &&
     //            ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(ep_id)))) {
-    //            float dist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
-    //            lowerBound = dist;
-    //            if (dist < radius)
+    //            float dist = fstdistfunc_(data_point, getDataByInternalId(ep_id),
+    //            dist_func_param_); lowerBound = dist; if (dist < radius)
     //                top_candidates.emplace(dist, ep_id);
     //            candidate_set.emplace(-dist, ep_id);
     //        } else {
@@ -714,7 +718,8 @@ public:
     //#ifdef USE_SSE
     //            _mm_prefetch((char*)(visited_array + *(data + 1)), _MM_HINT_T0);
     //            _mm_prefetch((char*)(visited_array + *(data + 1) + 64), _MM_HINT_T0);
-    //            _mm_prefetch(data_level0_memory_ + (*(data + 1)) * size_data_per_element_ + offsetData_,
+    //            _mm_prefetch(data_level0_memory_ + (*(data + 1)) * size_data_per_element_ +
+    //            offsetData_,
     //                         _MM_HINT_T0);
     //            _mm_prefetch((char*)(data + 2), _MM_HINT_T0);
     //#endif
@@ -725,8 +730,8 @@ public:
     //#ifdef USE_SSE
     //                _mm_prefetch((char*)(visited_array + *(data + j + 1)), _MM_HINT_T0);
     //                _mm_prefetch(
-    //                    data_level0_memory_ + (*(data + j + 1)) * size_data_per_element_ + offsetData_,
-    //                    _MM_HINT_T0);  ////////////
+    //                    data_level0_memory_ + (*(data + j + 1)) * size_data_per_element_ +
+    //                    offsetData_, _MM_HINT_T0);  ////////////
     //#endif
     //                if (!(visited_array[candidate_id] == visited_array_tag)) {
     //                    visited_array[candidate_id] = visited_array_tag;
@@ -745,8 +750,9 @@ public:
     //#endif
     //
     //                        if ((!has_deletions || !isMarkedDeleted(candidate_id)) &&
-    //                            ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id))))
-    //                            if (dist < radius)
+    //                            ((!isIdAllowed) ||
+    //                            (*isIdAllowed)(getExternalLabel(candidate_id)))) if (dist <
+    //                            radius)
     //                                top_candidates.emplace(dist, candidate_id);
     //
     //                        if (!top_candidates.empty())
@@ -899,7 +905,9 @@ public:
                 }
             }
 
-            // If cur_c is already present in the neighboring connections of `selectedNeighbors[idx]` then no need to modify any connections or run the heuristics.
+            // If cur_c is already present in the neighboring connections of
+            // `selectedNeighbors[idx]` then no need to modify any connections or run the
+            // heuristics.
             if (!is_cur_c_present) {
                 if (sz_link_list_other < Mcurmax) {
                     data[sz_link_list_other] = cur_c;
@@ -936,9 +944,8 @@ public:
                     // Nearest K:
                     /*int indx = -1;
                     for (int j = 0; j < sz_link_list_other; j++) {
-                        float d = fstdistfunc_(getDataByInternalId(data[j]), getDataByInternalId(rez[idx]), dist_func_param_);
-                        if (d > d_max) {
-                            indx = j;
+                        float d = fstdistfunc_(getDataByInternalId(data[j]),
+                    getDataByInternalId(rez[idx]), dist_func_param_); if (d > d_max) { indx = j;
                             d_max = d;
                         }
                     }
@@ -1596,8 +1603,8 @@ public:
     }
 
     /*
-    * Checks the first 16 bits of the memory to see if the element is marked deleted.
-    */
+     * Checks the first 16 bits of the memory to see if the element is marked deleted.
+     */
     bool
     isMarkedDeleted(tableint internalId) const {
         unsigned char* ll_cur = ((unsigned char*)get_linklist0(internalId)) + 2;
@@ -1615,8 +1622,8 @@ public:
     }
 
     /*
-    * Adds point.
-    */
+     * Adds point.
+     */
     bool
     addPoint(const void* data_point, labeltype label) override {
         if (addPoint(data_point, label, -1) == -1) {
@@ -1823,7 +1830,8 @@ public:
         //
         //        tableint currObj = enterpoint_node_;
         //        float curdist =
-        //            fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
+        //            fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_),
+        //            dist_func_param_);
         //
         //        for (int level = maxlevel_; level > 0; level--) {
         //            bool changed = true;
@@ -1841,7 +1849,8 @@ public:
         //                    tableint cand = datal[i];
         //                    if (cand < 0 || cand > max_elements_)
         //                        throw std::runtime_error("cand error");
-        //                    float d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
+        //                    float d = fstdistfunc_(query_data, getDataByInternalId(cand),
+        //                    dist_func_param_);
         //
         //                    if (d < curdist) {
         //                        curdist = d;
@@ -1862,7 +1871,8 @@ public:
         //        } else {
         //            top_candidates =
         //                searchBaseLayerST<false, true>(currObj, query_data, radius, isIdAllowed);
-        //            // std::cout << "top_candidates.size(): " << top_candidates.size() << std::endl;
+        //            // std::cout << "top_candidates.size(): " << top_candidates.size() <<
+        //            std::endl;
         //        }
         //
         //        // while (top_candidates.size() > k) {
@@ -1870,8 +1880,8 @@ public:
         //        // }
         //        while (top_candidates.size() > 0) {
         //            std::pair<float, tableint> rez = top_candidates.top();
-        //            result.push(std::pair<float, labeltype>(rez.first, getExternalLabel(rez.second)));
-        //            top_candidates.pop();
+        //            result.push(std::pair<float, labeltype>(rez.first,
+        //            getExternalLabel(rez.second))); top_candidates.pop();
         //        }
         //
         //        // std::cout << "hnswalg::result.size(): " << result.size() << std::endl;
@@ -2106,9 +2116,10 @@ public:
         //            pq_cluster = cluster_size;
         //            if (cur_element_count_ < pq_train_bound)
         //                pq_train_bound = cur_element_count_;
-        //            auto pq_training_data = std::shared_ptr<float[]>(new float[pq_train_bound * vec_dim]);
-        //            for (size_t i = 0; i < pq_train_bound; i++) {
-        //                memcpy(pq_training_data.get() + i * vec_dim, getDataByInternalId(i), data_size_);
+        //            auto pq_training_data = std::shared_ptr<float[]>(new float[pq_train_bound *
+        //            vec_dim]); for (size_t i = 0; i < pq_train_bound; i++) {
+        //                memcpy(pq_training_data.get() + i * vec_dim, getDataByInternalId(i),
+        //                data_size_);
         //            }
         //            // generate code book;
         //            pq_book.resize(pq_chunk);
@@ -2119,7 +2130,8 @@ public:
         //                }
         //            }
         //            diskann::generate_pq_pivots(
-        //                pq_training_data.get(), pq_train_bound, vec_dim, pq_cluster, pq_chunk, 12, pq_book);
+        //                pq_training_data.get(), pq_train_bound, vec_dim, pq_cluster, pq_chunk, 12,
+        //                pq_book);
         //        }
         //        else
         load_product_codebook(pq_code_file.c_str());
@@ -2285,7 +2297,7 @@ public:
     }
 #endif
 
-    //The default processing length is a multiple of 4, if not, add 0
+    // The default processing length is a multiple of 4, if not, add 0
     void
     pq_scan(const int* id, float* res, float*& dist_mp, unsigned num) const {
         for (int i = 0; i < num; i += 4) {

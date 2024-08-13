@@ -274,8 +274,8 @@ public:
     }
     // virtual double
     // INT8_L2(
-    //     int64_t* norm1, double norm2, const void* pVect1v, const void* pVect2v, size_t qty) const {
-    //     throw std::runtime_error("un-support int8 transform");
+    //     int64_t* norm1, double norm2, const void* pVect1v, const void* pVect2v, size_t qty) const
+    //     { throw std::runtime_error("un-support int8 transform");
     // }
 
     // virtual double
@@ -289,7 +289,8 @@ public:
     // }
 
     // virtual double
-    // INT8_InnerProduct512_AVX512_impl(const void* pVect1v, const void* pVect2v, size_t qty) const {
+    // INT8_InnerProduct512_AVX512_impl(const void* pVect1v, const void* pVect2v, size_t qty) const
+    // {
     //     throw std::runtime_error("un-support int8 transform");
     // }
 

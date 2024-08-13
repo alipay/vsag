@@ -69,4 +69,4 @@ _concate(std::stringstream& ss, const T& value, const Args&... args) {
     logger::error(ss.str());          \
     return tl::unexpected(Error(t, ss.str()));
 
-}  //namespace vsag
+}  // namespace vsag

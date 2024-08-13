@@ -157,17 +157,17 @@ subsample_training_set(const Clustering& clus,
 }
 
 /** compute centroids as (weighted) sum of training points
-*
-* @param x            training vectors, size n * code_size (from codec)
-* @param codec        how to decode the vectors (if NULL then cast to float*)
-* @param weights      per-training vector weight, size n (or NULL)
-* @param assign       nearest centroid for each training vector, size n
-* @param k_frozen     do not update the k_frozen first centroids
-* @param centroids    centroid vectors (output only), size k * d
-* @param hassign      histogram of assignments per centroid (size k),
-*                     should be 0 on input
-*
-*/
+ *
+ * @param x            training vectors, size n * code_size (from codec)
+ * @param codec        how to decode the vectors (if NULL then cast to float*)
+ * @param weights      per-training vector weight, size n (or NULL)
+ * @param assign       nearest centroid for each training vector, size n
+ * @param k_frozen     do not update the k_frozen first centroids
+ * @param centroids    centroid vectors (output only), size k * d
+ * @param hassign      histogram of assignments per centroid (size k),
+ *                     should be 0 on input
+ *
+ */
 
 void
 compute_centroids(size_t d,
@@ -233,12 +233,12 @@ compute_centroids(size_t d,
 #define EPS (1 / 1024.)
 
 /** Handle empty clusters by splitting larger ones.
-*
-* It works by slightly changing the centroids to make 2 clusters from
-* a single one. Takes the same arguments as compute_centroids.
-*
-* @return           nb of spliting operations (larger is worse)
-*/
+ *
+ * It works by slightly changing the centroids to make 2 clusters from
+ * a single one. Takes the same arguments as compute_centroids.
+ *
+ * @return           nb of spliting operations (larger is worse)
+ */
 int
 split_clusters(size_t d, size_t k, size_t n, size_t k_frozen, float* hassign, float* centroids) {
     k -= k_frozen;
@@ -441,4 +441,3 @@ kmeans_clustering(size_t d,
 }
 
 }  // namespace vsag
-

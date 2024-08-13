@@ -46,9 +46,9 @@ float_diskann() {
     int ef_search = 200;
     int io_limit = 200;
     float threshold = 8.0;
-    float pq_sample_rate =
-        0.5;  // pq_sample_rate represents how much original data is selected during the training of pq compressed vectors.
-    int pq_dims = 9;  // pq_dims represents the dimensionality of the compressed vector.
+    float pq_sample_rate = 0.5;  // pq_sample_rate represents how much original data is selected
+                                 // during the training of pq compressed vectors.
+    int pq_dims = 9;             // pq_dims represents the dimensionality of the compressed vector.
     // Initing index
     // {
     // 	"dim": 256,

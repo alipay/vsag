@@ -19,18 +19,18 @@
 namespace vsag {
 
 /**
-  * Get the version based on git revision
-  * 
-  * @return the version text
-  */
+ * Get the version based on git revision
+ *
+ * @return the version text
+ */
 extern std::string
 version();
 
 /**
-  * Init the vsag library
-  * 
-  * @return true always
-  */
+ * Init the vsag library
+ *
+ * @return true always
+ */
 extern bool
 init();
 

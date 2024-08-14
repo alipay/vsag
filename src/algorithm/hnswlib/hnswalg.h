@@ -943,7 +943,7 @@ public:
         std::iota(try_pos.begin(), try_pos.end(), 1);
         std::iota(try_pls.begin(), try_pls.end(), 1);
 
-        bool have_optimized = true;
+        bool have_optimized = false;
         if (have_optimized) {
             if (sq_num_bits_ == 4) {
                 try_pos.assign({3});
@@ -961,6 +961,7 @@ public:
         this->ef_ = 80;
         this->po_ = 1;
         this->pl_ = 1;
+        this->SetPrefetchLength(this->pl_);
         int best_po = 1;
         int best_pl = 1;
         // baseline
@@ -977,6 +978,7 @@ public:
             for (auto try_pl : try_pls) {
                 this->po_ = try_po;
                 this->pl_ = try_pl;
+                this->SetPrefetchLength(this->pl_);
                 auto st = std::chrono::high_resolution_clock::now();
                 for (int i = 0; i < sample_points_num; ++i) {
                     searchKnn(getDataByInternalId(i), k);
@@ -1006,135 +1008,130 @@ public:
             100.0 * (baseline_ela / min_ela - 1));
         this->po_ = best_po;
         this->pl_ = best_pl;
+        this->SetPrefetchLength(this->pl_);
     }
 
-    inline void
-    prefetch_L1(const void* address) const {
-#if defined(__SSE2__)
-        _mm_prefetch((const char*)address, _MM_HINT_T0);
-#else
-        __builtin_prefetch(address, 0, 3);
-#endif
-    }
+    std::function<void(unsigned char*)> prefetchFunc_ = PrefetchTemp<0>;
 
-    inline void
-    mem_prefetch(unsigned char* ptr, const int num_lines) const {
-        switch (num_lines) {
+    void SetPrefetchLength(int length) {
+
+        switch (length) {
             default:
                 [[fallthrough]];
             case 28:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<28>;
+                break;
                 [[fallthrough]];
             case 27:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<27>;
+                break;
                 [[fallthrough]];
             case 26:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<26>;
+                break;
                 [[fallthrough]];
             case 25:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<25>;
+                break;
                 [[fallthrough]];
             case 24:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<24>;
+                break;
                 [[fallthrough]];
             case 23:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<23>;
+                break;
                 [[fallthrough]];
             case 22:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<22>;
+                break;
                 [[fallthrough]];
             case 21:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<21>;
+                break;
                 [[fallthrough]];
             case 20:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<20>;
+                break;
                 [[fallthrough]];
             case 19:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<19>;
+                break;
                 [[fallthrough]];
             case 18:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<18>;
+                break;
                 [[fallthrough]];
             case 17:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<17>;
+                break;
                 [[fallthrough]];
             case 16:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<16>;
+                break;
                 [[fallthrough]];
             case 15:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<15>;
+                break;
                 [[fallthrough]];
             case 14:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<14>;
+                break;
                 [[fallthrough]];
             case 13:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<13>;
+                break;
                 [[fallthrough]];
             case 12:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<12>;
+                break;
                 [[fallthrough]];
             case 11:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<11>;
+                break;
                 [[fallthrough]];
             case 10:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<10>;
+                break;
                 [[fallthrough]];
             case 9:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<9>;
+                break;
                 [[fallthrough]];
             case 8:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<8>;
+                break;
                 [[fallthrough]];
             case 7:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<7>;
+                break;
                 [[fallthrough]];
             case 6:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<6>;
+                break;
                 [[fallthrough]];
             case 5:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<5>;
+                break;
                 [[fallthrough]];
             case 4:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<4>;
+                break;
                 [[fallthrough]];
             case 3:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<3>;
+                break;
                 [[fallthrough]];
             case 2:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<2>;
+                break;
                 [[fallthrough]];
             case 1:
-                prefetch_L1(ptr);
-                ptr += 64;
+                prefetchFunc_ = PrefetchTemp<1>;
+                break;
                 [[fallthrough]];
             case 0:
+                prefetchFunc_ = PrefetchTemp<0>;
                 break;
         }
     }
@@ -1248,7 +1245,7 @@ public:
             for (size_t j = 0; j < this->po_; j++) {
                 auto vector_data_ptr = (uint8_t*)get_encoded_data(to_be_visited[j], code_size + 8);
 #ifdef USE_SSE
-                mem_prefetch(vector_data_ptr, this->pl_);
+                this->prefetchFunc_(vector_data_ptr);
 #endif
             }
 
@@ -1258,7 +1255,7 @@ public:
                     auto vector_data_ptr =
                         (uint8_t*)get_encoded_data(to_be_visited[j + this->po_], code_size + 8);
 #ifdef USE_SSE
-                    mem_prefetch(vector_data_ptr, this->pl_);
+                    this->prefetchFunc_(vector_data_ptr);
 #endif
                 }
                 auto* codes = get_encoded_data(candidate_id, code_size + 8);

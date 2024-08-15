@@ -116,7 +116,7 @@ public:
               int64_t k,
               const std::string& parameters,
               const std::function<bool(int64_t)>& filter) const {
-    	throw std::runtime_error("Index not support filter search");
+        throw std::runtime_error("Index not support filter search");
     };
 
     /**

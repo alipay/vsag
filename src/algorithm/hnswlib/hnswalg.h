@@ -16,6 +16,7 @@
 
 #include <assert.h>
 #include <stdlib.h>
+#include <sys/mman.h>
 
 #include <atomic>
 #include <cstdint>
@@ -30,7 +31,6 @@
 #include <random>
 #include <stdexcept>
 #include <unordered_set>
-#include <sys/mman.h>
 
 #include "../../default_allocator.h"
 #include "hnswlib.h"
@@ -1033,7 +1033,7 @@ public:
         prefetch_L1(ptr + 384);
         prefetch_L1(ptr + 448);
         prefetch_L1(ptr + 512);
-        return ;
+        return;
 
         switch (num_lines) {
             default:

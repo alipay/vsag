@@ -75,7 +75,6 @@ public:
         SAFE_CALL(return this->knn_search(query, k, parameters, invalid));
     }
 
-
     tl::expected<DatasetPtr, Error>
     RangeSearch(const DatasetPtr& query,
                 float radius,

@@ -441,4 +441,3 @@ kmeans_clustering(size_t d,
 }
 
 }  // namespace vsag
-

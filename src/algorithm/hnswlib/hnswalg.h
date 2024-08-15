@@ -33,6 +33,7 @@
 #include <unordered_set>
 
 #include "../../default_allocator.h"
+#include "../../logger.h"
 #include "hnswlib.h"
 #include "visited_list_pool.h"
 
@@ -943,7 +944,7 @@ public:
         std::iota(try_pos.begin(), try_pos.end(), 1);
         std::iota(try_pls.begin(), try_pls.end(), 1);
 
-        bool have_optimized = false;
+        bool have_optimized = true;
         if (have_optimized) {
             if (sq_num_bits_ == 4) {
                 try_pos.assign({3});
@@ -957,7 +958,7 @@ public:
             }
         }
 
-        printf("=============Start optimization=============\n");
+        vsag::logger::info("=============Start optimization=============");
         this->ef_ = 80;
         this->po_ = 1;
         this->pl_ = 1;
@@ -991,21 +992,20 @@ public:
                     best_po = try_po;
                     best_pl = try_pl;
                 }
-                printf("try po = %d, pl = %d, gaining %.2f%% improvement\n",
-                       try_po,
-                       try_pl,
-                       100.0 * (baseline_ela / ela - 1));
+                vsag::logger::info(fmt::format("try po = {}, pl = {}, gaining {:.2f} improvement",
+                                               try_po,
+                                               try_pl,
+                                               100.0 * (baseline_ela / ela - 1)));
             }
         }
 
         // result
-        printf(
-            "settint best po = %d, best pl = %d\n"
-            "gaining %.2f%% performance improvement\n"
-            "=============Done optimization=============\n",
-            best_po,
-            best_pl,
-            100.0 * (baseline_ela / min_ela - 1));
+        vsag::logger::info(
+            fmt::format("settint best po = {}, best pl = {} gaining {:.2f} performance improvement",
+                        best_po,
+                        best_pl,
+                        100.0 * (baseline_ela / min_ela - 1)));
+        vsag::logger::info("=============Done optimization=============");
         this->po_ = best_po;
         this->pl_ = best_pl;
         this->SetPrefetchLength(this->pl_);
@@ -1013,8 +1013,8 @@ public:
 
     std::function<void(unsigned char*)> prefetchFunc_ = PrefetchTemp<0>;
 
-    void SetPrefetchLength(int length) {
-
+    void
+    SetPrefetchLength(int length) {
         switch (length) {
             default:
                 [[fallthrough]];

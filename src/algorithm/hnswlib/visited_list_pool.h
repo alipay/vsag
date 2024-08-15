@@ -47,40 +47,82 @@ prefetch_L1(const void* address) {
 }
 
 template <int T>
-inline void PrefetchTemp(unsigned char* ptr) {
-    for (int i = 0; i < T; ++ i) {
-        prefetch_L1(ptr + i * 64);
+inline void
+PrefetchTemp(unsigned char* ptr) {
+    if (T == 9) {
+        prefetch_L1(ptr);
+        prefetch_L1(ptr + 64);
+        prefetch_L1(ptr + 128);
+        prefetch_L1(ptr + 192);
+        prefetch_L1(ptr + 256);
+        prefetch_L1(ptr + 320);
+        prefetch_L1(ptr + 384);
+        prefetch_L1(ptr + 448);
+        prefetch_L1(ptr + 512);
+    } else {
+        for (int i = 0; i < T; ++i) {
+            prefetch_L1(ptr + i * 64);
+        }
     }
 }
-template void PrefetchTemp<0>(unsigned char* ptr);
-template void PrefetchTemp<1>(unsigned char* ptr);
-template void PrefetchTemp<2>(unsigned char* ptr);
-template void PrefetchTemp<3>(unsigned char* ptr);
-template void PrefetchTemp<4>(unsigned char* ptr);
-template void PrefetchTemp<5>(unsigned char* ptr);
-template void PrefetchTemp<6>(unsigned char* ptr);
-template void PrefetchTemp<7>(unsigned char* ptr);
-template void PrefetchTemp<8>(unsigned char* ptr);
-template void PrefetchTemp<9>(unsigned char* ptr);
-template void PrefetchTemp<10>(unsigned char* ptr);
-template void PrefetchTemp<11>(unsigned char* ptr);
-template void PrefetchTemp<12>(unsigned char* ptr);
-template void PrefetchTemp<13>(unsigned char* ptr);
-template void PrefetchTemp<14>(unsigned char* ptr);
-template void PrefetchTemp<15>(unsigned char* ptr);
-template void PrefetchTemp<16>(unsigned char* ptr);
-template void PrefetchTemp<17>(unsigned char* ptr);
-template void PrefetchTemp<18>(unsigned char* ptr);
-template void PrefetchTemp<19>(unsigned char* ptr);
-template void PrefetchTemp<20>(unsigned char* ptr);
-template void PrefetchTemp<21>(unsigned char* ptr);
-template void PrefetchTemp<22>(unsigned char* ptr);
-template void PrefetchTemp<23>(unsigned char* ptr);
-template void PrefetchTemp<24>(unsigned char* ptr);
-template void PrefetchTemp<25>(unsigned char* ptr);
-template void PrefetchTemp<26>(unsigned char* ptr);
-template void PrefetchTemp<27>(unsigned char* ptr);
-template void PrefetchTemp<28>(unsigned char* ptr);
+template void
+PrefetchTemp<0>(unsigned char* ptr);
+template void
+PrefetchTemp<1>(unsigned char* ptr);
+template void
+PrefetchTemp<2>(unsigned char* ptr);
+template void
+PrefetchTemp<3>(unsigned char* ptr);
+template void
+PrefetchTemp<4>(unsigned char* ptr);
+template void
+PrefetchTemp<5>(unsigned char* ptr);
+template void
+PrefetchTemp<6>(unsigned char* ptr);
+template void
+PrefetchTemp<7>(unsigned char* ptr);
+template void
+PrefetchTemp<8>(unsigned char* ptr);
+template void
+PrefetchTemp<9>(unsigned char* ptr);
+template void
+PrefetchTemp<10>(unsigned char* ptr);
+template void
+PrefetchTemp<11>(unsigned char* ptr);
+template void
+PrefetchTemp<12>(unsigned char* ptr);
+template void
+PrefetchTemp<13>(unsigned char* ptr);
+template void
+PrefetchTemp<14>(unsigned char* ptr);
+template void
+PrefetchTemp<15>(unsigned char* ptr);
+template void
+PrefetchTemp<16>(unsigned char* ptr);
+template void
+PrefetchTemp<17>(unsigned char* ptr);
+template void
+PrefetchTemp<18>(unsigned char* ptr);
+template void
+PrefetchTemp<19>(unsigned char* ptr);
+template void
+PrefetchTemp<20>(unsigned char* ptr);
+template void
+PrefetchTemp<21>(unsigned char* ptr);
+template void
+PrefetchTemp<22>(unsigned char* ptr);
+template void
+PrefetchTemp<23>(unsigned char* ptr);
+template void
+PrefetchTemp<24>(unsigned char* ptr);
+template void
+PrefetchTemp<25>(unsigned char* ptr);
+template void
+PrefetchTemp<26>(unsigned char* ptr);
+template void
+PrefetchTemp<27>(unsigned char* ptr);
+template void
+PrefetchTemp<28>(unsigned char* ptr);
 
 class VisitedList {
 public:

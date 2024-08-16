@@ -2659,16 +2659,30 @@ public:
             top_candidates.pop();
         }
 
-        while (top_candidates.size() > 0) {
-            std::pair<float, tableint> rez = top_candidates.top();
-            float dist =
-                fstdistfunc_(query_data, getDataByInternalId(rez.second), dist_func_param_);
-            result.push(std::pair<float, labeltype>(dist, getExternalLabel(rez.second)));
-            top_candidates.pop();
-            if (result.size() > k) {
-                result.pop();
+        float dist = 0;
+
+        if (ef_ <= 20) {
+            while (top_candidates.size() > 0) {
+                std::pair<float, tableint> rez = top_candidates.top();
+                dist = rez.first;
+                result.push(std::pair<float, labeltype>(dist, getExternalLabel(rez.second)));
+                top_candidates.pop();
+                if (result.size() > k) {
+                    result.pop();
+                }
+            }
+        } else {
+            while (top_candidates.size() > 0) {
+                std::pair<float, tableint> rez = top_candidates.top();
+                dist = fstdistfunc_(query_data, getDataByInternalId(rez.second), dist_func_param_);
+                result.push(std::pair<float, labeltype>(dist, getExternalLabel(rez.second)));
+                top_candidates.pop();
+                if (result.size() > k) {
+                    result.pop();
+                }
             }
         }
+
         result.push({10000000, counts.first});
         result.push({20000000, counts.second});
         return result;

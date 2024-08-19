@@ -32,6 +32,7 @@
 #include <stdexcept>
 #include <unordered_set>
 
+#include "vsag/PQCodes.h"
 #include "../../default_allocator.h"
 #include "hnswlib.h"
 #include "visited_list_pool.h"
@@ -115,6 +116,10 @@ private:
     uint32_t po_;
     uint32_t pl_;
 
+    std::vector<std::vector<uint8_t>> pqcodes_;
+    PQCodes* pq_{nullptr};
+
+
 public:
     HierarchicalNSW(SpaceInterface* s) {
     }
@@ -148,7 +153,8 @@ public:
           alpha_(alpha) {
         this->po_ = 1;
         this->pl_ = 1;
-
+        pq_ = new PQCodes(120, 960);
+        pqcodes_.resize(max_elements);
         max_elements_ = max_elements;
         num_deleted_ = 0;
         data_size_ = s->get_data_size();
@@ -232,6 +238,26 @@ public:
         allocator_->Deallocate(element_levels_);
         allocator_->Deallocate(link_lists_);
         delete visited_list_pool_;
+    }
+
+    void Train(int64_t ntotal, const float* data) {
+        pqcodes_.resize(this->cur_element_count_);
+        pq_->Train(data, ntotal);
+        std::vector<uint8_t> allcodes;
+        pq_->BatchEncode(data, ntotal, allcodes);
+#pragma omp parallel for
+        for (int i = 0; i < this->cur_element_count_; ++ i) {
+            auto* neighbors = this->get_linklist0(i);
+            auto nbCount = this->getListCount(neighbors);
+            auto& vec = pqcodes_[i];
+            vec.resize(pq_->subSpace_ * nbCount);
+            for (int j = 1; j <= nbCount; ++ j) {
+                memcpy(vec.data() + (j - 1) * pq_->subSpace_,
+                       allcodes.data() + neighbors[j] * pq_->subSpace_,
+                       pq_->subSpace_);
+            }
+            pq_->Packaged(vec);
+        }
     }
 
     double
@@ -1206,7 +1232,8 @@ public:
         const void* transformed_query;
         size_t dim = *(size_t*)dist_func_param_;
         size_t code_size = 0;
-
+        PQScanner scanner(this->pq_);
+        scanner.SetQuery((float *)data_point);
         if (sq_num_bits_ == 8) {
             code_size = dim;
         } else if (sq_num_bits_ == 4) {
@@ -1246,7 +1273,7 @@ public:
         uint32_t hops = 0;
         uint32_t dist_cmp = 0;
         std::vector<int> to_be_visited(M_ * 2);
-
+        std::vector<float> dists(32);
         while (!candidate_set.empty()) {
             hops++;
             std::pair<float, tableint> current_node_pair = candidate_set.top();
@@ -1257,6 +1284,7 @@ public:
             }
             candidate_set.pop();
             std::pair<float, tableint> next_node_pair = candidate_set.top();
+            auto t1 = std::chrono::steady_clock::now();
             uint32_t count_no_visited = visit(
                 current_node_pair, next_node_pair, visited_array, visited_array_tag, to_be_visited);
             dist_cmp += count_no_visited;
@@ -1303,6 +1331,17 @@ public:
                         lowerBound = top_candidates.top().first;
                 }
             }
+            auto t2 = std::chrono::steady_clock::now();
+            int* data = (int*)get_linklist0(current_node_pair.second);
+            size_t size = getListCount((linklistsizeint*)data);
+            auto ptr = 0;
+            while (ptr < size) {
+                scanner.ScanCodes(pqcodes_[current_node_pair.second].data() + ptr * pq_->subSpace_ / 2, dists);
+                ptr += 32;
+            }
+            auto t3 = std::chrono::steady_clock::now();
+            std::cout << std::chrono::duration<double, std::nano>(t2 - t1).count() << "\t";
+            std::cout << std::chrono::duration<double, std::nano>(t3 - t2).count() << "\n";
         }
 
         visited_list_pool_->releaseVisitedList(vl);
@@ -1711,6 +1750,13 @@ public:
                 writeBinaryToMem(dest, link_lists_[i], link_list_size);
             }
         }
+        std::cout << "Write PQCodes" << std::endl;
+        for (auto& vec : this->pqcodes_) {
+            writeVarToMem(dest, vec.size());
+            writeBinaryToMem(dest, (char*)vec.data(), vec.size());
+        }
+        writeVarToMem(dest, pq_->codebook.size());
+        writeBinaryToMem(dest, (char*)pq_->codebook.data(), pq_->codebook.size() * sizeof(float));
         // output.close();
     }
 
@@ -1972,6 +2018,19 @@ public:
                     deleted_elements.insert(i);
             }
         }
+//        pqcodes_.resize(cur_element_count_);
+//        for (int i = 0; i < cur_element_count_; ++ i) {
+//            size_t size = 0;
+//            readFromReader(read_func, cursor, size);
+//            pqcodes_[i].resize(size);
+//            read_func(cursor, size, pqcodes_[i].data());
+//            cursor += size;
+//        }
+//        size_t size = 0;
+//        readFromReader(read_func, cursor, size);
+//        pq_ = new PQCodes(120, 960);
+//        read_func(cursor, size * sizeof(float), pq_->codebook.data());
+
 
         // input.close();
 

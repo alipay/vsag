@@ -59,5 +59,5 @@ constexpr const char* FAILED_BASE_TAG_PATH_FMT = "{}_failed_base_tag.fbin";
 constexpr const char* FAILED_BASE_ID_PATH_FMT = "{}_failed_base_id.fbin";
 
 inline std::string face_dataset_name = "face_b1t10q10_50000000_float";
-inline int BL = 500, BR = 36;
+inline int BL = 500, BR = 32;
 inline int npts_index = 835770;

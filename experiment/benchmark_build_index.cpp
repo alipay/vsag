@@ -15,8 +15,7 @@ int sq_num_bits = -1;
 int gt_dim = 100;
 
 
-int get_data(vsag::DatasetPtr& data, uint32_t expected_dim, std::string data_path_fmt)
-{
+int get_data(vsag::DatasetPtr &data, uint32_t expected_dim, std::string data_path_fmt) {
     auto logger = vsag::Options::Instance().logger();
     logger->SetLevel(vsag::Logger::Level::kDEBUG);
 
@@ -31,7 +30,7 @@ int get_data(vsag::DatasetPtr& data, uint32_t expected_dim, std::string data_pat
     vsag::load_aligned_fvecs(base_path, base_vec, base_npts, base_dim);
     if (expected_dim != base_dim) {
         logger->Debug(
-            fmt::format("Error: expected_dim({}) != dim({})", expected_dim, base_dim));
+                fmt::format("Error: expected_dim({}) != dim({})", expected_dim, base_dim));
         return -1;
     } else {
         logger->Debug(fmt::format("npts: {}, dim: {}", base_npts, base_dim));
@@ -43,10 +42,10 @@ int get_data(vsag::DatasetPtr& data, uint32_t expected_dim, std::string data_pat
     }
 
     data->NumElements(base_npts)
-        ->Dim(base_dim)
-        ->Ids(base_id)
-        ->Float32Vectors(base_vec)
-        ->Owner(true);
+            ->Dim(base_dim)
+            ->Ids(base_id)
+            ->Float32Vectors(base_vec)
+            ->Owner(true);
     return base_npts;
 }
 
@@ -95,7 +94,7 @@ int build() {
     std::string metric_type;
     if (metric_name == "euclidean") {
         metric_type = vsag::METRIC_L2;
-    } else if (metric_name == "angular" or metric_name == "dot"){
+    } else if (metric_name == "angular" or metric_name == "dot") {
         metric_type = vsag::METRIC_IP;
     } else {
         logger->Error(fmt::format("unsupported metric: {}", metric_name));
@@ -103,15 +102,15 @@ int build() {
 
     // data
     if (target_npts > 0) {
-        base_npts = std::min((uint32_t)target_npts, base_npts);
+        base_npts = std::min((uint32_t) target_npts, base_npts);
         logger->Debug(fmt::format("target npts: {}", base_npts));
     }
     auto base = vsag::Dataset::Make();
     base->NumElements(base_npts)
-        ->Dim(base_dim)
-        ->Ids(base_id)
-        ->Float32Vectors(base_vec)
-        ->Owner(true);
+            ->Dim(base_dim)
+            ->Ids(base_id)
+            ->Float32Vectors(base_vec)
+            ->Owner(true);
 
     // index build
     std::string index_path = fmt::format(INDEX_PATH_FMT,
@@ -120,15 +119,17 @@ int build() {
                                          use_static ? "static" : "pure");
     auto build_parameters = fmt::format(BUILD_PARAM_FMT, metric_type, base_dim, BR, BL, sq_num_bits, use_static);
     auto index = vsag::Factory::CreateIndex(algo_name, build_parameters).value();
-    if (std::filesystem::exists(index_path)) {
+    if (false) {
         logger->Debug(fmt::format("====Index Path Exists===="));
         logger->Debug(fmt::format("Index path: {}", index_path));
     } else {
+        std::cout << "Start Deserialize" << std::endl;
+        vsag::deserialize(index, index_path);
         logger->Debug(fmt::format("====Start build===="));
         if (const auto build_result = index->Build(base); build_result.has_value()) {
             logger->Debug(fmt::format("After Build(), Index constains: {} elements", index->GetNumElements()));
         } else if (build_result.error().type == vsag::ErrorType::INTERNAL_ERROR) {
-            logger->Error(fmt::format( "Failed to build index: internalError"));
+            logger->Error(fmt::format("Failed to build index: internalError"));
             return -1;
         }
 
@@ -143,7 +144,7 @@ int build() {
         vsag::deserialize(another_index, index_path);
         if (another_index->GetNumElements() != index->GetNumElements() or
             another_index->GetMemoryUsage() != index->GetMemoryUsage()) {
-            logger->Error(fmt::format( "Failed to check serialize result {}=={}, {}=={}",
+            logger->Error(fmt::format("Failed to check serialize result {}=={}, {}=={}",
                                       another_index->GetNumElements(), index->GetNumElements(),
                                       another_index->GetMemoryUsage(), index->GetMemoryUsage()));
             return -1;
@@ -176,7 +177,7 @@ int calculate_gt() {
     std::string metric_type;
     if (metric_name == "euclidean") {
         metric_type = vsag::METRIC_L2;
-    } else if (metric_name == "angular" or metric_name == "dot"){
+    } else if (metric_name == "angular" or metric_name == "dot") {
         metric_type = vsag::METRIC_IP;
     } else {
         logger->Error(fmt::format("unsupported metric: {}", metric_name));
@@ -213,7 +214,7 @@ int calculate_gt() {
     if (std::filesystem::exists(gt_path)) {
         logger->Debug(fmt::format("====GT already exists===="));
 
-        int32_t* gt_data;
+        int32_t *gt_data;
         uint32_t gt_npts, gt_valid_dim;
         vsag::load_aligned_fvecs(gt_path, gt_data, gt_npts, gt_valid_dim);
         if ((gt_npts != query_npts) or (gt_valid_dim != gt_dim)) {
@@ -227,14 +228,14 @@ int calculate_gt() {
         delete[] gt_data;
     }
 
-    if (not validate_gt){
+    if (not validate_gt) {
         logger->Debug(fmt::format("====GT calculation start===="));
         std::fstream out_file(gt_path, std::ios::out | std::ios::binary);
 
-        std::vector<int32_t*> gt_results(query_npts);
+        std::vector<int32_t *> gt_results(query_npts);
 
         omp_set_num_threads(24);
-        #pragma omp parallel for schedule(dynamic, 10)
+#pragma omp parallel for schedule(dynamic, 10)
         for (int i = 0; i < query_npts; i++) {
             if (i % 100 == 0) {
                 logger->Debug(fmt::format("calculated on {}", i));
@@ -247,7 +248,7 @@ int calculate_gt() {
                 logger->Error(fmt::format("gt_dim({}) != knn_result_dim({})", gt_dim, knn_result->GetDim()));
             }
 
-            int32_t* data32 = new int32_t[gt_dim];
+            int32_t *data32 = new int32_t[gt_dim];
             for (int j = 0; j < gt_dim; j++) {
                 data32[j] = static_cast<int32_t>(knn_result->GetIds()[j]);
             }
@@ -256,8 +257,8 @@ int calculate_gt() {
         }
 
         for (int i = 0; i < query_npts; i++) {
-            out_file.write((char *)&gt_dim, sizeof(gt_dim));
-            out_file.write((char *)gt_results[i], gt_dim * sizeof(int32_t));
+            out_file.write((char *) &gt_dim, sizeof(gt_dim));
+            out_file.write((char *) gt_results[i], gt_dim * sizeof(int32_t));
             delete[] gt_results[i];
         }
 
@@ -270,17 +271,17 @@ int calculate_gt() {
 }
 
 
-float calculate_recall(vsag::DatasetPtr ann_result, int32_t* gt_data, uint32_t k) {
+float calculate_recall(vsag::DatasetPtr ann_result, int32_t *gt_data, uint32_t k) {
 
     std::unordered_set<int32_t> searched;
     std::unordered_set<int32_t> gt;
     for (int i = 0; i < k; i++) {
-        searched.insert((int32_t)ann_result->GetIds()[i]);
+        searched.insert((int32_t) ann_result->GetIds()[i]);
         gt.insert(gt_data[i]);
     }
 
     int count_successful_searched = 0;
-    for (const auto& item : gt) {
+    for (const auto &item: gt) {
         if (searched.find(item) != searched.end()) {
             count_successful_searched++;
         }
@@ -294,11 +295,11 @@ int search(std::vector<uint32_t> efs, uint32_t k = 10) {
     auto logger = vsag::Options::Instance().logger();
     logger->SetLevel(vsag::Logger::Level::kINFO);
 
-    #ifdef NDEBUG
-        logger->Info("Release mode");
-    #else
-        logger->Info("Debug mode");
-    #endif
+#ifdef NDEBUG
+    logger->Info("Release mode");
+#else
+    logger->Info("Debug mode");
+#endif
 
     logger->Debug(fmt::format("====Metadata===="));
     size_t pos1 = dataset.find_first_of("0123456789");
@@ -316,7 +317,7 @@ int search(std::vector<uint32_t> efs, uint32_t k = 10) {
     std::string metric_type;
     if (metric_name == "euclidean") {
         metric_type = vsag::METRIC_L2;
-    } else if (metric_name == "angular" or metric_name == "dot"){
+    } else if (metric_name == "angular" or metric_name == "dot") {
         metric_type = vsag::METRIC_IP;
     } else {
         logger->Error(fmt::format("unsupported metric: {}", metric_name));
@@ -347,7 +348,7 @@ int search(std::vector<uint32_t> efs, uint32_t k = 10) {
     int query_npts = get_data(query, expected_dim, BENCHMARK_QUERY_PATH_FMT);
 
     auto gt_path = fmt::format(BENCHMARK_GT_PATH_FMT, dataset, base_npts, gt_dim);
-    int32_t* gt_data;
+    int32_t *gt_data;
     uint32_t gt_npts, gt_valid_dim;
     vsag::load_aligned_fvecs(gt_path, gt_data, gt_npts, gt_valid_dim);
     if ((gt_npts != query_npts) or (gt_valid_dim != gt_dim)) {
@@ -372,7 +373,7 @@ int search(std::vector<uint32_t> efs, uint32_t k = 10) {
     auto result = index->Test(single_query);
     logger->Info(fmt::format("sq: {}, time: {}", sq_num_bits, result->first));
 
-    for (auto ef_search : efs) {
+    for (auto ef_search: efs) {
         logger->Debug(fmt::format("====Search with ef {}====", ef_search));
         auto search_parameters = fmt::format(search_parameters_json, ef_search);
 
@@ -399,12 +400,13 @@ int search(std::vector<uint32_t> efs, uint32_t k = 10) {
             avg_hop += ann_result->GetIds()[k + 1];
         }
         recall /= query_npts;
-        logger->Info(fmt::format("recall: {:.4f}, QPS: {:.1f}, time cost: {:.2f} ms, avg_dist_cmp: {:.2f}, avg_hop: {:.2f}",
-                                 recall,
-                                 query_npts / (total_time_cost / 1000),
-                                 total_time_cost / query_npts,
-                                 avg_dist_cmp / query_npts,
-                                 avg_hop / query_npts));
+        logger->Info(
+                fmt::format("recall: {:.4f}, QPS: {:.1f}, time cost: {:.2f} ms, avg_dist_cmp: {:.2f}, avg_hop: {:.2f}",
+                            recall,
+                            query_npts / (total_time_cost / 1000),
+                            total_time_cost / query_npts,
+                            avg_dist_cmp / query_npts,
+                            avg_hop / query_npts));
     }
 
 
@@ -418,25 +420,26 @@ int main() {
     dataset = "gist-960-euclidean";
     target_npts = -1;
     use_static = false;
-    sq_num_bits = -1;
+    sq_num_bits = 12;
     gt_dim = 100;
 
     // prepare index and ground_truth
-    // build();
+    build();
     calculate_gt();
 
     // search
     std::vector<uint32_t> efs = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
 //    efs.resize(1000, 80);
     for (int round = 0; round < 2; round++) {
-         if (round == 0) {
-             sq_num_bits = 4;
-         } else if (round == 1) {
-             sq_num_bits = 8;
-         } else {
-             sq_num_bits = -1;
-         }
-         use_static = (round == 2);
+        sq_num_bits = 12;
+//         if (round == 0) {
+//             sq_num_bits = 4;
+//         } else if (round == 1) {
+//             sq_num_bits = 8;
+//         } else {
+//             sq_num_bits = -1;
+//         }
+//         use_static = (round == 2);
         search(efs);
     }
 }

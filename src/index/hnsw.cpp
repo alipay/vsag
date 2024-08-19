@@ -146,17 +146,17 @@ HNSW::build(const DatasetPtr& base) {
         auto ids = base->GetIds();
         auto vectors = base->GetFloat32Vectors();
         std::vector<int64_t> failed_ids;
-        {
-            SlowTaskTimer t("hnsw graph");
-#pragma omp parallel for
-            for (int64_t i = 0; i < num_elements; ++i) {
-                // noexcept runtime
-                if (!alg_hnsw->addPoint((const void*)(vectors + i * dim_), ids[i])) {
-                    logger::debug("duplicate point: {}", ids[i]);
-                    failed_ids.emplace_back(ids[i]);
-                }
-            }
-        }
+//        {
+//            SlowTaskTimer t("hnsw graph");
+//#pragma omp parallel for
+//            for (int64_t i = 0; i < num_elements; ++i) {
+//                // noexcept runtime
+//                if (!alg_hnsw->addPoint((const void*)(vectors + i * dim_), ids[i])) {
+//                    logger::debug("duplicate point: {}", ids[i]);
+//                    failed_ids.emplace_back(ids[i]);
+//                }
+//            }
+//        }
 
         if (use_static_) {
             SlowTaskTimer t("hnsw pq", 10);
@@ -172,6 +172,9 @@ HNSW::build(const DatasetPtr& base) {
                 alg_hnsw->transform_base();
             } else if (sq_num_bits_ == 4) {
                 alg_hnsw->transform_base_int4();
+            } else if (sq_num_bits_ == 12) {
+                auto* hnsw = dynamic_cast<hnswlib::HierarchicalNSW*>(alg_hnsw.get());
+                hnsw->Train(max_elements_, vectors);
             } else {
                 throw std::invalid_argument(fmt::format("invalid sq_num_bits()", sq_num_bits_));
             }
@@ -524,14 +527,13 @@ HNSW::deserialize(const BinarySet& binary_set) {
             } else if (sq_num_bits_ == 4) {
                 alg_hnsw->transform_base_int4();
             }
-            alg_hnsw->optimize();
+//            alg_hnsw->optimize();
         }
     } catch (const std::runtime_error& e) {
         LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to deserialize: ", e.what());
     } catch (const std::out_of_range& e) {
         LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to deserialize: ", e.what());
     }
-
     return {};
 }
 

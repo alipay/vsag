@@ -16,7 +16,7 @@ endif ()
 if (DIST_CONTAINS_AVX512)
   target_compile_definitions (unittests PRIVATE ENABLE_AVX512=1)
 endif ()
-target_include_directories (unittests PRIVATE "./fixtures")
+target_include_directories (unittests PRIVATE "./fixtures" "./")
 target_link_libraries (unittests PRIVATE Catch2::Catch2WithMain vsag simd)
 add_dependencies (unittests spdlog Catch2)
 

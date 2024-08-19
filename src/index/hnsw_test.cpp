@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "../logger.h"
+#include "catch2/catch_message.hpp"
 #include "fixtures.h"
 #include "vsag/bitset.h"
 #include "vsag/errors.h"

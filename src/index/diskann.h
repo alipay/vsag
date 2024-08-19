@@ -30,6 +30,7 @@
 #include "../common.h"
 #include "../logger.h"
 #include "../utils.h"
+#include "./diskann_zserialization.h"
 #include "vsag/index.h"
 #include "vsag/options.h"
 
@@ -101,17 +102,17 @@ public:
 public:
     tl::expected<BinarySet, Error>
     Serialize() const override {
-        SAFE_CALL(return this->serialize());
+        SAFE_CALL(return DiskannSerialization::Serialize(*this));
     }
 
     tl::expected<void, Error>
     Deserialize(const BinarySet& binary_set) override {
-        SAFE_CALL(return this->deserialize(binary_set));
+        SAFE_CALL(return DiskannSerialization::Deserialize(*this, binary_set));
     }
 
     tl::expected<void, Error>
     Deserialize(const ReaderSet& reader_set) override {
-        SAFE_CALL(return this->deserialize(reader_set));
+        SAFE_CALL(return DiskannSerialization::Deserialize(*this, reader_set));
     }
 
 public:
@@ -166,15 +167,6 @@ private:
                  BitsetPtr invalid,
                  int64_t limited_size) const;
 
-    tl::expected<BinarySet, Error>
-    serialize() const;
-
-    tl::expected<void, Error>
-    deserialize(const BinarySet& binary_set);
-
-    tl::expected<void, Error>
-    deserialize(const ReaderSet& reader_set);
-
     tl::expected<void, Error>
     build_partial_graph(const DatasetPtr& base,
                         const BinarySet& binary_set,
@@ -184,8 +176,8 @@ private:
     tl::expected<void, Error>
     load_disk_index(const BinarySet& binary_set);
 
-    BinarySet
-    empty_binaryset() const;
+private:
+    friend class DiskannSerialization;
 
 private:
     std::shared_ptr<LocalFileReader> reader_;

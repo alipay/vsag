@@ -30,12 +30,14 @@
 #include "../impl/conjugate_graph.h"
 #include "../logger.h"
 #include "../utils.h"
+#include "./hnsw_zserialization.h"
 #include "vsag/binaryset.h"
 #include "vsag/errors.h"
 #include "vsag/index.h"
 #include "vsag/readerset.h"
 
 namespace vsag {
+
 class BitsetOrCallbackFilter : public hnswlib::BaseFilterFunctor {
 public:
     BitsetOrCallbackFilter(const std::function<bool(int64_t)>& func) : func_(func) {
@@ -135,27 +137,35 @@ public:
 public:
     tl::expected<BinarySet, Error>
     Serialize() const override {
-        SAFE_CALL(return this->serialize());
-    }
-
-    tl::expected<void, Error>
-    Serialize(std::ostream& out_stream) override {
-        SAFE_CALL(return this->serialize(out_stream));
+        SAFE_CALL(return HnswSerialization::KvSerialize(*this));
     }
 
     tl::expected<void, Error>
     Deserialize(const BinarySet& binary_set) override {
-        SAFE_CALL(return this->deserialize(binary_set));
+        SAFE_CALL(return HnswSerialization::KvDeserialize(*this, binary_set));
     }
 
     tl::expected<void, Error>
     Deserialize(const ReaderSet& reader_set) override {
-        SAFE_CALL(return this->deserialize(reader_set));
+        SAFE_CALL(return HnswSerialization::KvDeserialize(*this, reader_set));
+    }
+
+    tl::expected<void, Error>
+    Serialize(std::ostream& out_stream) override {
+        SAFE_CALL(return HnswSerialization::StreamingSerialize(*this, out_stream));
     }
 
     tl::expected<void, Error>
     Deserialize(std::istream& in_stream) override {
-        SAFE_CALL(return this->deserialize(in_stream));
+        SAFE_CALL(return HnswSerialization::StreamingDeserialize(*this, in_stream));
+    }
+
+    nlohmann::json
+    Metadata() const {
+        nlohmann::json metadata = {
+            {"version", 1},
+        };
+        return metadata;
     }
 
 public:
@@ -224,23 +234,8 @@ private:
     tl::expected<uint32_t, Error>
     pretrain(const std::vector<int64_t>& base_tag_ids, uint32_t k, const std::string& parameters);
 
-    tl::expected<BinarySet, Error>
-    serialize() const;
-
-    tl::expected<void, Error>
-    serialize(std::ostream& out_stream);
-
-    tl::expected<void, Error>
-    deserialize(const BinarySet& binary_set);
-
-    tl::expected<void, Error>
-    deserialize(const ReaderSet& binary_set);
-
-    tl::expected<void, Error>
-    deserialize(std::istream& in_stream);
-
-    BinarySet
-    empty_binaryset() const;
+private:
+    friend class HnswSerialization;
 
 private:
     std::shared_ptr<hnswlib::AlgorithmInterface<float>> alg_hnsw;
@@ -258,6 +253,9 @@ private:
 
     mutable std::mutex stats_mutex_;
     mutable std::map<std::string, WindowResultQueue> result_queues_;
+
+    // TODO(wxyu): fill this
+    nlohmann::json metadata_ = nlohmann::json::parse(R"({"version": 1})");
 };
 
 }  // namespace vsag

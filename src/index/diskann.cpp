@@ -31,6 +31,7 @@
 #include "../logger.h"
 #include "../utils.h"
 #include "./diskann_zparameters.h"
+#include "diskann_zserialization.h"
 #include "vsag/constants.h"
 #include "vsag/errors.h"
 #include "vsag/expected.hpp"
@@ -114,28 +115,6 @@ private:
     std::mutex mutex_;
     std::unique_ptr<ThreadPool> pool_;
 };
-
-Binary
-convert_stream_to_binary(const std::stringstream& stream) {
-    std::streambuf* buf = stream.rdbuf();
-    std::streamsize size = buf->pubseekoff(0, stream.end, stream.in);  // get the stream buffer size
-    buf->pubseekpos(0, stream.in);                                     // reset pointer pos
-    std::shared_ptr<int8_t[]> binary_data(new int8_t[size]);
-    buf->sgetn((char*)binary_data.get(), size);
-    Binary binary{
-        .data = binary_data,
-        .size = (size_t)size,
-    };
-    return std::move(binary);
-}
-
-void
-convert_binary_to_stream(const Binary& binary, std::stringstream& stream) {
-    stream.str("");
-    if (binary.data && binary.size > 0) {
-        stream.write((const char*)binary.data.get(), binary.size);
-    }
-}
 
 DiskANN::DiskANN(diskann::Metric metric,
                  std::string data_type,
@@ -569,157 +548,6 @@ DiskANN::range_search(const DatasetPtr& query,
     }
 }
 
-BinarySet
-DiskANN::empty_binaryset() const {
-    // version 0 pairs:
-    // - hnsw_blank: b"EMPTY_DISKANN"
-    const std::string empty_str = "EMPTY_DISKANN";
-    size_t num_bytes = empty_str.length();
-    std::shared_ptr<int8_t[]> bin(new int8_t[num_bytes]);
-    memcpy(bin.get(), empty_str.c_str(), empty_str.length());
-    Binary b{
-        .data = bin,
-        .size = num_bytes,
-    };
-    BinarySet bs;
-    bs.Set(BLANK_INDEX, b);
-
-    return bs;
-}
-
-tl::expected<BinarySet, Error>
-DiskANN::serialize() const {
-    if (status_ == IndexStatus::EMPTY) {
-        // return a special binaryset means empty
-        return empty_binaryset();
-    }
-
-    SlowTaskTimer t("diskann serialize");
-    try {
-        BinarySet bs;
-
-        bs.Set(DISKANN_PQ, convert_stream_to_binary(pq_pivots_stream_));
-        bs.Set(DISKANN_COMPRESSED_VECTOR, convert_stream_to_binary(disk_pq_compressed_vectors_));
-        bs.Set(DISKANN_LAYOUT_FILE, convert_stream_to_binary(disk_layout_stream_));
-        bs.Set(DISKANN_TAG_FILE, convert_stream_to_binary(tag_stream_));
-        if (preload_) {
-            bs.Set(DISKANN_GRAPH, convert_stream_to_binary(graph_stream_));
-        }
-        return bs;
-    } catch (const std::bad_alloc& e) {
-        return tl::unexpected(Error(ErrorType::NO_ENOUGH_MEMORY, ""));
-    }
-}
-
-tl::expected<void, Error>
-DiskANN::deserialize(const BinarySet& binary_set) {
-    SlowTaskTimer t("diskann deserialize");
-    if (this->index_) {
-        LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
-                              "failed to deserialize: index is not empty")
-    }
-
-    // check if binaryset is a empty index
-    if (binary_set.Contains(BLANK_INDEX)) {
-        empty_index_ = true;
-        return {};
-    }
-
-    convert_binary_to_stream(binary_set.Get(DISKANN_LAYOUT_FILE), disk_layout_stream_);
-    auto graph = binary_set.Get(DISKANN_GRAPH);
-    if (preload_) {
-        if (graph.data) {
-            convert_binary_to_stream(graph, graph_stream_);
-        } else {
-            LOG_ERROR_AND_RETURNS(
-                ErrorType::MISSING_FILE,
-                fmt::format("missing file: {} when deserialize diskann index", DISKANN_GRAPH));
-        }
-    } else {
-        if (graph.data) {
-            logger::warn("serialize without using file: {} ", DISKANN_GRAPH);
-        }
-    }
-    load_disk_index(binary_set);
-    status_ = IndexStatus::MEMORY;
-
-    return {};
-}
-
-tl::expected<void, Error>
-DiskANN::deserialize(const ReaderSet& reader_set) {
-    SlowTaskTimer t("diskann deserialize");
-
-    if (this->index_) {
-        LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
-                              fmt::format("failed to deserialize: {} is not empty", INDEX_DISKANN));
-    }
-
-    // check if readerset is a empty index
-    if (reader_set.Contains(BLANK_INDEX)) {
-        empty_index_ = true;
-        return {};
-    }
-
-    std::stringstream pq_pivots_stream, disk_pq_compressed_vectors, graph, tag_stream;
-
-    {
-        auto pq_reader = reader_set.Get(DISKANN_PQ);
-        auto pq_pivots_data = std::make_unique<char[]>(pq_reader->Size());
-        pq_reader->Read(0, pq_reader->Size(), pq_pivots_data.get());
-        pq_pivots_stream.write(pq_pivots_data.get(), pq_reader->Size());
-        pq_pivots_stream.seekg(0);
-    }
-
-    {
-        auto compressed_vector_reader = reader_set.Get(DISKANN_COMPRESSED_VECTOR);
-        auto compressed_vector_data = std::make_unique<char[]>(compressed_vector_reader->Size());
-        compressed_vector_reader->Read(
-            0, compressed_vector_reader->Size(), compressed_vector_data.get());
-        disk_pq_compressed_vectors.write(compressed_vector_data.get(),
-                                         compressed_vector_reader->Size());
-        disk_pq_compressed_vectors.seekg(0);
-    }
-
-    {
-        auto tag_reader = reader_set.Get(DISKANN_TAG_FILE);
-        auto tag_data = std::make_unique<char[]>(tag_reader->Size());
-        tag_reader->Read(0, tag_reader->Size(), tag_data.get());
-        tag_stream.write(tag_data.get(), tag_reader->Size());
-        tag_stream.seekg(0);
-    }
-
-    disk_layout_reader_ = reader_set.Get(DISKANN_LAYOUT_FILE);
-    reader_.reset(new LocalFileReader(batch_read_));
-    index_.reset(
-        new diskann::PQFlashIndex<float, int64_t>(reader_, metric_, sector_len_, use_bsa_));
-    index_->set_sector_size(Option::Instance().sector_size());
-    index_->load_from_separate_paths(
-        omp_get_num_procs(), pq_pivots_stream, disk_pq_compressed_vectors, tag_stream);
-
-    auto graph_reader = reader_set.Get(DISKANN_GRAPH);
-    if (preload_) {
-        if (graph_reader) {
-            auto graph_data = std::make_unique<char[]>(graph_reader->Size());
-            graph_reader->Read(0, graph_reader->Size(), graph_data.get());
-            graph.write(graph_data.get(), graph_reader->Size());
-            graph.seekg(0);
-            index_->load_graph(graph);
-        } else {
-            LOG_ERROR_AND_RETURNS(
-                ErrorType::MISSING_FILE,
-                fmt::format("miss file: {} when deserialize diskann index", DISKANN_GRAPH));
-        }
-    } else {
-        if (graph_reader) {
-            logger::warn("serialize without using file: {} ", DISKANN_GRAPH);
-        }
-    }
-    status_ = IndexStatus::HYBRID;
-
-    return {};
-}
-
 std::string
 DiskANN::GetStats() const {
     nlohmann::json j;
@@ -893,9 +721,11 @@ DiskANN::continue_build(const DatasetPtr& base, const BinarySet& binary_set) {
                                                              disk_pq_dims_,
                                                              use_opq_);
                 after_binary_set = binary_set;
-                after_binary_set.Set(DISKANN_PQ, convert_stream_to_binary(pq_pivots_stream_));
-                after_binary_set.Set(DISKANN_COMPRESSED_VECTOR,
-                                     convert_stream_to_binary(disk_pq_compressed_vectors_));
+                after_binary_set.Set(
+                    DISKANN_PQ, DiskannSerialization::ConvertStreamToBinary(pq_pivots_stream_));
+                after_binary_set.Set(
+                    DISKANN_COMPRESSED_VECTOR,
+                    DiskannSerialization::ConvertStreamToBinary(disk_pq_compressed_vectors_));
                 build_status = BuildStatus::DISK_LAYOUT;
                 break;
             }
@@ -903,7 +733,8 @@ DiskANN::continue_build(const DatasetPtr& base, const BinarySet& binary_set) {
                 SlowTaskTimer t(fmt::format("diskann build (disk layout)"));
                 auto failed_locs =
                     deserialize_vector_from_binary<size_t>(after_binary_set.Get(BUILD_FAILED_LOC));
-                convert_binary_to_stream(binary_set.Get(DISKANN_GRAPH), graph_stream_);
+                DiskannSerialization::ConvertBinaryToStream(binary_set.Get(DISKANN_GRAPH),
+                                                            graph_stream_);
                 diskann::create_disk_layout<float>(base->GetFloat32Vectors(),
                                                    base->GetNumElements(),
                                                    dim_,
@@ -947,8 +778,10 @@ DiskANN::build_partial_graph(const DatasetPtr& base,
         std::unordered_set<uint32_t> builded_nodes;
         if (round > 1) {
             std::stringstream graph_stream, tag_stream;
-            convert_binary_to_stream(binary_set.Get(DISKANN_GRAPH), graph_stream);
-            convert_binary_to_stream(binary_set.Get(DISKANN_TAG_FILE), tag_stream);
+            DiskannSerialization::ConvertBinaryToStream(binary_set.Get(DISKANN_GRAPH),
+                                                        graph_stream);
+            DiskannSerialization::ConvertBinaryToStream(binary_set.Get(DISKANN_TAG_FILE),
+                                                        tag_stream);
 
             build_index_->load(graph_stream, tag_stream, omp_get_max_threads(), L_);
             builded_nodes =
@@ -970,8 +803,9 @@ DiskANN::build_partial_graph(const DatasetPtr& base,
         after_binary_set.Set(BUILD_FAILED_LOC, serialize_vector_to_binary<size_t>(failed_locs));
         build_index_.reset();
     }
-    after_binary_set.Set(DISKANN_GRAPH, convert_stream_to_binary(graph_stream_));
-    after_binary_set.Set(DISKANN_TAG_FILE, convert_stream_to_binary(tag_stream_));
+    after_binary_set.Set(DISKANN_GRAPH, DiskannSerialization::ConvertStreamToBinary(graph_stream_));
+    after_binary_set.Set(DISKANN_TAG_FILE,
+                         DiskannSerialization::ConvertStreamToBinary(tag_stream_));
     return tl::expected<void, Error>();
 }
 
@@ -983,10 +817,10 @@ DiskANN::load_disk_index(const BinarySet& binary_set) {
         new diskann::PQFlashIndex<float, int64_t>(reader_, metric_, sector_len_, use_bsa_));
     index_->set_sector_size(Option::Instance().sector_size());
 
-    convert_binary_to_stream(binary_set.Get(DISKANN_COMPRESSED_VECTOR),
-                             disk_pq_compressed_vectors_);
-    convert_binary_to_stream(binary_set.Get(DISKANN_PQ), pq_pivots_stream_);
-    convert_binary_to_stream(binary_set.Get(DISKANN_TAG_FILE), tag_stream_);
+    DiskannSerialization::ConvertBinaryToStream(binary_set.Get(DISKANN_COMPRESSED_VECTOR),
+                                                disk_pq_compressed_vectors_);
+    DiskannSerialization::ConvertBinaryToStream(binary_set.Get(DISKANN_PQ), pq_pivots_stream_);
+    DiskannSerialization::ConvertBinaryToStream(binary_set.Get(DISKANN_TAG_FILE), tag_stream_);
     index_->load_from_separate_paths(
         omp_get_num_procs(), pq_pivots_stream_, disk_pq_compressed_vectors_, tag_stream_);
     if (preload_) {

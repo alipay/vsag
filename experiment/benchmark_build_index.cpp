@@ -119,12 +119,12 @@ int build() {
                                          use_static ? "static" : "pure");
     auto build_parameters = fmt::format(BUILD_PARAM_FMT, metric_type, base_dim, BR, BL, sq_num_bits, use_static);
     auto index = vsag::Factory::CreateIndex(algo_name, build_parameters).value();
-    if (false) {
+    if (std::filesystem::exists(index_path)) {
         logger->Debug(fmt::format("====Index Path Exists===="));
         logger->Debug(fmt::format("Index path: {}", index_path));
     } else {
-        std::cout << "Start Deserialize" << std::endl;
-        vsag::deserialize(index, index_path);
+//        std::cout << "Start Deserialize" << std::endl;
+//        vsag::deserialize(index, index_path);
         logger->Debug(fmt::format("====Start build===="));
         if (const auto build_result = index->Build(base); build_result.has_value()) {
             logger->Debug(fmt::format("After Build(), Index constains: {} elements", index->GetNumElements()));
@@ -425,6 +425,7 @@ int main() {
 
     // prepare index and ground_truth
     build();
+//    return 0;
     calculate_gt();
 
     // search

@@ -153,7 +153,7 @@ public:
           alpha_(alpha) {
         this->po_ = 1;
         this->pl_ = 1;
-        pq_ = new PQCodes(120, 960);
+        pq_ = new PQCodes(960, 960);
         pqcodes_.resize(max_elements);
         max_elements_ = max_elements;
         num_deleted_ = 0;
@@ -1284,64 +1284,104 @@ public:
             }
             candidate_set.pop();
             std::pair<float, tableint> next_node_pair = candidate_set.top();
-            auto t1 = std::chrono::steady_clock::now();
-            uint32_t count_no_visited = visit(
-                current_node_pair, next_node_pair, visited_array, visited_array_tag, to_be_visited);
-            dist_cmp += count_no_visited;
 
-            for (size_t j = 0; j < this->po_; j++) {
-                auto vector_data_ptr = (uint8_t*)get_encoded_data(to_be_visited[j], code_size + 8);
-#ifdef USE_SSE
-                mem_prefetch(vector_data_ptr, this->pl_);
-#endif
-            }
-
-            for (size_t j = 0; j < count_no_visited; j++) {
-                int candidate_id = to_be_visited[j];
-                if (j + this->po_ <= count_no_visited) {
-                    auto vector_data_ptr =
-                        (uint8_t*)get_encoded_data(to_be_visited[j + this->po_], code_size + 8);
-#ifdef USE_SSE
-                    mem_prefetch(vector_data_ptr, this->pl_);
-#endif
-                }
-                auto* codes = get_encoded_data(candidate_id, code_size + 8);
-                if (sq_num_bits_ == 8) {
-                    dist = INT8_L2(((int64_t*)(codes + code_size)),
-                                   norm2,
-                                   (const void*)codes,
-                                   transformed_query,
-                                   dim);
-                } else if (sq_num_bits_ == 4) {
-                    dist = INT4_L2_precompute(
-                        *((int64_t*)(codes + code_size)), norm2, codes, transformed_query, dim);
-                } else {
-                    char* currObj1 = (getDataByInternalId(candidate_id));
-                    dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
-                }
-                if (top_candidates.size() < ef || lowerBound > dist) {
-                    candidate_set.emplace(-dist, candidate_id);
-
-                    top_candidates.emplace(dist, candidate_id);
-
-                    if (top_candidates.size() > ef)
-                        top_candidates.pop();
-
-                    if (!top_candidates.empty())
-                        lowerBound = top_candidates.top().first;
-                }
-            }
-            auto t2 = std::chrono::steady_clock::now();
             int* data = (int*)get_linklist0(current_node_pair.second);
             size_t size = getListCount((linklistsizeint*)data);
             auto ptr = 0;
             while (ptr < size) {
                 scanner.ScanCodes(pqcodes_[current_node_pair.second].data() + ptr * pq_->subSpace_ / 2, dists);
                 ptr += 32;
+//                std::vector<float> newdist(size);
+//                for (int ii = 0; ii < size; ++ii) {
+//                    char* currObj1 = (getDataByInternalId(data[ii + 1]));
+//                    newdist[ii] = fstdistfunc_(data_point, currObj1, dist_func_param_);
+//                }
+                for (int i = 1; i <= size; ++ i) {
+                    auto id = data[i];
+                    if (visited_array[id] == visited_array_tag) {
+                        continue;
+                    }
+                    visited_array[id] = visited_array_tag;
+                    dist = dists[i - 1];
+                    if (top_candidates.size() < ef || lowerBound > dist) {
+                        candidate_set.emplace(-dist, id);
+
+                        top_candidates.emplace(dist, id);
+
+                        if (top_candidates.size() > ef)
+                            top_candidates.pop();
+
+                        if (!top_candidates.empty())
+                            lowerBound = top_candidates.top().first;
+                    }
+                }
             }
-            auto t3 = std::chrono::steady_clock::now();
-            std::cout << std::chrono::duration<double, std::nano>(t2 - t1).count() << "\t";
-            std::cout << std::chrono::duration<double, std::nano>(t3 - t2).count() << "\n";
+
+
+//            auto t1 = std::chrono::steady_clock::now();
+//            uint32_t count_no_visited = visit(
+//                current_node_pair, next_node_pair, visited_array, visited_array_tag, to_be_visited);
+//            dist_cmp += count_no_visited;
+//
+//            for (size_t j = 0; j < this->po_; j++) {
+//                auto vector_data_ptr = (uint8_t*)get_encoded_data(to_be_visited[j], code_size + 8);
+//#ifdef USE_SSE
+//                mem_prefetch(vector_data_ptr, this->pl_);
+//#endif
+//            }
+//
+//            for (size_t j = 0; j < count_no_visited; j++) {
+//                int candidate_id = to_be_visited[j];
+//                if (j + this->po_ <= count_no_visited) {
+//                    auto vector_data_ptr =
+//                        (uint8_t*)get_encoded_data(to_be_visited[j + this->po_], code_size + 8);
+//#ifdef USE_SSE
+//                    mem_prefetch(vector_data_ptr, this->pl_);
+//#endif
+//                }
+//                auto* codes = get_encoded_data(candidate_id, code_size + 8);
+//                if (sq_num_bits_ == 8) {
+//                    dist = INT8_L2(((int64_t*)(codes + code_size)),
+//                                   norm2,
+//                                   (const void*)codes,
+//                                   transformed_query,
+//                                   dim);
+//                } else if (sq_num_bits_ == 4) {
+//                    dist = INT4_L2_precompute(
+//                        *((int64_t*)(codes + code_size)), norm2, codes, transformed_query, dim);
+//                } else {
+//                    char* currObj1 = (getDataByInternalId(candidate_id));
+//                    dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
+//                }
+//                if (top_candidates.size() < ef || lowerBound > dist) {
+//                    candidate_set.emplace(-dist, candidate_id);
+//
+//                    top_candidates.emplace(dist, candidate_id);
+//
+//                    if (top_candidates.size() > ef)
+//                        top_candidates.pop();
+//
+//                    if (!top_candidates.empty())
+//                        lowerBound = top_candidates.top().first;
+//                }
+//            }
+//            auto t2 = std::chrono::steady_clock::now();
+//            int* data = (int*)get_linklist0(current_node_pair.second);
+//            size_t size = getListCount((linklistsizeint*)data);
+//            auto ptr = 0;
+////            while (ptr < size) {
+//                scanner.ScanCodes(pqcodes_[current_node_pair.second].data() + ptr * pq_->subSpace_ / 2, dists);
+//                ptr += 32;
+//                std::vector<float> newdist(size);
+//                for (int ii = 0; ii < size; ++ii) {
+//                    char* currObj1 = (getDataByInternalId(data[ii + 1]));
+//                    newdist[ii] = fstdistfunc_(data_point, currObj1, dist_func_param_);
+//                }
+//            }
+//            auto t3 = std::chrono::steady_clock::now();
+
+//            std::cout << std::chrono::duration<double, std::nano>(t2 - t1).count() << "\t";
+//            std::cout << std::chrono::duration<double, std::nano>(t3 - t2).count() << "\n";
         }
 
         visited_list_pool_->releaseVisitedList(vl);
@@ -1806,6 +1846,12 @@ public:
                 size += link_list_size;
             }
         }
+
+        for (auto& vec: this->pqcodes_) {
+            size += vec.size() + sizeof(size_t);
+        }
+        size += sizeof(size_t);
+        size += this->pq_->codebook.size() * sizeof(float);
         // output.close();
         return size;
     }
@@ -2018,18 +2064,18 @@ public:
                     deleted_elements.insert(i);
             }
         }
-//        pqcodes_.resize(cur_element_count_);
-//        for (int i = 0; i < cur_element_count_; ++ i) {
-//            size_t size = 0;
-//            readFromReader(read_func, cursor, size);
-//            pqcodes_[i].resize(size);
-//            read_func(cursor, size, pqcodes_[i].data());
-//            cursor += size;
-//        }
-//        size_t size = 0;
-//        readFromReader(read_func, cursor, size);
-//        pq_ = new PQCodes(120, 960);
-//        read_func(cursor, size * sizeof(float), pq_->codebook.data());
+        pqcodes_.resize(cur_element_count_);
+        for (int i = 0; i < cur_element_count_; ++ i) {
+            size_t size = 0;
+            readFromReader(read_func, cursor, size);
+            pqcodes_[i].resize(size);
+            read_func(cursor, size, pqcodes_[i].data());
+            cursor += size;
+        }
+        size_t size = 0;
+        readFromReader(read_func, cursor, size);
+        pq_ = new PQCodes(960, 960);
+        read_func(cursor, size * sizeof(float), pq_->codebook.data());
 
 
         // input.close();

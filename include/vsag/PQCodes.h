@@ -22,7 +22,7 @@ public:
 
     int dim_;
 
-    int dimPerSpace_;
+    size_t dimPerSpace_;
 
     std::vector<float> codebook;
 

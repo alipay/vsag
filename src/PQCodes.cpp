@@ -159,30 +159,27 @@ void PQScanner::ScanCodes(const uint8_t *codes, std::vector<float> &dists) {
     auto M = this->pqCodes_->subSpace_ / 2;
     __m256i sum1 = _mm256_set1_epi16(0);
     __m256i sum2 = _mm256_set1_epi16(0);
-    __m256i sum3 = _mm256_set1_epi16(0);
-    __m256i sum4 = _mm256_set1_epi16(0);
     __m256i mask = _mm256_set1_epi8(0x0F);
     for (int i = 0; i < M; ++i) {
         __m256i curCode = _mm256_loadu_epi8(codes);
         __m256i curLut = _mm256_loadu_epi8(lut);
-        codes += 16;
-        lut += 16;
-        __m256i c1 = _mm256_and_si256(_mm256_srli_epi16(curCode, 4), mask);
-        __m256i c2 = _mm256_and_si256(curCode, mask);
-        __m256i res1 = _mm256_shuffle_epi8(c1, curLut);
-        __m256i res2 = _mm256_shuffle_epi8(c2, curLut);
+
+        __m256i c2 = _mm256_and_si256(_mm256_srli_epi16(curCode, 4), mask);
+        __m256i c1 = _mm256_and_si256(curCode, mask);
+        __m256i res1 = _mm256_shuffle_epi8(curLut, c1);
+        __m256i res2 = _mm256_shuffle_epi8(curLut, c2);
         sum1 = _mm256_add_epi16(_mm256_cvtepi8_epi16(_mm256_extracti128_si256(res1, 0)), sum1);
-        sum2 = _mm256_add_epi16(_mm256_cvtepi8_epi16(_mm256_extracti128_si256(res1, 1)), sum2);
-        sum3 = _mm256_add_epi16(_mm256_cvtepi8_epi16(_mm256_extracti128_si256(res2, 0)), sum3);
-        sum4 = _mm256_add_epi16(_mm256_cvtepi8_epi16(_mm256_extracti128_si256(res2, 1)), sum4);
+        sum1 = _mm256_add_epi16(_mm256_cvtepi8_epi16(_mm256_extracti128_si256(res1, 1)), sum1);
+        sum2 = _mm256_add_epi16(_mm256_cvtepi8_epi16(_mm256_extracti128_si256(res2, 0)), sum2);
+        sum2 = _mm256_add_epi16(_mm256_cvtepi8_epi16(_mm256_extracti128_si256(res2, 1)), sum2);
+        codes += 32;
+        lut += 32;
     }
-    std::vector<short> result(dists.size());
+    std::vector<short> result(32);
     auto *curp = result.data();
     _mm256_storeu_epi16(curp, sum1);
     _mm256_storeu_epi16(curp + 16, sum2);
-    _mm256_storeu_epi16(curp + 32, sum3);
-    _mm256_storeu_epi16(curp + 48, sum4);
-    for (auto i = 0; i < dists.size(); ++i) {
+    for (auto i = 0; i < 32; ++i) {
         dists[i] = (double(result[i]) / 255.0) * (sqMax_ - sqMin_) + M * 2.0 * sqMin_;
     }
 }

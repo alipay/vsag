@@ -46,6 +46,8 @@ public:
 
     std::vector<uint8_t> lut_;
 
+    std::vector<uint32_t> result;
+
     float sqMax_{-10000};
 
     float sqMin_{10000};

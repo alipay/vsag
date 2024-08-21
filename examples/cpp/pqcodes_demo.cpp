@@ -4,9 +4,11 @@
 
 
 #include "vsag/PQCodes.h"
+#include "vsag/vsag.h"
 #include <random>
 #include <iostream>
 #include <chrono>
+#include "fmt/format-inl.h"
 
 static void
 Normalize(float* input_vector, int64_t dim) {
@@ -39,37 +41,55 @@ GenVector(int64_t num_vectors, int64_t dim) {
 
 void TestPQCodesTrain()
 {
-    int baseCount = 100000;
+    int baseCount = 10000;
     int queryCount = 100;
-    int M = 120;
-    int dim = 960;
-    PQCodes pqCodes(M, dim);
-
-    std::vector<float> base = GenVector(baseCount, dim);
-    std::cout << "start train\n";
-    pqCodes.Train(base.data(), baseCount);
-    std::vector<uint8_t> codes;
-    int64_t N = 10000;
-    std::vector<std::vector<float>> newData;
-    std::vector<std::vector<uint8_t>> newCodes(N);
-    for (int i = 0; i < N; ++ i) {
-        newData.emplace_back(GenVector(64, dim));
-        pqCodes.BatchEncode(newData[i].data(), 64, newCodes[i]);
-        pqCodes.Packaged(newCodes[i]);
+    int M = 32;
+    int dim = 32;
+    auto baseVec = GenVector(baseCount, dim);
+    auto queryVec = GenVector(queryCount, dim);
+    std::string algo_name = "hnsw";
+    constexpr const char* BUILD_PARAM = R"(
+    {{
+        "dtype": "float32",
+        "metric_type": "l2",
+        "dim": {},
+        "hnsw": {{
+            "max_degree": 32,
+            "ef_construction": 200,
+            "sq_num_bits": {}
+        }}
+    }}
+    )";
+    auto* base_id = new int64_t[baseCount];
+    for (int64_t i = 0; i < baseCount; i++) {
+        base_id[i] = i;
     }
+    std::string build_parameters = fmt::format(BUILD_PARAM, dim, 12);
+    std::cout << build_parameters << std::endl;
+    auto dataset = vsag::Dataset::Make();
+    dataset->NumElements(baseCount)
+            ->Dim(dim)
+            ->Ids(base_id)
+            ->Float32Vectors(baseVec.data())
+            ->Owner(false);
 
-    std::vector<float> query = GenVector(100, dim);
-    std::vector<float> dist(64);
-    for (int i = 0; i < 100; ++ i) {
-        PQScanner scanner(&pqCodes);
-        scanner.SetQuery(query.data() + i * dim);
-        for (int j = 0; j < 1000; ++ j) {
-            auto idx = random() % N;
-            auto t1 = std::chrono::steady_clock::now();
-            scanner.ScanCodes(newCodes[idx].data(), dist);
-            auto t2 = std::chrono::steady_clock::now();
-            std::cout << std::chrono::duration<double, std::nano>(t2 - t1).count() << "\n";
-        }
+    auto index = vsag::Factory::CreateIndex(algo_name, build_parameters).value();
+    index->Build(dataset);
+    int k = 10;
+    constexpr auto search_parameters_json = R"(
+        {{
+            "hnsw": {{
+                "ef_search": {}
+            }}
+        }}
+        )";
+    auto search_parameters = fmt::format(search_parameters_json, 10);
+    for (int i = 0; i < queryCount; ++ i) {
+        auto single_query = vsag::Dataset::Make();
+        single_query->NumElements(1)->Dim(dim)->Owner(false);
+        vsag::DatasetPtr ann_result;
+        single_query->Float32Vectors(queryVec.data() + i * dim);
+        index->KnnSearch(single_query, k, search_parameters);
     }
 
 }

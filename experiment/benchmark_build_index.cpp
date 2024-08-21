@@ -206,7 +206,7 @@ int calculate_gt() {
                                          "pure");
 
     logger->Debug(fmt::format("====Start deserialize from {}====", index_path));
-    vsag::deserialize(index, index_path);
+
 
     // calculate and store
     bool validate_gt = false;
@@ -230,6 +230,7 @@ int calculate_gt() {
 
     if (not validate_gt) {
         logger->Debug(fmt::format("====GT calculation start===="));
+        vsag::deserialize(index, index_path);
         std::fstream out_file(gt_path, std::ios::out | std::ios::binary);
 
         std::vector<int32_t *> gt_results(query_npts);
@@ -420,7 +421,7 @@ int main() {
     dataset = "gist-960-euclidean";
     target_npts = -1;
     use_static = false;
-    sq_num_bits = 12;
+    sq_num_bits = 4;
     gt_dim = 100;
 
     // prepare index and ground_truth
@@ -429,10 +430,10 @@ int main() {
     calculate_gt();
 
     // search
-    std::vector<uint32_t> efs = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
-//    efs.resize(1000, 80);
+    std::vector<uint32_t> efs = {100, 200};
+    efs.resize(1000, 100);
     for (int round = 0; round < 2; round++) {
-        sq_num_bits = 12;
+        sq_num_bits = 4;
 //         if (round == 0) {
 //             sq_num_bits = 4;
 //         } else if (round == 1) {

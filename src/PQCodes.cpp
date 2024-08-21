@@ -38,7 +38,7 @@ void PQCodes::Train(const float *data, int64_t count) {
     }
     std::vector<int64_t> sample;
     SelectRandomNumbers(sample, count, newCount);
-
+#pragma omp parallel for
     for (int64_t i = 0; i < subSpace_; ++i) {
         std::vector<float> curData(newCount * dimPerSpace_);
         for (int64_t j = 0; j < newCount; ++j) {
@@ -136,6 +136,7 @@ void PQCodes::FromFile(std::string filepath)
 PQScanner::PQScanner(PQCodes *pq) {
     this->pqCodes_ = pq;
     this->lut_.resize(16 * pq->subSpace_);
+    result.resize(32);
 }
 
 void PQScanner::SetQuery(float *query) {
@@ -154,32 +155,39 @@ void PQScanner::SetQuery(float *query) {
     }
 }
 
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "portability-simd-intrinsics"
 void PQScanner::ScanCodes(const uint8_t *codes, std::vector<float> &dists) {
     auto *lut = this->lut_.data();
-    auto M = this->pqCodes_->subSpace_ / 2;
-    __m256i sum1 = _mm256_set1_epi16(0);
-    __m256i sum2 = _mm256_set1_epi16(0);
-    __m256i mask = _mm256_set1_epi8(0x0F);
+    auto M = this->pqCodes_->subSpace_ / 4;
+    __m512i sum1 = _mm512_set1_epi32(0);
+    __m512i sum2 = _mm512_set1_epi32(0);
+    __m512i mask = _mm512_set1_epi8(0x0F);
     for (int i = 0; i < M; ++i) {
-        __m256i curCode = _mm256_loadu_epi8(codes);
-        __m256i curLut = _mm256_loadu_epi8(lut);
+        __m512i curCode = _mm512_loadu_epi8(codes);
+        __m512i curLut = _mm512_loadu_epi8(lut);
 
-        __m256i c2 = _mm256_and_si256(_mm256_srli_epi16(curCode, 4), mask);
-        __m256i c1 = _mm256_and_si256(curCode, mask);
-        __m256i res1 = _mm256_shuffle_epi8(curLut, c1);
-        __m256i res2 = _mm256_shuffle_epi8(curLut, c2);
-        sum1 = _mm256_add_epi16(_mm256_cvtepi8_epi16(_mm256_extracti128_si256(res1, 0)), sum1);
-        sum1 = _mm256_add_epi16(_mm256_cvtepi8_epi16(_mm256_extracti128_si256(res1, 1)), sum1);
-        sum2 = _mm256_add_epi16(_mm256_cvtepi8_epi16(_mm256_extracti128_si256(res2, 0)), sum2);
-        sum2 = _mm256_add_epi16(_mm256_cvtepi8_epi16(_mm256_extracti128_si256(res2, 1)), sum2);
-        codes += 32;
-        lut += 32;
+        __m512i c1 = _mm512_and_si512(curCode, mask);
+        __m512i c2 = _mm512_and_si512(_mm512_srli_epi16(curCode, 4), mask);
+
+        __m512i res1 = _mm512_shuffle_epi8(curLut, c1);
+        __m512i res2 = _mm512_shuffle_epi8(curLut, c2);
+        sum1 = _mm512_add_epi16(_mm512_cvtepi8_epi32(_mm512_extracti32x4_epi32(res1, 0)), sum1);
+        sum1 = _mm512_add_epi16(_mm512_cvtepi8_epi32(_mm512_extracti32x4_epi32(res1, 1)), sum1);
+        sum1 = _mm512_add_epi16(_mm512_cvtepi8_epi32(_mm512_extracti32x4_epi32(res1, 2)), sum1);
+        sum1 = _mm512_add_epi16(_mm512_cvtepi8_epi32(_mm512_extracti32x4_epi32(res1, 3)), sum1);
+        sum2 = _mm512_add_epi16(_mm512_cvtepi8_epi32(_mm512_extracti32x4_epi32(res2, 0)), sum2);
+        sum2 = _mm512_add_epi16(_mm512_cvtepi8_epi32(_mm512_extracti32x4_epi32(res2, 1)), sum2);
+        sum2 = _mm512_add_epi16(_mm512_cvtepi8_epi32(_mm512_extracti32x4_epi32(res2, 2)), sum2);
+        sum2 = _mm512_add_epi16(_mm512_cvtepi8_epi32(_mm512_extracti32x4_epi32(res2, 3)), sum2);
+        codes += 64;
+        lut += 64;
     }
-    std::vector<short> result(32);
     auto *curp = result.data();
-    _mm256_storeu_epi16(curp, sum1);
-    _mm256_storeu_epi16(curp + 16, sum2);
+    _mm512_storeu_epi16(curp, sum1);
+    _mm512_storeu_epi16(curp + 16, sum2);
     for (auto i = 0; i < 32; ++i) {
         dists[i] = (double(result[i]) / 255.0) * (sqMax_ - sqMin_) + M * 2.0 * sqMin_;
     }
 }
+#pragma clang diagnostic pop

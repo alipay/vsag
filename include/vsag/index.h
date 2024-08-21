@@ -155,6 +155,11 @@ public:
         throw std::runtime_error("Index doesn't support pretrain");
     };
 
+    virtual tl::expected<uint32_t, Error>
+    Train(const DatasetPtr& base) {
+        throw std::runtime_error("Index doesn't support pretrain");
+    };
+
     /**
      * Performing feedback on conjugate graph
      *

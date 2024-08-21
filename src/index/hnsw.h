@@ -99,6 +99,10 @@ public:
         SAFE_CALL(return this->pretrain(base_tag_ids, k, parameters));
     };
 
+    tl::expected<uint32_t, Error>
+    Train(const DatasetPtr& base) override {
+    };
+
     virtual tl::expected<float, Error>
     CalcDistanceById(const float* vector, int64_t id) const override {
         SAFE_CALL(return alg_hnsw->getDistanceByLabel(id, vector));

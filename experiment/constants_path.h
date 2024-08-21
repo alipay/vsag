@@ -24,7 +24,7 @@ inline std::string workspace = "/home/tianlan.lht/data/";
 constexpr const char* BENCHMARK_GT_PATH_FMT = "/home/tianlan.lht/data/{}/gt_N{}_K{}.fvecs";
 constexpr const char* BENCHMARK_QUERY_PATH_FMT = "/home/tianlan.lht/data/{}/query.fvecs";
 constexpr const char* BENCHMARK_BASE_PATH_FMT = "/home/tianlan.lht/data/{}/learn.fvecs";
-constexpr const char* INDEX_PATH_FMT = "{}/index/ann-benchmarks/pq960_{}_{}_N{}_BL{}_BR{}_{}.index";
+constexpr const char* INDEX_PATH_FMT = "{}/index/ann-benchmarks/pq320_{}_{}_N{}_BL{}_BR{}_{}.index";
 
 constexpr const char* BUILD_PARAM_FMT = R"(
     {{

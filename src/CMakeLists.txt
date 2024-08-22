@@ -19,3 +19,8 @@ target_link_libraries (vsag ${VSAG_DEP_LIBS})
 target_link_libraries (vsag_static ${VSAG_DEP_LIBS})
 maybe_add_dependencies (vsag spdlog roaring openblas boost mkl)
 maybe_add_dependencies (vsag_static spdlog roaring openblas boost mkl)
+
+
+add_executable (graph_example impl/graph_example.cpp)
+target_link_libraries(graph_example vsag)
+

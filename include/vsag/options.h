@@ -80,6 +80,7 @@ private:
 
     Logger* logger_ = nullptr;
 };
+
 using Option = Options;  // for compatibility
 
 }  // namespace vsag

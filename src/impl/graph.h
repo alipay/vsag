@@ -29,6 +29,7 @@ struct Node {
          this->id = id;
          this->distance = distance;
      }
+     Node(){}
 };
 
 struct Linklist {
@@ -53,6 +54,10 @@ public:
         data_ = dataset->GetFloat32Vectors();
         init_graph();
         check_turn();
+        for (int i = 0; i < 10; ++i) {
+            update_neighbors();
+            check_turn();
+        }
         return true;
     }
 
@@ -102,8 +107,11 @@ private:
                 }
                 last_id = old_neighbors[j].id;
                 for (int k = 0; k < new_neighbors.size(); ++k) {
-                    if ((old_neighbors[j].old && new_neighbors[k].old) || old_neighbors[j].id == new_neighbors[k].id) {
+                    if ((old_neighbors[j].old && new_neighbors[k].old)) {
                         continue;
+                    }
+                    if (old_neighbors[j].id == new_neighbors[k].id) {
+                        break;
                     }
                     float d = get_distance(old_neighbors[j].id, new_neighbors[k].id);
                     if (d < old_neighbors[j].distance) {
@@ -119,15 +127,26 @@ private:
                 }
             }
             for (int j = 0; j < new_neighbors.size(); ++j) {
-
+                new_neighbors[j].old = true;
+            }
+            {
+                graph[i].neigbors.insert(graph[i].neigbors.end(), new_neighbors.begin(), new_neighbors.end());
+                if (graph[i].neigbors.size() > max_degree_) {
+                    graph[i].neigbors.resize(max_degree_);
+                }
             }
         }
+    }
+
+
+    void add_reverse_edges() {
+
     }
 
     void check_turn() {
         float loss = 0;
         for (int i = 0; i < data_num_; ++i) {
-            for (int j = 0; j < max_degree_; ++j) {
+            for (int j = 0; j < graph[i].neigbors.size(); ++j) {
                 loss += graph[i].neigbors[j].distance;
             }
         }

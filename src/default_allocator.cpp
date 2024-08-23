@@ -14,20 +14,42 @@
 
 #include "default_allocator.h"
 
+#include <fmt/format.h>
+
 namespace vsag {
 void*
 DefaultAllocator::Allocate(size_t size) {
-    return malloc(size);
+    auto ptr = malloc(size);
+    allocated_ptrs.insert(ptr);
+    return ptr;
 }
 
 void
 DefaultAllocator::Deallocate(void* p) {
+    if (!p) {
+        return;
+    }
+    if (allocated_ptrs.find(p) == allocated_ptrs.end()) {
+        throw std::runtime_error(
+            fmt::format("deallocate: address {} is not allocated by {}", p, Name()));
+    }
+    allocated_ptrs.erase(p);
     free(p);
 }
 
 void*
 DefaultAllocator::Reallocate(void* p, size_t size) {
-    return realloc(p, size);
+    if (!p) {
+        return Allocate(size);
+    }
+    if (allocated_ptrs.find(p) == allocated_ptrs.end()) {
+        throw std::runtime_error(
+            fmt::format("reallocate: address {} is not allocated by {}", p, Name()));
+    }
+    allocated_ptrs.erase(p);
+    auto ptr = realloc(p, size);
+    allocated_ptrs.insert(ptr);
+    return ptr;
 }
 
 std::string

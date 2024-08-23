@@ -17,8 +17,10 @@
 
 #include <map>
 #include <memory>
+#include <unordered_set>
 #include <vector>
 
+#include "logger.h"
 #include "vsag/allocator.h"
 
 namespace vsag {
@@ -33,7 +35,14 @@ public:
 
 public:
     DefaultAllocator() = default;
-    virtual ~DefaultAllocator() = default;
+    ~DefaultAllocator() override {
+        if (not allocated_ptrs.empty()) {
+            logger::error(fmt::format("There is a memory leak in {}.", Name()));
+#ifndef NDEBUG
+            abort();
+#endif
+        }
+    }
 
     DefaultAllocator(const DefaultAllocator&) = delete;
     DefaultAllocator(DefaultAllocator&&) = delete;
@@ -50,6 +59,9 @@ public:
 
     void*
     Reallocate(void* p, size_t size) override;
+
+private:
+    std::unordered_set<void*> allocated_ptrs;
 };
 
 template <class T>

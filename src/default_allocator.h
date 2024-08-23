@@ -61,8 +61,11 @@ public:
     Reallocate(void* p, size_t size) override;
 
 private:
+
+#ifndef NDBUG
     std::unordered_set<void*> allocated_ptrs_;
     std::mutex set_mutex_;
+#endif
 };
 
 template <class T>

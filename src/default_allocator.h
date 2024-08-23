@@ -62,7 +62,7 @@ public:
 
 private:
 
-#ifndef NDBUG
+#ifndef NDEBUG
     std::unordered_set<void*> allocated_ptrs_;
     std::mutex set_mutex_;
 #endif

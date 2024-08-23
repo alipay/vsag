@@ -33,8 +33,10 @@ int main() {
         vectors[i] = distrib_real(rng);
     }
 
+    vsag::DatasetPtr dataset = vsag::Dataset::Make();
+    dataset->NumElements(num_vectors)->Float32Vectors(vectors)->Dim(dim)->Owner(true);
     vsag::Graph graph(32, 1, vsag::GetL2DistanceFunc(32));
+    graph.Build(dataset);
 
-    delete[] ids;
-    delete[] vectors;
+
 }

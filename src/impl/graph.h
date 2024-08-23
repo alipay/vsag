@@ -20,9 +20,19 @@
 #include <iostream>
 namespace vsag {
 
-
 struct Node {
-    std::vector<uint32_t> neigbors;
+     bool old = false;
+     uint32_t id;
+     float distance;
+
+     Node(uint32_t id, float distance) {
+         this->id = id;
+         this->distance = distance;
+     }
+};
+
+struct Linklist {
+    std::vector<Node> neigbors;
 };
 
 class Graph {
@@ -40,6 +50,7 @@ public:
         is_build_ = true;
         dim_ = dataset->GetDim();
         data_num_ = dataset->GetNumElements();
+        data_ = dataset->GetFloat32Vectors();
         init_graph();
         check_turn();
         return true;
@@ -64,10 +75,51 @@ private:
         std::uniform_int_distribution<int> k_generate(0, data_num_);
 #pragma omp for
         for (int i = 0; i < data_num_; ++i) {
-            graph[i].neigbors.resize(max_degree_);
             std::mt19937 rng(rd());
             for (int j = 0; j < max_degree_; ++j) {
-                graph[i].neigbors[j] = k_generate(rng);
+                auto id = k_generate(rng);
+                graph[i].neigbors.emplace_back(id, get_distance(i, id));
+            }
+        }
+    }
+    
+    
+    void update_neighbors() {
+        for (int i = 0; i < data_num_; ++i) {
+            std::vector<Node> old_neighbors;
+            {
+                graph[i].neigbors.swap(old_neighbors);
+            }
+            std::sort(old_neighbors.begin(), old_neighbors.end(), [](const Node& a, const Node& b) {
+                return a.distance < b.distance;
+            });
+            std::vector<Node> new_neighbors;
+            uint32_t last_id = -1;
+            for (int j = 0; j < old_neighbors.size(); ++j) {
+                bool flag = true;
+                if (j > 0 && last_id == old_neighbors[j].id) {
+                    continue;
+                }
+                last_id = old_neighbors[j].id;
+                for (int k = 0; k < new_neighbors.size(); ++k) {
+                    if ((old_neighbors[j].old && new_neighbors[k].old) || old_neighbors[j].id == new_neighbors[k].id) {
+                        continue;
+                    }
+                    float d = get_distance(old_neighbors[j].id, new_neighbors[k].id);
+                    if (d < old_neighbors[j].distance) {
+                        flag = false;
+                        {
+                            graph[new_neighbors[k].id].neigbors.emplace_back(old_neighbors[j].id, d);
+                        }
+                        break;
+                    }
+                }
+                if (flag) {
+                    new_neighbors.push_back(old_neighbors[j]);
+                }
+            }
+            for (int j = 0; j < new_neighbors.size(); ++j) {
+
             }
         }
     }
@@ -76,9 +128,10 @@ private:
         float loss = 0;
         for (int i = 0; i < data_num_; ++i) {
             for (int j = 0; j < max_degree_; ++j) {
-                loss += get_distance(i, graph[i].neigbors[j]);
+                loss += graph[i].neigbors[j].distance;
             }
         }
+        loss /= data_num_ * max_degree_;
         std::cout << "loss:" << loss << std::endl;
     }
 
@@ -90,7 +143,7 @@ private:
 
     int64_t max_degree_;
     int64_t turn_;
-    std::vector<Node> graph;
+    std::vector<Linklist> graph;
 
     DistanceFunc distance_;
 

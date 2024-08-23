@@ -36,9 +36,9 @@ public:
 public:
     DefaultAllocator() = default;
     ~DefaultAllocator() override {
+#ifndef NDEBUG
         if (not allocated_ptrs_.empty()) {
             logger::error(fmt::format("There is a memory leak in {}.", Name()));
-#ifndef NDEBUG
             abort();
 #endif
         }

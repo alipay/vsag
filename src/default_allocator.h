@@ -48,7 +48,6 @@ public:
     DefaultAllocator(DefaultAllocator&&) = delete;
 
 public:
-    
     std::string
     Name() override;
 
@@ -62,6 +61,7 @@ public:
     Reallocate(void* p, size_t size) override;
 
 private:
+    
 #ifndef NDEBUG
     std::unordered_set<void*> allocated_ptrs_;
     std::mutex set_mutex_;

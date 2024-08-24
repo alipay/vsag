@@ -40,8 +40,8 @@ public:
         if (not allocated_ptrs_.empty()) {
             logger::error(fmt::format("There is a memory leak in {}.", Name()));
             abort();
-#endif
         }
+#endif
     }
 
     DefaultAllocator(const DefaultAllocator&) = delete;
@@ -61,7 +61,6 @@ public:
     Reallocate(void* p, size_t size) override;
 
 private:
-
 #ifndef NDEBUG
     std::unordered_set<void*> allocated_ptrs_;
     std::mutex set_mutex_;

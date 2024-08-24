@@ -48,6 +48,7 @@ public:
     DefaultAllocator(DefaultAllocator&&) = delete;
 
 public:
+    
     std::string
     Name() override;
 

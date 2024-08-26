@@ -119,6 +119,10 @@ public:
         throw std::runtime_error("Index not support filter search");
     };
 
+    virtual std::vector<float>
+    GetFeatures() const {
+    };
+
     /**
       * Performing single range search on index
       *

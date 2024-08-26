@@ -261,6 +261,9 @@ HNSW::knn_search(const DatasetPtr& query,
         // check search parameters
         auto params = HnswSearchParameters::FromJson(parameters);
         alg_hnsw->setEf(std::max(params.ef_search, k));
+        alg_hnsw->setEnableToFile(params.to_file);
+
+
 
         // check filter
         std::shared_ptr<Filter> filter = nullptr;
@@ -524,7 +527,7 @@ HNSW::deserialize(const BinarySet& binary_set) {
             } else if (sq_num_bits_ == 4) {
                 alg_hnsw->transform_base_int4();
             }
-            alg_hnsw->optimize();
+//            alg_hnsw->optimize();
         }
     } catch (const std::runtime_error& e) {
         LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to deserialize: ", e.what());

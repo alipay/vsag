@@ -63,6 +63,7 @@ public:
     // required vars
     int64_t ef_search;
     bool use_conjugate_graph_search;
+    bool to_file;
 
 private:
     HnswSearchParameters() = default;

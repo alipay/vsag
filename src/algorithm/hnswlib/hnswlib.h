@@ -200,7 +200,7 @@ public:
     addPoint(const void* datapoint, labeltype label) = 0;
 
     virtual std::priority_queue<std::pair<dist_t, labeltype>>
-    searchKnn(const void*, size_t, BaseFilterFunctor* isIdAllowed = nullptr) const = 0;
+    searchKnn(const void*, size_t, BaseFilterFunctor* isIdAllowed = nullptr) = 0;
 
     virtual std::priority_queue<std::pair<dist_t, labeltype>>
     searchRange(const void*, float, BaseFilterFunctor* isIdAllowed = nullptr) const = 0;
@@ -209,7 +209,11 @@ public:
     virtual std::vector<std::pair<dist_t, labeltype>>
     searchKnnCloserFirst(const void* query_data,
                          size_t k,
-                         BaseFilterFunctor* isIdAllowed = nullptr) const;
+                         BaseFilterFunctor* isIdAllowed = nullptr);
+
+    virtual std::vector<float> GetFeatures() {};
+
+    virtual void setEnableToFile(bool fe) {};
 
     virtual void
     saveIndex(const std::string& location) = 0;
@@ -361,7 +365,7 @@ template <typename dist_t>
 std::vector<std::pair<dist_t, labeltype>>
 AlgorithmInterface<dist_t>::searchKnnCloserFirst(const void* query_data,
                                                  size_t k,
-                                                 BaseFilterFunctor* isIdAllowed) const {
+                                                 BaseFilterFunctor* isIdAllowed) {
     std::vector<std::pair<dist_t, labeltype>> result;
 
     // here searchKnn returns the result in the order of further first

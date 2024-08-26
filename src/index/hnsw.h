@@ -104,6 +104,11 @@ public:
         SAFE_CALL(return alg_hnsw->getDistanceByLabel(id, vector));
     };
 
+    std::vector<float>
+    GetFeatures() const override {
+        return this->alg_hnsw->GetFeatures();
+    };
+
     tl::expected<DatasetPtr, Error>
     BruteForce(const DatasetPtr& query, int64_t k) const override {
         SAFE_CALL(return this->brute_force(query, k));

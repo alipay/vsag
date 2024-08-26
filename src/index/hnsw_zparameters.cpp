@@ -131,6 +131,12 @@ HnswSearchParameters::FromJson(const std::string& json_string) {
         obj.use_conjugate_graph_search = true;
     }
 
+    if (params[INDEX_HNSW].contains("to_file")) {
+        obj.to_file = (params[INDEX_HNSW]["to_file"] != 0);
+    } else {
+        obj.to_file = false;
+    }
+
     return obj;
 }
 

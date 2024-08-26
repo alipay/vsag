@@ -114,6 +114,8 @@ private:
     float alpha_;
     uint32_t po_;
     uint32_t pl_;
+    uint32_t code_size_aligned_;
+    uint32_t redundant_size_;
 
 public:
     HierarchicalNSW(SpaceInterface* s) {
@@ -157,6 +159,8 @@ public:
         M_ = M;
         maxM_ = M_;
         maxM0_ = M_ * 2;
+        redundant_size_ = M_ * 2;
+
         ef_construction_ = std::max(ef_construction, M_);
         ef_ = 10;
 
@@ -601,7 +605,7 @@ public:
 
     inline int8_t*
     get_encoded_data(tableint internal_id, size_t code_size) const override {
-        return data_int8.get() + internal_id * code_size * (M_ * 2 + 1);
+        return data_int8.get() + internal_id * code_size * (redundant_size_ + 1);
     }
 
     void
@@ -639,50 +643,56 @@ public:
                 free(ptr);
             }
         };
-        // 0 :[code(code_size) + norm(8) + neighbor_size(8)]    -> code_size + 16
-        //    neighbor1 : [code(code_size) + norm(8) + id(8)]   -> code_size + 16
+        // 0 :[code(code_size) + norm(8) + neighbor_size(8)]    -> code_size + 16 or 512
+        //    neighbor1 : [code(code_size) + norm(8) + id(8)]   -> code_size + 16 or 512
         //    neighbor2...                                      -> maximum items: (M_ * 2 + 1)
-        void* ptr = std::aligned_alloc(4096, cur_element_count_ * (code_size + 16) * (M_ * 2 + 1));
+        code_size_aligned_ = ((code_size + 16) + (1 << 9) - 1) >> 9 << 9;   // 512 aligned
+        uint64_t sz_B = cur_element_count_ * code_size_aligned_ * (redundant_size_ + 1);
+        uint64_t sz_aligned = (sz_B + (1 << 21) - 1) >> 21 << 21;           // 2M aligned
+        void* ptr = std::aligned_alloc(1 << 21, sz_aligned);
+        std::memset(ptr, 0, sz_aligned);
+        madvise(ptr, sz_aligned, MADV_HUGEPAGE);
+
         data_int8 = std::shared_ptr<int8_t[]>(static_cast<int8_t*>(ptr), AlignedDeleter());
         // norm_pre_compute.resize(cur_element_count_);
         for (int i = 0; i < cur_element_count_; ++i) {
-            auto* code = get_encoded_data(i, code_size + 16);
+            auto* code = get_encoded_data(i, code_size_aligned_);
             transform_to_int4((float*)getDataByInternalId(i), code);
             int64_t norm = INT4_IP(code, code, dim);
             memcpy(code + code_size, &norm, 8);
         }
 
-        for (int i = 0; i < cur_element_count_; i++) {
-            int* data = (int*)get_linklist0(i);
-            uint64_t size = getListCount((linklistsizeint*)data);
-            auto* code = get_encoded_data(i, code_size + 16);
-            memcpy(code + code_size + 8, &size, 8);
-
-            for (int j = 1; j <= size; j++) {
-                uint64_t candidate_id = *(data + j);
-                auto* neighbor_code = get_encoded_data(candidate_id, code_size + 16);
-                memcpy(code + j * (code_size + 16), neighbor_code, code_size + 8);
-                memcpy(code + j * (code_size + 16) + (code_size + 8), &candidate_id, 8);
-            }
-        }
-
-        bool check_transform = true;
-        if (check_transform) {
+        if (redundant_size_ != 0) {
             for (int i = 0; i < cur_element_count_; i++) {
                 int* data = (int*)get_linklist0(i);
                 uint64_t size = getListCount((linklistsizeint*)data);
-                auto* code = get_encoded_data(i, code_size + 16);
+                auto* code = get_encoded_data(i, code_size_aligned_);
+                memcpy(code + code_size + 8, &size, 8);
+
+                for (int j = 1; j <= size; j++) {
+                    uint64_t candidate_id = *(data + j);
+                    auto* neighbor_code = get_encoded_data(candidate_id, code_size_aligned_);
+                    memcpy(code + j * code_size_aligned_, neighbor_code, code_size + 8);
+                    memcpy(code + j * code_size_aligned_ + (code_size + 8), &candidate_id, 8);
+                }
+            }
+
+            // check storage
+            for (int i = 0; i < cur_element_count_; i++) {
+                int* data = (int*)get_linklist0(i);
+                uint64_t size = getListCount((linklistsizeint*)data);
+                auto* code = get_encoded_data(i, code_size_aligned_);
 
                 uint64_t size_valid = *(uint64_t*)(code + code_size + 8);
                 assert(size_valid == size);
 
                 for (int j = 1; j <= size; j++) {
                     uint64_t candidate_id = *(data + j);
-                    auto* neighbor_code = get_encoded_data(candidate_id, code_size + 16);
+                    auto* neighbor_code = get_encoded_data(candidate_id, code_size_aligned_);
                     for (int k = 0; k < code_size + 8; k++) {
-                        assert((code + j * (code_size + 16))[k] == neighbor_code[k]);
+                        assert((code + j * (code_size_aligned_))[k] == neighbor_code[k]);
                     }
-                    assert(*(uint64_t*)(code + j * (code_size + 16) + code_size + 8) == candidate_id);
+                    assert(*(uint64_t*)(code + j * (code_size_aligned_) + code_size + 8) == candidate_id);
                 }
             }
         }
@@ -1193,14 +1203,36 @@ public:
         }
     }
 
-    uint32_t
-    visit(std::pair<float, tableint>& current_node_pair,
+    inline uint32_t
+    visit_naive(std::pair<float, tableint>& current_node_pair,
           std::pair<float, tableint>& next_node_pair,
           vl_type* visited_array,
           vl_type visited_array_tag,
           std::vector<int>& to_be_visited) const {
         int* data2 = (int*)get_linklist0(next_node_pair.second);
-//        _mm_prefetch((char*)(data2), _MM_HINT_T0);
+        _mm_prefetch(visited_array + *(data2 + 1), _MM_HINT_T0);
+
+        int* data = (int*)get_linklist0(current_node_pair.second);
+        size_t size = getListCount((linklistsizeint*)data);
+
+        uint32_t count_no_visited = 0;
+        for (size_t j = 1; j <= size; j++) {
+            int candidate_id = *(data + j);
+            if (!(visited_array[candidate_id] == visited_array_tag)) {
+                to_be_visited[count_no_visited++] = candidate_id;
+            }
+            visited_array[candidate_id] = visited_array_tag;
+        }
+        return count_no_visited;
+    }
+
+    inline uint32_t
+    visit_redundant(std::pair<float, tableint>& current_node_pair,
+          std::pair<float, tableint>& next_node_pair,
+          vl_type* visited_array,
+          vl_type visited_array_tag,
+          std::vector<int>& to_be_visited) const {
+        int* data2 = (int*)get_linklist0(next_node_pair.second);
         _mm_prefetch(visited_array + *(data2 + 1), _MM_HINT_T0);
 
         uint32_t count_no_visited = 0;
@@ -1211,20 +1243,20 @@ public:
         } else if (sq_num_bits_ == 4) {
             code_size = dim / 2;
         }
-        auto* code = get_encoded_data(current_node_pair.second, code_size + 16);
+        auto* code = get_encoded_data(current_node_pair.second, code_size_aligned_);
         uint64_t size = *(uint64_t*)(code + code_size + 8);
 
         for (int j = 1; j <= size; j++) {
-            _mm_prefetch((char*)(code + (j + 4) * (code_size + 16) + code_size + 8), _MM_HINT_T0);
-            uint64_t candidate_id = *(int64_t*)(code + j * (code_size + 16) + code_size + 8);
+            _mm_prefetch((char*)(code + (j + 4) * (code_size_aligned_) + code_size + 8), _MM_HINT_T0);
+            uint64_t candidate_id = *(int64_t*)(code + j * (code_size_aligned_) + code_size + 8);
             if (!(visited_array[candidate_id] == visited_array_tag)) {
                 to_be_visited[count_no_visited++] = j;  // note here return j
             }
             visited_array[candidate_id] = visited_array_tag;
 
-//            auto* neighbor_code = get_encoded_data(candidate_id, code_size + 16);
+//            auto* neighbor_code = get_encoded_data(candidate_id, code_size_aligned_);
 //            for (int k = 0; k < code_size + 8; k++) {
-//                assert((code + j * (code_size + 16))[k] == neighbor_code[k]);
+//                assert((code + j * (code_size_aligned_))[k] == neighbor_code[k]);
 //            }
         }
 //        for (size_t j = 1; j <= size; j++) {
@@ -1285,7 +1317,7 @@ public:
 
         float lowerBound;
         float dist;
-        auto* codes = get_encoded_data(ep_id, code_size + 16);
+        auto* codes = get_encoded_data(ep_id, code_size_aligned_);
         if (sq_num_bits_ == 8) {
             dist = INT8_L2(
                 ((int64_t*)(codes + code_size)), norm2, (const void*)codes, transformed_query, dim);
@@ -1315,43 +1347,92 @@ public:
             }
             candidate_set.pop();
             std::pair<float, tableint> next_node_pair = candidate_set.top();
-            uint32_t count_no_visited = visit(
-                current_node_pair, next_node_pair, visited_array, visited_array_tag, to_be_visited);
-            dist_cmp += count_no_visited;
 
-            auto* code = get_encoded_data(current_node_pair.second, code_size + 16);
-            for (size_t j = 0; j < this->po_; j++) {
-                auto vector_data_ptr = (uint8_t *)(code + to_be_visited[j] * (code_size + 16));
-#ifdef USE_SSE
-                mem_prefetch(vector_data_ptr, this->pl_);
-#endif
-            }
+            if (redundant_size_ == 0) {
+                uint32_t count_no_visited = visit_naive(current_node_pair,
+                                                        next_node_pair,
+                                                        visited_array,
+                                                        visited_array_tag,
+                                                        to_be_visited);
+                dist_cmp += count_no_visited;
 
-            for (size_t j = 0; j < count_no_visited; j++) {
-                if (j + this->po_ <= count_no_visited) {
-                    auto vector_data_ptr = (uint8_t *)(code + to_be_visited[j + this->po_] * (code_size + 16));
+                for (size_t j = 0; j < this->po_; j++) {
+                    auto vector_data_ptr =
+                        (uint8_t*)get_encoded_data(to_be_visited[j], code_size_aligned_);
 #ifdef USE_SSE
                     mem_prefetch(vector_data_ptr, this->pl_);
 #endif
                 }
-                dist = INT4_L2_precompute(
-                    *((int64_t*)(code + to_be_visited[j] * (code_size + 16) + code_size)),
-                    norm2,
-                    code + to_be_visited[j] * (code_size + 16),
-                    transformed_query,
-                    dim);
 
-                if (top_candidates.size() < ef || lowerBound > dist) {
-                    auto candidate_id = *(uint64_t*)(code + to_be_visited[j] * (code_size + 16) + code_size + 8);
-                    candidate_set.emplace(-dist, candidate_id);
+                for (size_t j = 0; j < count_no_visited; j++) {
+                    int candidate_id = to_be_visited[j];
+                    if (j + this->po_ <= count_no_visited) {
+                        auto vector_data_ptr =
+                            (uint8_t*)get_encoded_data(to_be_visited[j + this->po_], code_size_aligned_);
+#ifdef USE_SSE
+                        mem_prefetch(vector_data_ptr, this->pl_);
+#endif
+                    }
+                    auto* codes = get_encoded_data(candidate_id, code_size_aligned_);
+                    dist = INT4_L2_precompute(
+                        *((int64_t*)(codes + code_size)), norm2, codes, transformed_query, dim);
 
-                    top_candidates.emplace(dist, candidate_id);
+                    if (top_candidates.size() < ef || lowerBound > dist) {
+                        candidate_set.emplace(-dist, candidate_id);
 
-                    if (top_candidates.size() > ef)
-                        top_candidates.pop();
+                        top_candidates.emplace(dist, candidate_id);
 
-                    if (!top_candidates.empty())
-                        lowerBound = top_candidates.top().first;
+                        if (top_candidates.size() > ef)
+                            top_candidates.pop();
+
+                        if (!top_candidates.empty())
+                            lowerBound = top_candidates.top().first;
+                    }
+                }
+            } else {
+                uint32_t count_no_visited = visit_redundant(current_node_pair,
+                                                            next_node_pair,
+                                                            visited_array,
+                                                            visited_array_tag,
+                                                            to_be_visited);
+                dist_cmp += count_no_visited;
+
+                auto* code = get_encoded_data(current_node_pair.second, code_size_aligned_);
+                for (size_t j = 0; j < this->po_; j++) {
+                    auto vector_data_ptr = (uint8_t*)(code + to_be_visited[j] * (code_size_aligned_));
+#ifdef USE_SSE
+                    mem_prefetch(vector_data_ptr, this->pl_);
+#endif
+                }
+
+                for (size_t j = 0; j < count_no_visited; j++) {
+                    if (j + this->po_ <= count_no_visited) {
+                        auto vector_data_ptr =
+                            (uint8_t*)(code + to_be_visited[j + this->po_] * (code_size_aligned_));
+#ifdef USE_SSE
+                        mem_prefetch(vector_data_ptr, this->pl_);
+#endif
+                    }
+                    dist = INT4_L2_precompute(
+                        *((int64_t*)(code + to_be_visited[j] * (code_size_aligned_) + code_size)),
+                        norm2,
+                        code + to_be_visited[j] * (code_size_aligned_),
+                        transformed_query,
+                        dim);
+
+                    if (top_candidates.size() < ef || lowerBound > dist) {
+                        auto candidate_id = *(
+                            uint64_t*)(code + to_be_visited[j] * (code_size_aligned_) + code_size + 8);
+                        candidate_set.emplace(-dist, candidate_id);
+
+                        top_candidates.emplace(dist, candidate_id);
+
+                        if (top_candidates.size() > ef)
+                            top_candidates.pop();
+
+                        if (!top_candidates.empty())
+                            lowerBound = top_candidates.top().first;
+                    }
                 }
             }
         }

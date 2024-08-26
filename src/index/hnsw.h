@@ -92,7 +92,7 @@ public:
               int64_t k,
               const std::string& parameters,
               const std::function<bool(int64_t)>& filter) const override {
-        SAFE_CALL(return this->knn_search_internal(query, k, parameters, filter));
+        return this->knn_search_internal(query, k, parameters, filter);
     }
 
     tl::expected<DatasetPtr, Error>
@@ -100,7 +100,7 @@ public:
               int64_t k,
               const std::string& parameters,
               BitsetPtr invalid = nullptr) const override {
-        SAFE_CALL(return this->knn_search_internal(query, k, parameters, invalid));
+        return this->knn_search_internal(query, k, parameters, invalid);
     }
 
     tl::expected<DatasetPtr, Error>
@@ -278,6 +278,7 @@ private:
     std::shared_ptr<ConjugateGraph> conjugate_graph_;
 
     int64_t dim_;
+    int64_t M_;
     bool use_static_ = false;
     bool empty_index_ = false;
     bool use_reversed_edges_ = false;

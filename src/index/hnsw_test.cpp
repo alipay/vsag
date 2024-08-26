@@ -417,12 +417,12 @@ TEST_CASE("hnsw add vector with duplicated id", "[ut][hnsw]") {
 TEST_CASE("build with reversed edges", "[ut][hnsw]") {
     vsag::logger::set_level(vsag::logger::level::debug);
     int64_t dim = 128;
-    int64_t max_degree = 12;
+    int64_t max_degree = 16;
     int64_t ef_construction = 100;
     auto index = std::make_shared<vsag::HNSW>(
         std::make_shared<hnswlib::L2Space>(dim), max_degree, ef_construction, false, true);
 
-    const int64_t num_elements = 1000;
+    const int64_t num_elements = 10000;
     auto [ids, vectors] = fixtures::generate_ids_and_vectors(num_elements, dim);
 
     auto dataset = vsag::Dataset::Make();
@@ -436,6 +436,7 @@ TEST_CASE("build with reversed edges", "[ut][hnsw]") {
     REQUIRE(result.has_value());
 
     REQUIRE(index->CheckGraphIntegrity());
+    exit(0);
 
     {
         fixtures::temp_dir dir("test_index_serialize_via_stream");

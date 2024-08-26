@@ -1037,6 +1037,12 @@ public:
         // output.close();
     }
 
+
+    void
+    set_graph(vsag::DatasetPtr dataset, vsag::Graph& graph) override {
+
+    }
+
     size_t
     calcSerializeSize() override {
         // std::ofstream output(location, std::ios::binary);

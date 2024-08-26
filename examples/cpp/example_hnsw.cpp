@@ -41,7 +41,7 @@ void
 float_hnsw() {
     int dim = 128;             // Dimension of the elements
     int max_elements = 10000;  // Maximum number of elements, should be known beforehand
-    int max_degree = 16;       // Tightly connected with internal dimensionality of the data
+    int max_degree = 64;       // Tightly connected with internal dimensionality of the data
     // strongly affects the memory consumption
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
     int ef_search = 100;
@@ -87,7 +87,7 @@ float_hnsw() {
     {
         auto dataset = vsag::Dataset::Make();
         dataset->Dim(dim)
-            ->NumElements(max_elements - 1)
+            ->NumElements(max_elements)
             ->Ids(ids.get())
             ->Float32Vectors(data.get())
             ->Owner(false);
@@ -97,16 +97,16 @@ float_hnsw() {
             std::cerr << "Failed to build index: internalError" << std::endl;
             exit(-1);
         }
-
-        // Adding data after index built
-        auto incremental = vsag::Dataset::Make();
-        incremental->Dim(dim)
-            ->NumElements(1)
-            ->Ids(ids.get() + max_elements - 1)
-            ->Float32Vectors(data.get() + (max_elements - 1) * dim)
-            ->Owner(false);
-        hnsw->Add(incremental);
-        std::cout << "After Add(), Index constains: " << hnsw->GetNumElements() << std::endl;
+//
+//        // Adding data after index built
+//        auto incremental = vsag::Dataset::Make();
+//        incremental->Dim(dim)
+//            ->NumElements(1)
+//            ->Ids(ids.get() + max_elements - 1)
+//            ->Float32Vectors(data.get() + (max_elements - 1) * dim)
+//            ->Owner(false);
+//        hnsw->Add(incremental);
+//        std::cout << "After Add(), Index constains: " << hnsw->GetNumElements() << std::endl;
     }
 
     // Query the elements for themselves and measure recall 1@1
@@ -127,13 +127,7 @@ float_hnsw() {
             };
             int64_t k = 10;
             if (auto result = hnsw->KnnSearch(query, k, parameters.dump()); result.has_value()) {
-                correct += vsag::knn_search_recall(data.get(),
-                                                   ids.get(),
-                                                   max_elements,
-                                                   data.get() + i * dim,
-                                                   dim,
-                                                   result.value()->GetIds(),
-                                                   result.value()->GetDim());
+                correct += result.value()->GetIds()[0] == ids[i] ? 1 : 0;
             } else if (result.error().type == vsag::ErrorType::INTERNAL_ERROR) {
                 std::cerr << "failed to perform knn search on index" << std::endl;
             }
@@ -144,6 +138,7 @@ float_hnsw() {
         std::cout << "Recall: " << recall << std::endl;
         std::cout << hnsw->GetStats() << std::endl;
     }
+    exit(0);
 
     correct = 0;
     {

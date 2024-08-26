@@ -346,6 +346,7 @@ public:
     checkReverseConnection() {
         int edge_count = 0;
         int reversed_edge_count = 0;
+        float loss = 0;
         for (int internal_id = 0; internal_id < cur_element_count_; ++internal_id) {
             for (int level = 0; level <= element_levels_[internal_id]; ++level) {
                 unsigned int* data;
@@ -360,6 +361,9 @@ public:
                 reversed_edge_count += getEdges(internal_id, level).size();
                 for (int j = 0; j < size; ++j) {
                     auto id = link_list[j];
+                    if (level == 0) {
+                        loss += fstdistfunc_(getDataByInternalId(internal_id), getDataByInternalId(id), dist_func_param_);
+                    }
                     const auto& in_edges = getEdges(id, level);
                     if (in_edges.find(internal_id) == in_edges.end()) {
                         std::cout << "can not find internal_id (" << internal_id
@@ -370,6 +374,7 @@ public:
             }
         }
 
+                std::cout << "loss:" << loss / edge_count << " edge count:" << edge_count << std::endl;
         if (edge_count != reversed_edge_count) {
             std::cout << "mismatch: edge_count (" << edge_count << ") != reversed_edge_count("
                       << reversed_edge_count << ")" << std::endl;
@@ -720,6 +725,35 @@ public:
         return top_candidates;
     }
 
+    void
+    set_graph(vsag::DatasetPtr dataset, vsag::Graph& graph) override {
+        auto data_num = dataset->GetNumElements();
+        auto vectors = dataset->GetFloat32Vectors();
+        auto dim = dataset->GetDim();
+        auto ids = dataset->GetIds();
+        if (data_num > max_elements_) {
+            resizeIndex(data_num);
+        }
+        cur_element_count_ = data_num;
+
+        enterpoint_node_ = 0;
+        auto edges = graph.GetGraph();
+        for (int i = 0; i < cur_element_count_; ++i) {
+            labeltype label = ids[i];
+            memcpy(getExternalLabeLp(i), &label, sizeof(labeltype));
+            memcpy(getDataByInternalId(i), vectors + i * dim, dim);
+            element_levels_[i] = 0;
+            auto link = get_linklist0(i);
+            setListCount(link, edges[i].size());
+            if (edges[i].size() > M_ * 2) {
+                std::cout << "edges[i].size() is too large:" << i <<std::endl;
+            }
+            link += 1;
+            for (int j = 0; j < edges[i].size(); ++j) {
+                link[j] = edges[i][j];
+            }
+        }
+    }
     void
     getNeighborsByHeuristic2(std::priority_queue<std::pair<float, tableint>,
                                                  std::vector<std::pair<float, tableint>>,
@@ -2067,6 +2101,8 @@ public:
     checkIntegrity() {
         int connections_checked = 0;
         std::vector<int> inbound_connections_num(cur_element_count_, 0);
+        float loss = 0;
+        int edges_count = 0;
         for (int i = 0; i < cur_element_count_; i++) {
             for (int l = 0; l <= element_levels_[i]; l++) {
                 linklistsizeint* ll_cur = get_linklist_at_level(i, l);

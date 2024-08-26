@@ -13,11 +13,23 @@
 // limitations under the License.
 
 #include "graph.h"
+void
+normalize(float* input_vector, int64_t dim) {
+    float magnitude = 0.0f;
+    for (int64_t i = 0; i < dim; ++i) {
+        magnitude += input_vector[i] * input_vector[i];
+    }
+    magnitude = std::sqrt(magnitude);
 
+    for (int64_t i = 0; i < dim; ++i) {
+        input_vector[i] = input_vector[i] / magnitude;
+    }
+}
 int main() {
 
     int64_t num_vectors = 10000;
-    int64_t dim = 128;
+    size_t dim = 128;
+    int64_t max_degree = 32;
 
     // prepare ids and vectors
     auto ids = new int64_t[num_vectors];
@@ -33,9 +45,29 @@ int main() {
         vectors[i] = distrib_real(rng);
     }
 
+    for (int64_t i = 0; i < num_vectors; ++i) {
+        normalize(vectors + i * dim, dim);
+    }
+
+    vsag::DistanceFunc dist = vsag::GetL2DistanceFunc(32);
+//    std::vector<std::vector<std::pair<float, uint32_t>>> ground_truths(num_vectors);
+//    float min_loss = 0;
+//    for (int i = 0; i < num_vectors; ++i) {
+//        for (int j = 0; j < num_vectors; ++j) {
+//            if (i != j) {
+//                ground_truths[i].emplace_back(dist(vectors + i * dim, vectors + j * dim, &dim), j);
+//            }
+//        }
+//        std::sort(ground_truths[i].begin(), ground_truths[i].end());
+//        for (int j = 0; j < max_degree; ++j) {
+//            min_loss += ground_truths[i][j].first;
+//        }
+//    }
+//    std::cout << "min_loss:" << min_loss / (num_vectors * max_degree) << std::endl;
+
     vsag::DatasetPtr dataset = vsag::Dataset::Make();
     dataset->NumElements(num_vectors)->Float32Vectors(vectors)->Dim(dim)->Owner(true);
-    vsag::Graph graph(32, 1, vsag::GetL2DistanceFunc(32));
+    vsag::Graph graph(max_degree, 1, dist);
     graph.Build(dataset);
 
 

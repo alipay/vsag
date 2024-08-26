@@ -71,6 +71,9 @@ xgetbv(unsigned int index) {
 // Adapted from https://github.com/Mysticial/FeatureDetector
 #define _XCR_XFEATURE_ENABLED_MASK 0
 
+
+#include "../../impl/graph.h"
+#include "vsag/dataset.h"
 static bool
 AVXCapable() {
     int cpuInfo[4];
@@ -257,6 +260,9 @@ public:
 
     virtual bool
     isValidLabel(labeltype label) = 0;
+
+    virtual void
+    set_graph(vsag::DatasetPtr dataset, vsag::Graph& graph) = 0;
 
     virtual ~AlgorithmInterface() {
     }

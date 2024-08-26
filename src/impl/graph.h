@@ -18,6 +18,7 @@
 #include <vector>
 #include <random>
 #include <iostream>
+#include "../utils.h"
 namespace vsag {
 
 struct Node {
@@ -29,7 +30,21 @@ struct Node {
          this->id = id;
          this->distance = distance;
      }
+
+     Node(uint32_t id, float distance, bool old) {
+         this->id = id;
+         this->distance = distance;
+         this->old = old;
+     }
      Node(){}
+
+     bool operator<(const Node& other) const {
+         return distance < other.distance;
+     }
+
+     bool operator==(const Node& other) const {
+         return id == other.id;
+     }
 };
 
 struct Linklist {
@@ -54,12 +69,37 @@ public:
         data_ = dataset->GetFloat32Vectors();
         init_graph();
         check_turn();
-        for (int i = 0; i < 10; ++i) {
-            update_neighbors();
+        {
+            SlowTaskTimer t("hnsw graph");
+            for (int i = 0; i < 10; ++i) {
+                update_neighbors();
+                check_turn();
+                if (i != 9) {
+                    add_reverse_edges();
+                }
+            }
+            for (int i = 0; i < data_num_; ++i) {
+                reduce_graph(i);
+            }
             check_turn();
         }
         return true;
     }
+
+    std::vector<std::vector<uint32_t>>
+    GetGraph(){
+        std::vector<std::vector<uint32_t>> extract_graph;
+        extract_graph.resize(data_num_);
+        for (int i = 0; i < data_num_; ++i) {
+            extract_graph[i].resize(graph[i].neigbors.size());
+            for (int j = 0; j < graph[i].neigbors.size(); ++j) {
+                extract_graph[i][j] = graph[i].neigbors[j].id;
+            }
+        }
+
+        return extract_graph;
+    }
+
 
 
 
@@ -77,7 +117,7 @@ private:
     void init_graph() {
         graph.resize(data_num_);
         std::random_device rd;
-        std::uniform_int_distribution<int> k_generate(0, data_num_);
+        std::uniform_int_distribution<int> k_generate(0, data_num_ - 1);
 #pragma omp for
         for (int i = 0; i < data_num_; ++i) {
             std::mt19937 rng(rd());
@@ -95,9 +135,7 @@ private:
             {
                 graph[i].neigbors.swap(old_neighbors);
             }
-            std::sort(old_neighbors.begin(), old_neighbors.end(), [](const Node& a, const Node& b) {
-                return a.distance < b.distance;
-            });
+            std::sort(old_neighbors.begin(), old_neighbors.end());
             std::vector<Node> new_neighbors;
             uint32_t last_id = -1;
             for (int j = 0; j < old_neighbors.size(); ++j) {
@@ -131,27 +169,48 @@ private:
             }
             {
                 graph[i].neigbors.insert(graph[i].neigbors.end(), new_neighbors.begin(), new_neighbors.end());
-                if (graph[i].neigbors.size() > max_degree_) {
-                    graph[i].neigbors.resize(max_degree_);
-                }
+                reduce_graph(i);
             }
         }
     }
 
 
     void add_reverse_edges() {
+        std::vector<Linklist> reverse_graph;
+        reverse_graph.resize(data_num_);
+        for (int i = 0; i < data_num_; ++i) {
+            for (int j = 0; j < graph[i].neigbors.size(); ++j) {
+                auto& node = graph[i].neigbors[j];
+                reverse_graph[node.id].neigbors.emplace_back(i, node.distance);
+            }
+        }
+        for (int i = 0; i < data_num_; ++i) {
+            graph[i].neigbors.insert(graph[i].neigbors.end(), reverse_graph[i].neigbors.begin(), reverse_graph[i].neigbors.end());
+            reduce_graph(i);
+        }
+    }
 
+    void reduce_graph(uint32_t loc) {
+        std::sort(graph[loc].neigbors.begin(), graph[loc].neigbors.end());
+        graph[loc].neigbors.erase(std::unique(graph[loc].neigbors.begin(), graph[loc].neigbors.end()), graph[loc].neigbors.end());
+        if (graph[loc].neigbors.size() > max_degree_) {
+            graph[loc].neigbors.resize(max_degree_);
+        }
     }
 
     void check_turn() {
+        int edge_count = 0;
         float loss = 0;
         for (int i = 0; i < data_num_; ++i) {
             for (int j = 0; j < graph[i].neigbors.size(); ++j) {
                 loss += graph[i].neigbors[j].distance;
+//                std::cout << graph[i].neigbors[j].distance << " ";
             }
+//            std::cout << std::endl;
+            edge_count += graph[i].neigbors.size();
         }
-        loss /= data_num_ * max_degree_;
-        std::cout << "loss:" << loss << std::endl;
+        loss /= edge_count;
+        std::cout << "loss:" << loss << "  edge_count:" << edge_count << std::endl;
     }
 
 private:

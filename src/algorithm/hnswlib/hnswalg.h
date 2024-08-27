@@ -114,8 +114,9 @@ private:
     float alpha_;
     uint32_t po_;
     uint32_t pl_;
-    uint32_t code_size_aligned_;
-    uint32_t redundant_size_;
+    uint64_t code_size_aligned_;
+    uint64_t redundant_size_;
+    uint64_t cut_num_;
 
 public:
     HierarchicalNSW(SpaceInterface* s) {
@@ -604,8 +605,12 @@ public:
     }
 
     inline int8_t*
-    get_encoded_data(tableint internal_id, size_t code_size) const override {
-        return data_int8.get() + internal_id * code_size * (redundant_size_ + 1);
+    get_encoded_data(uint64_t internal_id, uint64_t code_size) const {
+        if (internal_id < cut_num_)
+            return data_int8.get() + internal_id * code_size * (redundant_size_ + 1);
+        else
+            return data_int8.get() + cut_num_ * code_size * (redundant_size_ + 1)
+                   + (internal_id - cut_num_) * code_size;
     }
 
     void
@@ -646,16 +651,18 @@ public:
         // 0 :[code(code_size) + norm(8) + neighbor_size(8)]    -> code_size + 16 or 512
         //    neighbor1 : [code(code_size) + norm(8) + id(8)]   -> code_size + 16 or 512
         //    neighbor2...                                      -> maximum items: (M_ * 2 + 1)
+        cut_num_ = cur_element_count_ / 3;
         code_size_aligned_ = ((code_size + 16) + (1 << 9) - 1) >> 9 << 9;   // 512 aligned
-        uint64_t sz_B = cur_element_count_ * code_size_aligned_ * (redundant_size_ + 1);
-        uint64_t sz_aligned = (sz_B + (1 << 21) - 1) >> 21 << 21;           // 2M aligned
+        uint64_t sz_redundant = cut_num_ * code_size_aligned_ * (redundant_size_ + 1);
+        uint64_t sz_naive = (cur_element_count_ - cut_num_) * code_size_aligned_;
+
+        uint64_t sz_aligned = (sz_redundant + sz_naive + (1 << 21) - 1) >> 21 << 21; // 2M aligned
         void* ptr = std::aligned_alloc(1 << 21, sz_aligned);
-        std::memset(ptr, 0, sz_aligned);
         madvise(ptr, sz_aligned, MADV_HUGEPAGE);
+        std::memset(ptr, 0, sz_aligned);
 
         data_int8 = std::shared_ptr<int8_t[]>(static_cast<int8_t*>(ptr), AlignedDeleter());
-        // norm_pre_compute.resize(cur_element_count_);
-        for (int i = 0; i < cur_element_count_; ++i) {
+        for (uint64_t i = 0; i < cur_element_count_; ++i) {  // note here mixed
             auto* code = get_encoded_data(i, code_size_aligned_);
             transform_to_int4((float*)getDataByInternalId(i), code);
             int64_t norm = INT4_IP(code, code, dim);
@@ -663,13 +670,13 @@ public:
         }
 
         if (redundant_size_ != 0) {
-            for (int i = 0; i < cur_element_count_; i++) {
+            for (uint64_t i = 0; i < cut_num_; i++) {
                 int* data = (int*)get_linklist0(i);
                 uint64_t size = getListCount((linklistsizeint*)data);
                 auto* code = get_encoded_data(i, code_size_aligned_);
                 memcpy(code + code_size + 8, &size, 8);
 
-                for (int j = 1; j <= size; j++) {
+                for (uint64_t j = 1; j <= size; j++) {
                     uint64_t candidate_id = *(data + j);
                     auto* neighbor_code = get_encoded_data(candidate_id, code_size_aligned_);
                     memcpy(code + j * code_size_aligned_, neighbor_code, code_size + 8);
@@ -678,7 +685,7 @@ public:
             }
 
             // check storage
-            for (int i = 0; i < cur_element_count_; i++) {
+            for (uint64_t i = 0; i < cut_num_; i++) {
                 int* data = (int*)get_linklist0(i);
                 uint64_t size = getListCount((linklistsizeint*)data);
                 auto* code = get_encoded_data(i, code_size_aligned_);
@@ -686,7 +693,7 @@ public:
                 uint64_t size_valid = *(uint64_t*)(code + code_size + 8);
                 assert(size_valid == size);
 
-                for (int j = 1; j <= size; j++) {
+                for (uint64_t j = 1; j <= size; j++) {
                     uint64_t candidate_id = *(data + j);
                     auto* neighbor_code = get_encoded_data(candidate_id, code_size_aligned_);
                     for (int k = 0; k < code_size + 8; k++) {
@@ -1348,7 +1355,7 @@ public:
             candidate_set.pop();
             std::pair<float, tableint> next_node_pair = candidate_set.top();
 
-            if (redundant_size_ == 0) {
+            if (current_node_pair.second >= cut_num_) {
                 uint32_t count_no_visited = visit_naive(current_node_pair,
                                                         next_node_pair,
                                                         visited_array,
@@ -1357,7 +1364,7 @@ public:
                 dist_cmp += count_no_visited;
 
                 for (size_t j = 0; j < this->po_; j++) {
-                    auto vector_data_ptr =
+                    auto* vector_data_ptr =
                         (uint8_t*)get_encoded_data(to_be_visited[j], code_size_aligned_);
 #ifdef USE_SSE
                     mem_prefetch(vector_data_ptr, this->pl_);
@@ -1366,8 +1373,8 @@ public:
 
                 for (size_t j = 0; j < count_no_visited; j++) {
                     int candidate_id = to_be_visited[j];
-                    if (j + this->po_ <= count_no_visited) {
-                        auto vector_data_ptr =
+                    if (j + this->po_ < count_no_visited) {
+                        auto* vector_data_ptr =
                             (uint8_t*)get_encoded_data(to_be_visited[j + this->po_], code_size_aligned_);
 #ifdef USE_SSE
                         mem_prefetch(vector_data_ptr, this->pl_);

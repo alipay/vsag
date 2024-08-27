@@ -369,8 +369,6 @@ int search(std::vector<uint32_t> efs, uint32_t k = 10) {
     single_query->NumElements(1)->Dim(expected_dim)->Owner(false);
     vsag::DatasetPtr ann_result;
     single_query->Float32Vectors(query->GetFloat32Vectors() + 100 * expected_dim);
-    auto result = index->Test(single_query);
-    logger->Info(fmt::format("sq: {}, time: {}", sq_num_bits, result->first));
 
     for (auto ef_search : efs) {
         logger->Debug(fmt::format("====Search with ef {}====", ef_search));

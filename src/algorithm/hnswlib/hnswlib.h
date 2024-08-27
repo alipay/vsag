@@ -338,11 +338,6 @@ public:
         throw std::runtime_error("un-support int4 transform");
     }
 
-    virtual int8_t*
-    get_encoded_data(uint32_t internal_id, size_t code_size) const {
-        throw std::runtime_error("un-support int4 transform");
-    }
-
     virtual void
     transform_to_int4(const float* from, int8_t* to) const {
         throw std::runtime_error("un-support int4 transform");

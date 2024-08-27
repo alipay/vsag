@@ -109,41 +109,6 @@ public:
         SAFE_CALL(return this->brute_force(query, k));
     }
 
-    virtual tl::expected<std::pair<double, uint32_t>, Error>
-    Test(const DatasetPtr& query) override {
-        int8_t* tq;
-        int code_size;
-
-        if (sq_num_bits_ == 4) {
-            code_size = dim_ / 2;
-            tq = new int8_t[code_size];
-            alg_hnsw->transform_to_int4(query->GetFloat32Vectors(), tq);
-        } else if (sq_num_bits_ == 8) {
-            code_size = dim_;
-            tq = new int8_t[code_size];
-            alg_hnsw->transform_to_int8(query->GetFloat32Vectors(), tq);
-        }
-
-        double avg_time = 0;
-        double single_time = 0;
-        for (int i = 0; i < 1000; i++) {
-            single_time = 0;
-            auto tb = alg_hnsw->get_encoded_data(rand() % alg_hnsw->getCurrentElementCount(),
-                                                 code_size + 8);
-            {
-                Timer t(single_time);
-                if (sq_num_bits_ == 4) {
-                    alg_hnsw->INT4_IP((const void*)tq, (const void*)tb, dim_);
-                } else if (sq_num_bits_ == 8) {
-                    alg_hnsw->INT8_IP_TEST((const void*)tq, (const void*)tb, dim_);
-                }
-            }
-            avg_time += single_time;
-        }
-
-        return std::make_pair(avg_time, 0);
-    }
-
 public:
     tl::expected<BinarySet, Error>
     Serialize() const override {

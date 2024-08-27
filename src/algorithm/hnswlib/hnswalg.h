@@ -114,6 +114,7 @@ private:
     float alpha_;
     uint32_t po_;
     uint32_t pl_;
+    uint32_t centroid_;
 
 public:
     HierarchicalNSW(SpaceInterface* s) {
@@ -648,6 +649,20 @@ public:
             int64_t norm = INT4_IP(code, code, dim);
             memcpy(code + code_size, &norm, 8);
         }
+
+        std::vector<double> query(dim, 0);
+        std::vector<float> query_fp(dim, 0);
+        for (int i = 0; i < cur_element_count_; ++i) {
+            auto* data = getDataByInternalId(i);
+            for (int d = 0; d < dim; d++) {
+                query[d] += data[d];
+            }
+        }
+        for (int d = 0; d < dim; d++) {
+            query_fp[d] = query[d] / (double)cur_element_count_;
+        }
+        centroid_ = enterpoint_node_;
+        //        centroid_ = searchKnn(query_fp.data(), 1).top().second;
     }
 
     float
@@ -1227,22 +1242,68 @@ public:
 
         float lowerBound;
         float dist;
-        auto* codes = get_encoded_data(ep_id, code_size + 8);
-        if (sq_num_bits_ == 8) {
-            dist = INT8_L2(
-                ((int64_t*)(codes + code_size)), norm2, (const void*)codes, transformed_query, dim);
-        } else if (sq_num_bits_ == 4) {
-            dist = INT4_L2_precompute(
-                *((int64_t*)(codes + code_size)), norm2, codes, transformed_query, dim);
-        } else {
-            dist = fstdistfunc_(
-                (const float*)data_point, getDataByInternalId(ep_id), dist_func_param_);
-        }
-        lowerBound = dist;
-        top_candidates.emplace(dist, ep_id);
-        candidate_set.emplace(-dist, ep_id);
+        tableint currObj = ep_id;
+        auto* codes_top = get_encoded_data(ep_id, code_size + 8);
+        float curdist = INT4_L2_precompute(
+            *((int64_t*)(codes_top + code_size)), norm2, codes_top, transformed_query, dim);
+        lowerBound = curdist;
+        for (int level = maxlevel_; level > 0; level--) {
+            bool changed = true;
+            while (changed) {
+                changed = false;
+                unsigned int* data;
 
-        visited_array[ep_id] = visited_array_tag;
+                data = (unsigned int*)get_linklist(currObj, level);
+                int size = getListCount(data);
+
+                tableint* datal = (tableint*)(data + 1);
+
+                for (int i = 0; i < po_; i++) {
+                    mem_prefetch((uint8_t*)get_encoded_data(datal[i], code_size + 8), 512);
+                }
+
+                for (int i = 0; i < size; i++) {
+                    if (i + po_ < size) {
+                        mem_prefetch((uint8_t*)get_encoded_data(datal[i + po_], code_size + 8),
+                                     512);
+                    }
+                    tableint cand = datal[i];
+
+                    if (visited_array[cand] == visited_array_tag) {
+                        continue;
+                    }
+
+                    if (cand < 0 || cand > max_elements_)
+                        throw std::runtime_error("cand error");
+                    codes_top = get_encoded_data(cand, code_size + 8);
+                    float d = INT4_L2_precompute(*((int64_t*)(codes_top + code_size)),
+                                                 norm2,
+                                                 codes_top,
+                                                 transformed_query,
+                                                 dim);
+
+                    visited_array[cand] = visited_array_tag;
+                    if (top_candidates.size() < ef || lowerBound > d) {
+                        candidate_set.emplace(-d, cand);
+
+                        top_candidates.emplace(d, cand);
+
+                        if (top_candidates.size() > ef)
+                            top_candidates.pop();
+
+                        if (!top_candidates.empty())
+                            lowerBound = top_candidates.top().first;
+                    }
+
+                    if (d < curdist) {
+                        curdist = d;
+                        currObj = cand;
+                        changed = true;
+                    }
+                }
+            }
+        }
+
         uint32_t hops = 0;
         uint32_t dist_cmp = 0;
         std::vector<int> to_be_visited(M_ * 2);
@@ -2648,11 +2709,11 @@ public:
             top_candidates;
         std::pair<uint32_t, uint32_t> counts;
         if (num_deleted_) {
-            std::tie(top_candidates, counts) = searchBaseLayerST<true, true>(
-                enterpoint_node_, query_data, std::max(ef_, k), isIdAllowed);
+            std::tie(top_candidates, counts) =
+                searchBaseLayerST<true, true>(centroid_, query_data, std::max(ef_, k), isIdAllowed);
         } else {
             std::tie(top_candidates, counts) = searchBaseLayerST<false, true>(
-                enterpoint_node_, query_data, std::max(ef_, k), isIdAllowed);
+                centroid_, query_data, std::max(ef_, k), isIdAllowed);
         }
 
         while (ef_ >= 50 and top_candidates.size() > ef_ / 2) {

@@ -1037,6 +1037,22 @@ public:
 #endif
     }
 
+    inline void mem_prefetch1(unsigned char* ptr, const int num_lines) const {
+        prefetch_L1(ptr);
+
+    }
+
+    inline void mem_prefetch2(unsigned char* ptr, const int num_lines) const {
+        prefetch_L1(ptr + 64);
+        prefetch_L1(ptr + 128);
+        prefetch_L1(ptr + 192);
+        prefetch_L1(ptr + 256);
+        prefetch_L1(ptr + 320);
+        prefetch_L1(ptr + 384);
+        prefetch_L1(ptr + 448);
+        prefetch_L1(ptr + 512);
+    }
+
     inline void
     mem_prefetch(unsigned char* ptr, const int num_lines) const {
         prefetch_L1(ptr);
@@ -1177,7 +1193,6 @@ public:
           vl_type visited_array_tag,
           std::vector<int>& to_be_visited) const {
         int* data2 = (int*)get_linklist0(next_node_pair.second);
-        _mm_prefetch((char*)(data2), _MM_HINT_T0);
         _mm_prefetch(visited_array + *(data2 + 1), _MM_HINT_T0);
 
         int* data = (int*)get_linklist0(current_node_pair.second);
@@ -1321,9 +1336,9 @@ public:
             uint32_t count_no_visited = visit(
                 current_node_pair, next_node_pair, visited_array, visited_array_tag, to_be_visited);
             dist_cmp += count_no_visited;
-
+            uint8_t* vector_data_ptr;
             for (size_t j = 0; j < this->po_; j++) {
-                auto vector_data_ptr = (uint8_t*)get_encoded_data(to_be_visited[j], code_size + 8);
+                vector_data_ptr = (uint8_t*)get_encoded_data(to_be_visited[j], code_size + 8);
 #ifdef USE_SSE
                 mem_prefetch(vector_data_ptr, this->pl_);
 #endif
@@ -1332,10 +1347,10 @@ public:
             for (size_t j = 0; j < count_no_visited; j++) {
                 int candidate_id = to_be_visited[j];
                 if (j + this->po_ <= count_no_visited) {
-                    auto vector_data_ptr =
+                    vector_data_ptr =
                         (uint8_t*)get_encoded_data(to_be_visited[j + this->po_], code_size + 8);
 #ifdef USE_SSE
-                    mem_prefetch(vector_data_ptr, this->pl_);
+                    mem_prefetch1(vector_data_ptr, this->pl_);
 #endif
                 }
                 auto* codes = get_encoded_data(candidate_id, code_size + 8);
@@ -1351,6 +1366,11 @@ public:
                 } else {
                     char* currObj1 = (getDataByInternalId(candidate_id));
                     dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
+                }
+                if (j + this->po_ <= count_no_visited) {
+#ifdef USE_SSE
+                    mem_prefetch2(vector_data_ptr, this->pl_);
+#endif
                 }
                 if (top_candidates.size() < ef || lowerBound > dist) {
                     candidate_set.emplace(-dist, candidate_id);

@@ -115,6 +115,7 @@ private:
     uint32_t po_;
     uint32_t pl_;
     uint32_t centroid_;
+    mutable uint8_t* to_be_prefetch_;
 
 public:
     HierarchicalNSW(SpaceInterface* s) {
@@ -532,6 +533,12 @@ public:
                                                           0);
                 xx = _mm512_and_si512(xx, mask_overflow);
                 yy = _mm512_and_si512(yy, mask_overflow);
+            }
+            if (d == 256) {
+                prefetch_L1(to_be_prefetch_);
+                prefetch_L1(to_be_prefetch_ + 64);
+                prefetch_L1(to_be_prefetch_ + 128);
+                prefetch_L1(to_be_prefetch_ + 192);
             }
             auto xx1 = _mm512_and_si512(xx, mask);                        // 64 * 8bits
             auto xx2 = _mm512_and_si512(_mm512_srli_epi16(xx, 4), mask);  // 64 * 8bits
@@ -1043,10 +1050,6 @@ public:
     }
 
     inline void mem_prefetch2(unsigned char* ptr, const int num_lines) const {
-        prefetch_L1(ptr + 64);
-        prefetch_L1(ptr + 128);
-        prefetch_L1(ptr + 192);
-        prefetch_L1(ptr + 256);
         prefetch_L1(ptr + 320);
         prefetch_L1(ptr + 384);
         prefetch_L1(ptr + 448);
@@ -1353,6 +1356,7 @@ public:
                     mem_prefetch1(vector_data_ptr, this->pl_);
 #endif
                 }
+                to_be_prefetch_ = vector_data_ptr + 64;
                 auto* codes = get_encoded_data(candidate_id, code_size + 8);
                 if (sq_num_bits_ == 8) {
                     dist = INT8_L2(((int64_t*)(codes + code_size)),

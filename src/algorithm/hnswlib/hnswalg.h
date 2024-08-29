@@ -33,6 +33,7 @@
 #include <unordered_set>
 
 #include "../../default_allocator.h"
+#include "../../logger.h"
 #include "hnswlib.h"
 #include "visited_list_pool.h"
 
@@ -117,6 +118,7 @@ private:
     uint64_t code_size_aligned_;
     uint64_t redundant_size_;
     uint64_t cut_num_;
+    uint64_t* offset_code_;
 
 public:
     HierarchicalNSW(SpaceInterface* s) {
@@ -606,11 +608,7 @@ public:
 
     inline int8_t*
     get_encoded_data(uint64_t internal_id, uint64_t code_size) const {
-        if (internal_id < cut_num_)
-            return data_int8.get() + internal_id * code_size * (redundant_size_ + 1);
-        else
-            return data_int8.get() + cut_num_ * code_size * (redundant_size_ + 1)
-                   + (internal_id - cut_num_) * code_size;
+        return data_int8.get() + offset_code_[internal_id];
     }
 
     void
@@ -651,15 +649,30 @@ public:
         // 0 :[code(code_size) + norm(8) + neighbor_size(8)]    -> code_size + 16 or 512
         //    neighbor1 : [code(code_size) + norm(8) + id(8)]   -> code_size + 16 or 512
         //    neighbor2...                                      -> maximum items: (M_ * 2 + 1)
-        cut_num_ = cur_element_count_ / 3;
-        code_size_aligned_ = ((code_size + 16) + (1 << 9) - 1) >> 9 << 9;   // 512 aligned
-        uint64_t sz_redundant = cut_num_ * code_size_aligned_ * (redundant_size_ + 1);
-        uint64_t sz_naive = (cur_element_count_ - cut_num_) * code_size_aligned_;
 
-        uint64_t sz_aligned = (sz_redundant + sz_naive + (1 << 21) - 1) >> 21 << 21; // 2M aligned
-        void* ptr = std::aligned_alloc(1 << 21, sz_aligned);
-        madvise(ptr, sz_aligned, MADV_HUGEPAGE);
-        std::memset(ptr, 0, sz_aligned);
+        uint64_t avg_degree = 0;
+        for (uint64_t i = 0; i < cur_element_count_; i++) {
+            int* data = (int*)get_linklist0(i);
+            uint64_t size = getListCount((linklistsizeint*)data);
+            avg_degree += size;
+        }
+        vsag::logger::info(fmt::format("====avg_degree: {} ====", 1.0 * avg_degree / cur_element_count_));
+
+        cut_num_ = cur_element_count_;
+        offset_code_ = new uint64_t[cur_element_count_];
+        code_size_aligned_ = ((code_size + 16) + (1 << 9) - 1) >> 9 << 9;   // 512 aligned
+
+        uint64_t sz_close = 0;
+        for (uint64_t i = 0; i < cur_element_count_; ++i) {
+            offset_code_[i] = sz_close;
+            int* data = (int*)get_linklist0(i);
+            uint64_t size = getListCount((linklistsizeint*)data);
+            sz_close += (code_size_aligned_ * (size + 1));
+        }
+        sz_close = (sz_close + (1 << 21) - 1) >> 21 << 21;
+        void* ptr = std::aligned_alloc(1 << 21, sz_close);
+        madvise(ptr, sz_close, MADV_HUGEPAGE);
+        std::memset(ptr, 0, sz_close);
 
         data_int8 = std::shared_ptr<int8_t[]>(static_cast<int8_t*>(ptr), AlignedDeleter());
         for (uint64_t i = 0; i < cur_element_count_; ++i) {  // note here mixed

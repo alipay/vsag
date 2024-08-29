@@ -51,7 +51,7 @@ int get_data(vsag::DatasetPtr& data, uint32_t expected_dim, std::string data_pat
 }
 
 
-int build() {
+int build(bool is_recompute = false) {
     auto logger = vsag::Options::Instance().logger();
     logger->SetLevel(vsag::Logger::Level::kDEBUG);
 
@@ -120,7 +120,7 @@ int build() {
                                          use_static ? "static" : "pure");
     auto build_parameters = fmt::format(BUILD_PARAM_FMT, metric_type, base_dim, BR, BL, sq_num_bits, use_static);
     auto index = vsag::Factory::CreateIndex(algo_name, build_parameters).value();
-    if (std::filesystem::exists(index_path)) {
+    if (std::filesystem::exists(index_path) and not is_recompute) {
         logger->Debug(fmt::format("====Index Path Exists===="));
         logger->Debug(fmt::format("Index path: {}", index_path));
     } else {
@@ -156,7 +156,7 @@ int build() {
 }
 
 
-int calculate_gt() {
+int calculate_gt(bool is_recompute = false) {
     auto logger = vsag::Options::Instance().logger();
     logger->SetLevel(vsag::Logger::Level::kDEBUG);
 
@@ -227,7 +227,7 @@ int calculate_gt() {
         delete[] gt_data;
     }
 
-    if (not validate_gt){
+    if (not validate_gt or is_recompute){
         logger->Debug(fmt::format("====GT calculation start===="));
         std::fstream out_file(gt_path, std::ios::out | std::ios::binary);
 
@@ -415,28 +415,22 @@ int search(std::vector<uint32_t> efs, uint32_t k = 10) {
 
 int main() {
     // metadata
-    dataset = "gist-960-euclidean";
+    dataset = "sift-128-euclidean";
     target_npts = -1;
     use_static = false;
     sq_num_bits = -1;
     gt_dim = 100;
 
     // prepare index and ground_truth
-    // build();
-    calculate_gt();
+    build(false);
+    calculate_gt(false);
 
     // search
     std::vector<uint32_t> efs = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
-    efs.resize(1000, 80);
-    for (int round = 0; round < 2; round++) {
-         if (round == 0) {
-             sq_num_bits = 4;
-         } else if (round == 1) {
-             sq_num_bits = 8;
-         } else {
-             sq_num_bits = -1;
-         }
-         use_static = (round == 2);
+    std::vector<int> sqs = {-1, 4, 8};
+    efs.resize(10, 80);
+    for (auto sq : sqs) {
+        sq_num_bits = sq;
         search(efs);
     }
 }

@@ -40,9 +40,9 @@ kmeans(py::array_t<float, py::array::c_style | py::array::forcecast>& datas,
     return centroids;
 }
 
-class Index {
+class IndexRS {
 public:
-    Index(std::string name, const std::string& parameters) {
+    IndexRS(std::string name, const std::string& parameters) {
         if (auto index = vsag::Factory::CreateIndex(name, parameters)) {
             index_ = index.value();
         } else {
@@ -185,24 +185,24 @@ private:
 
 PYBIND11_MODULE(pyvsag, m) {
     m.def("kmeans", &kmeans, "Kmeans");
-    py::class_<Index>(m, "Index")
+    py::class_<IndexRS>(m, "IndexRS")
         .def(py::init<std::string, std::string&>(), py::arg("name"), py::arg("parameters"))
         .def("build",
-             &Index::Build,
+             &IndexRS::Build,
              py::arg("vectors"),
              py::arg("ids"),
              py::arg("num_elements"),
              py::arg("dim"))
         .def(
-            "knn_search", &Index::KnnSearch, py::arg("vector"), py::arg("k"), py::arg("parameters"))
+            "knn_search", &IndexRS::KnnSearch, py::arg("vector"), py::arg("k"), py::arg("parameters"))
         .def("range_search",
-             &Index::RangeSearch,
+             &IndexRS::RangeSearch,
              py::arg("vector"),
              py::arg("threshold"),
              py::arg("parameters"))
-        .def("save", &Index::Save, py::arg("dir_name"))
+        .def("save", &IndexRS::Save, py::arg("dir_name"))
         .def("load",
-             &Index::Load,
+             &IndexRS::Load,
              py::arg("dir_name"),
              py::arg("file_sizes"),
              py::arg("load_memory"));

@@ -665,9 +665,13 @@ public:
         uint64_t sz_close = 0;
         for (uint64_t i = 0; i < cur_element_count_; ++i) {
             offset_code_[i] = sz_close;
-            int* data = (int*)get_linklist0(i);
-            uint64_t size = getListCount((linklistsizeint*)data);
-            sz_close += (code_size_aligned_ * (size + 1));
+            if (i < cut_num_) {
+                int* data = (int*)get_linklist0(i);
+                uint64_t size = getListCount((linklistsizeint*)data);
+                sz_close += (code_size_aligned_ * (size + 1));
+            } else {
+                sz_close += code_size_aligned_;
+            }
         }
         sz_close = (sz_close + (1 << 21) - 1) >> 21 << 21;
         void* ptr = std::aligned_alloc(1 << 21, sz_close);

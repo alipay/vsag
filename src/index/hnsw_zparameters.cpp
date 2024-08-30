@@ -106,8 +106,8 @@ CreateHnswParameters::FromJson(const std::string& json_string) {
 
     if (params[INDEX_HNSW].contains(PARAMETER_REDUNDANT_RATE)) {
         obj.redundant_rate = params[INDEX_HNSW][PARAMETER_REDUNDANT_RATE];
-        CHECK_ARGUMENT((0.5 <= obj.redundant_rate) and (obj.redundant_rate <= 1),
-                       fmt::format("alpha({}) must in range[0.5, 1.0]", obj.redundant_rate));
+        CHECK_ARGUMENT((0 <= obj.redundant_rate) and (obj.redundant_rate <= 1),
+                       fmt::format("alpha({}) must in range[0, 1.0]", obj.redundant_rate));
     } else {
         obj.redundant_rate = 1;
     }

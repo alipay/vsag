@@ -120,6 +120,7 @@ private:
     uint64_t code_size_aligned_;
     uint64_t cut_num_;
     uint64_t* offset_code_;
+    float redundant_rate_;
 
 public:
     HierarchicalNSW(SpaceInterface* s) {
@@ -143,6 +144,7 @@ public:
                     bool use_reversed_edges = false,
                     size_t block_size_limit = 128 * 1024 * 1024,
                     int sq_num_bits = -1,
+                    float redundant_rate = 1,
                     size_t random_seed = 100,
                     bool allow_replace_deleted = false)
         : allocator_(allocator),
@@ -151,7 +153,8 @@ public:
           allow_replace_deleted_(allow_replace_deleted),
           use_reversed_edges_(use_reversed_edges),
           sq_num_bits_(sq_num_bits),
-          alpha_(alpha) {
+          alpha_(alpha),
+          redundant_rate_(redundant_rate) {
         this->po_ = 1;
         this->pl_ = 1;
 
@@ -662,8 +665,9 @@ public:
             avg_degree += size;
         }
         vsag::logger::info(fmt::format("====avg_degree: {} ====", 1.0 * avg_degree / cur_element_count_));
+        cut_num_ = cur_element_count_ * redundant_rate_;
+        vsag::logger::info(fmt::format("====redundant size: {} ====", cut_num_));
 
-        cut_num_ = cur_element_count_;
         offset_code_ = new uint64_t[cur_element_count_];
         memset(offset_code_, cur_element_count_, 999);
         code_size_aligned_ = ((code_size + 16) + (1 << 9) - 1) >> 9 << 9;   // 512 aligned
@@ -1047,8 +1051,9 @@ public:
         size_t dim = *(size_t*)dist_func_param_;
         size_t code_size = dim / (8 / sq_num_bits_);
 
-        std::vector<int> try_pos(5);
+        std::vector<int> try_pos(10);
         std::vector<int> try_pls(15);
+        try_pls.assign({9});
         std::iota(try_pos.begin(), try_pos.end(), 1);
         std::iota(try_pls.begin(), try_pls.end(), 1);
 
@@ -1066,7 +1071,7 @@ public:
             }
         }
 
-        printf("=============Start optimization=============\n");
+        vsag::logger::info(fmt::format("=============Start optimization============="));
         this->ef_ = 80;
         this->po_ = 1;
         this->pl_ = 1;
@@ -1095,22 +1100,22 @@ public:
                     best_po = try_po;
                     best_pl = try_pl;
                 }
-                printf("try po = %d, pl = %d, gaining %.2f%% improvement\n",
+                vsag::logger::info(fmt::format("try po = {}, pl = {}, gaining {:.2f}% improvement",
                        try_po,
                        try_pl,
-                       100.0 * (baseline_ela / ela - 1));
+                       100.0 * (baseline_ela / ela - 1)));
             }
         }
 
-        printf(
-            "settint best po = %d, best pl = %d\n"
-            "gaining %.2f%% performance improvement\n"
-            "=============Done optimization=============\n",
+        vsag::logger::info(fmt::format(
+            "setting best po = {}, best pl = {}, gaining {:.2f}% performance improvement",
             best_po,
             best_pl,
-            100.0 * (baseline_ela / min_ela - 1));
+            100.0 * (baseline_ela / min_ela - 1)));
         this->po_ = best_po;
         this->pl_ = best_pl;
+
+        vsag::logger::info("=============Done optimization=============");
     }
 
     inline void
@@ -1120,6 +1125,28 @@ public:
 #else
         __builtin_prefetch(address, 0, 3);
 #endif
+    }
+
+    inline void
+    mem_prefetch_1(unsigned char* ptr, const int num_lines) const {
+        prefetch_L1(ptr);
+    }
+
+    inline void
+    mem_prefetch_2(unsigned char* ptr, const int num_lines) const {
+        prefetch_L1(ptr + 64);
+        prefetch_L1(ptr + 128);
+        prefetch_L1(ptr + 192);
+        prefetch_L1(ptr + 256);
+    }
+
+    inline void
+    mem_prefetch_3(unsigned char* ptr, const int num_lines) const {
+        prefetch_L1(ptr);
+        prefetch_L1(ptr + 320);
+        prefetch_L1(ptr + 384);
+        prefetch_L1(ptr + 448);
+        prefetch_L1(ptr + 512);
     }
 
     inline void

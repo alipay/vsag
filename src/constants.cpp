@@ -47,6 +47,7 @@ const char* const PARAMETER_METRIC_TYPE = "metric_type";
 const char* const PARAMETER_USE_CONJUGATE_GRAPH = "use_conjugate_graph";
 const char* const PARAMETER_USE_CONJUGATE_GRAPH_SEARCH = "use_conjugate_graph_search";
 const char* const PARAMETER_ALPHA = "alpha";
+const char* const PARAMETER_REDUNDANT_RATE = "redundant_rate";
 
 const char* const DISKANN_PARAMETER_L = "ef_construction";
 const char* const DISKANN_PARAMETER_R = "max_degree";

@@ -56,6 +56,7 @@ Factory::CreateIndex(const std::string& origin_name,
                                           params.use_conjugate_graph,
                                           params.sq_num_bits,
                                           params.alpha,
+                                          params.redundant_rate,
                                           params.extra_file,
                                           allocator);
         } else if (name == INDEX_FRESH_HNSW) {

@@ -59,8 +59,8 @@ CreateHnswParameters::FromJson(const std::string& json_string) {
     CHECK_ARGUMENT(params[INDEX_HNSW].contains(HNSW_PARAMETER_M),
                    fmt::format("parameters[{}] must contains {}", INDEX_HNSW, HNSW_PARAMETER_M));
     obj.max_degree = params[INDEX_HNSW][HNSW_PARAMETER_M];
-    CHECK_ARGUMENT((5 <= obj.max_degree) and (obj.max_degree <= 64),
-                   fmt::format("max_degree({}) must in range[5, 64]", obj.max_degree));
+    CHECK_ARGUMENT((5 <= obj.max_degree),
+                   fmt::format("max_degree({}) must in range[5, )", obj.max_degree));
 
     // set obj.ef_construction
     CHECK_ARGUMENT(
@@ -102,6 +102,14 @@ CreateHnswParameters::FromJson(const std::string& json_string) {
                        fmt::format("alpha({}) must in range[0.8, 2.0]", obj.alpha));
     } else {
         obj.alpha = 1;
+    }
+
+    if (params[INDEX_HNSW].contains(PARAMETER_REDUNDANT_RATE)) {
+        obj.redundant_rate = params[INDEX_HNSW][PARAMETER_REDUNDANT_RATE];
+        CHECK_ARGUMENT((0.5 <= obj.redundant_rate) and (obj.redundant_rate <= 1),
+                       fmt::format("alpha({}) must in range[0.5, 1.0]", obj.redundant_rate));
+    } else {
+        obj.redundant_rate = 1;
     }
 
     return obj;

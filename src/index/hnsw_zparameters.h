@@ -35,6 +35,7 @@ public:
     bool use_static;
     std::string extra_file;
     int sq_num_bits;
+    float redundant_rate;
     float alpha;
 
 protected:

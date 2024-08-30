@@ -46,6 +46,7 @@ extern const char* const PARAMETER_METRIC_TYPE;
 extern const char* const PARAMETER_USE_CONJUGATE_GRAPH;
 extern const char* const PARAMETER_USE_CONJUGATE_GRAPH_SEARCH;
 extern const char* const PARAMETER_ALPHA;
+extern const char* const PARAMETER_REDUNDANT_RATE;
 
 extern const char* const DISKANN_PARAMETER_L;
 extern const char* const DISKANN_PARAMETER_R;

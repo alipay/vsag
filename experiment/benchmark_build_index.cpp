@@ -13,7 +13,7 @@ int target_npts = -1;
 bool use_static = false;
 int sq_num_bits = -1;
 int gt_dim = 100;
-
+float redundant_rate = 1.0;
 
 int get_data(vsag::DatasetPtr& data, uint32_t expected_dim, std::string data_path_fmt)
 {
@@ -118,7 +118,7 @@ int build() {
                                          workspace, algo_name, dataset_name,
                                          base_npts, BL, BR,
                                          use_static ? "static" : "pure");
-    auto build_parameters = fmt::format(BUILD_PARAM_FMT, metric_type, base_dim, BR, BL, sq_num_bits, use_static);
+    auto build_parameters = fmt::format(BUILD_PARAM_FMT, metric_type, base_dim, BR, BL, sq_num_bits, use_static, 1.0);
     auto index = vsag::Factory::CreateIndex(algo_name, build_parameters).value();
     if (std::filesystem::exists(index_path)) {
         logger->Debug(fmt::format("====Index Path Exists===="));
@@ -197,7 +197,7 @@ int calculate_gt() {
 
     // index load
     logger->Debug(fmt::format("====Start create===="));
-    auto build_parameters = fmt::format(BUILD_PARAM_FMT, metric_type, expected_dim, BR, BL, sq_num_bits, false);
+    auto build_parameters = fmt::format(BUILD_PARAM_FMT, metric_type, expected_dim, BR, BL, sq_num_bits, false, 1.0);
     auto index = vsag::Factory::CreateIndex(algo_name, build_parameters).value();
     std::string index_path = fmt::format(INDEX_PATH_FMT,
                                          workspace, algo_name, dataset_name,
@@ -331,7 +331,7 @@ int search(std::vector<uint32_t> efs, uint32_t k = 10) {
 //        logger->Debug(fmt::format("target npts: {}", base_npts));
 //        base->NumElements(base_npts);
 //    }
-    auto build_parameters = fmt::format(BUILD_PARAM_FMT, metric_type, expected_dim, BR, BL, sq_num_bits, use_static);
+    auto build_parameters = fmt::format(BUILD_PARAM_FMT, metric_type, expected_dim, BR, BL, sq_num_bits, use_static, redundant_rate);
     auto index = vsag::Factory::CreateIndex(algo_name, build_parameters).value();
     std::string index_path = fmt::format(INDEX_PATH_FMT,
                                          workspace, algo_name, dataset_name,
@@ -416,7 +416,7 @@ int main() {
     dataset = "gist-960-euclidean";
     target_npts = -1;
     use_static = false;
-    sq_num_bits = -1;
+    sq_num_bits = 4;
     gt_dim = 100;
 
     // prepare index and ground_truth
@@ -425,16 +425,10 @@ int main() {
 
     // search
     std::vector<uint32_t> efs = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
-    efs.resize(1000, 80);
-    for (int round = 0; round < 1; round++) {
-         if (round == 0) {
-             sq_num_bits = 4;
-         } else if (round == 1) {
-             sq_num_bits = 8;
-         } else {
-             sq_num_bits = -1;
-         }
-         use_static = (round == 2);
+    efs.resize(20, 80);
+    std::vector<float> redundant_rate_list = {0.5, 0.6, 0.7, 0.8, 0.9, 1.0};
+    for (auto rate : redundant_rate_list) {
+        redundant_rate = rate;
         search(efs);
     }
 }

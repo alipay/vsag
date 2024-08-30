@@ -65,6 +65,7 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
            bool use_conjugate_graph,
            int sq_num_bits,
            float alpha,
+           float redundant_rate,
            std::string extra_file,
            Allocator* allocator)
     : space(std::move(space_interface)),
@@ -72,7 +73,8 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
       use_conjugate_graph_(use_conjugate_graph),
       use_reversed_edges_(use_reversed_edges),
       pq_code_file(std::move(extra_file)),
-      sq_num_bits_(sq_num_bits) {
+      sq_num_bits_(sq_num_bits),
+      redundant_rate_(redundant_rate) {
     dim_ = *((size_t*)space->get_dist_func_param());
 
     M = std::min(std::max(M, MINIMAL_M), MAXIMAL_M);
@@ -100,7 +102,8 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
                                                        alpha,
                                                        use_reversed_edges_,
                                                        Options::Instance().block_size_limit(),
-                                                       sq_num_bits);
+                                                       sq_num_bits,
+                                                       redundant_rate_);
     } else {
         if (dim_ % 4 != 0) {
             throw std::runtime_error("cannot build static hnsw while dim % 4 != 0");

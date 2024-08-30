@@ -47,6 +47,7 @@ public:
          bool use_conjugate_graph = false,
          int sq_num_bits = -1,
          float alpha = 1.0,
+         float redundant_rate = 1.0,
          std::string extra_file = "",
          Allocator* allocator = nullptr);
 
@@ -224,6 +225,7 @@ private:
     bool empty_index_ = false;
     bool use_reversed_edges_ = false;
     int sq_num_bits_ = -1;
+    float redundant_rate_ = 1;
 
     std::shared_ptr<Allocator> allocator_ = nullptr;
     std::string pq_code_file;

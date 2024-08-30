@@ -425,8 +425,10 @@ int main() {
 
     // search
     std::vector<uint32_t> efs = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
-    efs.resize(20, 80);
+    efs.assign({80});
+    efs.resize(10, 80);
     std::vector<float> redundant_rate_list = {0.5, 0.6, 0.7, 0.8, 0.9, 1.0};
+    redundant_rate_list.assign({0, 1.0});
     for (auto rate : redundant_rate_list) {
         redundant_rate = rate;
         search(efs);

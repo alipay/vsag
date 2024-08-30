@@ -121,6 +121,7 @@ private:
     uint64_t cut_num_;
     uint64_t* offset_code_;
     float redundant_rate_;
+    mutable uint8_t* to_be_prefetch_;
 
 public:
     HierarchicalNSW(SpaceInterface* s) {
@@ -541,6 +542,9 @@ public:
                                                           0);
                 xx = _mm512_and_si512(xx, mask_overflow);
                 yy = _mm512_and_si512(yy, mask_overflow);
+            }
+            if (to_be_prefetch_ != nullptr and d == 256) {
+                mem_prefetch_2(to_be_prefetch_, pl_);
             }
             auto xx1 = _mm512_and_si512(xx, mask);                        // 64 * 8bits
             auto xx2 = _mm512_and_si512(_mm512_srli_epi16(xx, 4), mask);  // 64 * 8bits
@@ -1142,7 +1146,6 @@ public:
 
     inline void
     mem_prefetch_3(unsigned char* ptr, const int num_lines) const {
-        prefetch_L1(ptr);
         prefetch_L1(ptr + 320);
         prefetch_L1(ptr + 384);
         prefetch_L1(ptr + 448);
@@ -1465,7 +1468,7 @@ public:
         uint32_t hops = 0;
         uint32_t dist_cmp = 0;
         std::vector<int> to_be_visited(M_ * 2);
-
+        uint8_t* vector_data_ptr;
         while (!candidate_set.empty()) {
             hops++;
             std::pair<float, tableint> current_node_pair = candidate_set.top();
@@ -1486,26 +1489,36 @@ public:
                 dist_cmp += count_no_visited;
 
                 for (size_t j = 0; j < this->po_; j++) {
-                    auto* vector_data_ptr =
+                    vector_data_ptr =
                         (uint8_t*)get_encoded_data(to_be_visited[j], code_size_aligned_);
 #ifdef USE_SSE
-                    mem_prefetch(vector_data_ptr, this->pl_);
+                    mem_prefetch_1(vector_data_ptr, this->pl_);
 #endif
                 }
 
                 for (size_t j = 0; j < count_no_visited; j++) {
                     int candidate_id = to_be_visited[j];
                     if (j + this->po_ < count_no_visited) {
-                        auto* vector_data_ptr =
+                        vector_data_ptr =
                             (uint8_t*)get_encoded_data(to_be_visited[j + this->po_], code_size_aligned_);
+                        to_be_prefetch_ = vector_data_ptr;
 #ifdef USE_SSE
-                        mem_prefetch(vector_data_ptr, this->pl_);
+                        mem_prefetch_1(vector_data_ptr, this->pl_);
 #endif
+                    } else {
+                        to_be_prefetch_ = nullptr;
                     }
                     auto* codes = get_encoded_data(candidate_id, code_size_aligned_);
                     dist = INT4_L2_precompute(
                         *((int64_t*)(codes + code_size)), norm2, codes, transformed_query, dim);
 
+                    if (j + this->po_ < count_no_visited) {
+                        vector_data_ptr =
+                            (uint8_t*)get_encoded_data(to_be_visited[j + this->po_], code_size_aligned_);
+#ifdef USE_SSE
+                        mem_prefetch_3(vector_data_ptr, this->pl_);
+#endif
+                    }
                     if (top_candidates.size() < ef || lowerBound > dist) {
                         candidate_set.emplace(-dist, candidate_id);
 
@@ -1528,7 +1541,7 @@ public:
 
                 auto* code = get_redundant_data(current_node_pair.second, code_size_aligned_);
                 for (size_t j = 0; j < this->po_; j++) {
-                    auto vector_data_ptr = (uint8_t*)(code + to_be_visited[j] * (code_size_aligned_));
+                    vector_data_ptr = (uint8_t*)(code + to_be_visited[j] * (code_size_aligned_));
 #ifdef USE_SSE
                     mem_prefetch(vector_data_ptr, this->pl_);
 #endif
@@ -1536,12 +1549,13 @@ public:
 
                 for (size_t j = 0; j < count_no_visited; j++) {
                     if (j + this->po_ <= count_no_visited) {
-                        auto vector_data_ptr =
+                        vector_data_ptr =
                             (uint8_t*)(code + to_be_visited[j + this->po_] * (code_size_aligned_));
 #ifdef USE_SSE
                         mem_prefetch(vector_data_ptr, this->pl_);
 #endif
                     }
+                    to_be_prefetch_ = nullptr;
                     dist = INT4_L2_precompute(
                         *((int64_t*)(code + to_be_visited[j] * (code_size_aligned_) + code_size)),
                         norm2,

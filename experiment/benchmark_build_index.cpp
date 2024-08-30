@@ -323,19 +323,19 @@ int search(std::vector<uint32_t> efs, uint32_t k = 10) {
     }
 
     // index load
-    logger->Debug(fmt::format("====Start create===="));
-    auto base = vsag::Dataset::Make();
-    int base_npts = get_data(base, expected_dim, BENCHMARK_BASE_PATH_FMT);
-    if (target_npts > 0) {
-        base_npts = std::min(target_npts, base_npts);
-        logger->Debug(fmt::format("target npts: {}", base_npts));
-        base->NumElements(base_npts);
-    }
+//    logger->Debug(fmt::format("====Start create===="));
+//    auto base = vsag::Dataset::Make();
+//    int base_npts = get_data(base, expected_dim, BENCHMARK_BASE_PATH_FMT);
+//    if (target_npts > 0) {
+//        base_npts = std::min(target_npts, base_npts);
+//        logger->Debug(fmt::format("target npts: {}", base_npts));
+//        base->NumElements(base_npts);
+//    }
     auto build_parameters = fmt::format(BUILD_PARAM_FMT, metric_type, expected_dim, BR, BL, sq_num_bits, use_static);
     auto index = vsag::Factory::CreateIndex(algo_name, build_parameters).value();
     std::string index_path = fmt::format(INDEX_PATH_FMT,
                                          workspace, algo_name, dataset_name,
-                                         base_npts, BL, BR,
+                                         1000000, BL, BR,
                                          use_static ? "static" : "pure");
 
     logger->Debug(fmt::format("====Start deserialize from {}====", index_path));
@@ -346,7 +346,7 @@ int search(std::vector<uint32_t> efs, uint32_t k = 10) {
     auto query = vsag::Dataset::Make();
     int query_npts = get_data(query, expected_dim, BENCHMARK_QUERY_PATH_FMT);
 
-    auto gt_path = fmt::format(BENCHMARK_GT_PATH_FMT, dataset, base_npts, gt_dim);
+    auto gt_path = fmt::format(BENCHMARK_GT_PATH_FMT, dataset, 1000000, gt_dim);
     int32_t* gt_data;
     uint32_t gt_npts, gt_valid_dim;
     vsag::load_aligned_fvecs(gt_path, gt_data, gt_npts, gt_valid_dim);
@@ -421,7 +421,7 @@ int main() {
 
     // prepare index and ground_truth
     // build();
-    calculate_gt();
+//    calculate_gt();
 
     // search
     std::vector<uint32_t> efs = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};

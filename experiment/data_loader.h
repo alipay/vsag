@@ -184,7 +184,7 @@ void deserialize(std::shared_ptr<vsag::Index> index, std::string index_path) {
     readBinaryPOD(file, footer_offset);
     file.seekg(footer_offset, std::ios::beg);
 
-    std::vector<std::string> keys;
+    std::vector<std::string> keys;  // todo: mem peak here
     std::vector<uint64_t> offsets;
     for (uint64_t i = 0; i < num_keys; ++i) {
         int64_t key_len;

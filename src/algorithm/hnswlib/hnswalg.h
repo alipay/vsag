@@ -662,7 +662,7 @@ public:
         }
         vsag::logger::info(fmt::format("====avg_degree: {} ====", 1.0 * avg_degree / cur_element_count_));
 
-        cut_num_ = cur_element_count_ * 0.5;
+        cut_num_ = cur_element_count_;
         offset_code_ = new uint64_t[cur_element_count_];
         memset(offset_code_, cur_element_count_, 999);
         code_size_aligned_ = ((code_size + 16) + (1 << 9) - 1) >> 9 << 9;   // 512 aligned
@@ -697,7 +697,7 @@ public:
             }
             void* ptr_redundant = std::aligned_alloc(1 << 21, (sz_redundant + (1 << 21) - 1) >> 21 << 21);
             madvise(ptr_redundant, sz_redundant, MADV_HUGEPAGE);
-            std::memset(ptr_redundant, 0, sz_redundant);
+            std::memset(ptr_redundant, 0, sz_redundant);    // TODO: huge physic mem alloc
             redundant_data_int8 = std::shared_ptr<int8_t[]>(static_cast<int8_t*>(ptr_redundant), AlignedDeleter());
 
             // assign

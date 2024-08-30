@@ -48,6 +48,7 @@ private:
     float max_ = 0;
     float min_ = 1000000;
     std::shared_ptr<int8_t[]> data_int8;
+    std::shared_ptr<int8_t[]> redundant_data_int8;
     int sq_num_bits_ = -1;
 
     std::vector<int64_t> norm_pre_compute;
@@ -116,7 +117,6 @@ private:
     uint32_t po_;
     uint32_t pl_;
     uint64_t code_size_aligned_;
-    uint64_t redundant_size_;
     uint64_t cut_num_;
     uint64_t* offset_code_;
 
@@ -162,7 +162,6 @@ public:
         M_ = M;
         maxM_ = M_;
         maxM0_ = M_ * 2;
-        redundant_size_ = M_ * 2;
 
         ef_construction_ = std::max(ef_construction, M_);
         ef_ = 10;
@@ -608,7 +607,12 @@ public:
 
     inline int8_t*
     get_encoded_data(uint64_t internal_id, uint64_t code_size) const {
-        return data_int8.get() + offset_code_[internal_id];
+        return data_int8.get() + code_size * internal_id;
+    }
+
+    inline int8_t*
+    get_redundant_data(uint64_t internal_id, uint64_t code_size) const {
+        return redundant_data_int8.get() + offset_code_[internal_id];
     }
 
     void
@@ -658,26 +662,21 @@ public:
         }
         vsag::logger::info(fmt::format("====avg_degree: {} ====", 1.0 * avg_degree / cur_element_count_));
 
-        cut_num_ = cur_element_count_;
+        cut_num_ = cur_element_count_ * 0.5;
         offset_code_ = new uint64_t[cur_element_count_];
+        memset(offset_code_, cur_element_count_, 999);
         code_size_aligned_ = ((code_size + 16) + (1 << 9) - 1) >> 9 << 9;   // 512 aligned
 
+        // original encoded data
         uint64_t sz_close = 0;
         for (uint64_t i = 0; i < cur_element_count_; ++i) {
             offset_code_[i] = sz_close;
-            if (i < cut_num_) {
-                int* data = (int*)get_linklist0(i);
-                uint64_t size = getListCount((linklistsizeint*)data);
-                sz_close += (code_size_aligned_ * (size + 1));
-            } else {
-                sz_close += code_size_aligned_;
-            }
+            sz_close += code_size_aligned_;
         }
         sz_close = (sz_close + (1 << 21) - 1) >> 21 << 21;
         void* ptr = std::aligned_alloc(1 << 21, sz_close);
         madvise(ptr, sz_close, MADV_HUGEPAGE);
         std::memset(ptr, 0, sz_close);
-
         data_int8 = std::shared_ptr<int8_t[]>(static_cast<int8_t*>(ptr), AlignedDeleter());
         for (uint64_t i = 0; i < cur_element_count_; ++i) {  // note here mixed
             auto* code = get_encoded_data(i, code_size_aligned_);
@@ -686,15 +685,29 @@ public:
             memcpy(code + code_size, &norm, 8);
         }
 
-        if (redundant_size_ != 0) {
+        // redundant neighbors
+        if (cut_num_ > 0) {
+            // storage
+            uint64_t sz_redundant = 0;
+            for (uint64_t i = 0; i < cut_num_; ++i) {
+                offset_code_[i] = sz_redundant;
+                int* data = (int*)get_linklist0(i);
+                uint64_t size = getListCount((linklistsizeint*)data);
+                sz_redundant += (code_size_aligned_ * size);
+            }
+            void* ptr_redundant = std::aligned_alloc(1 << 21, (sz_redundant + (1 << 21) - 1) >> 21 << 21);
+            madvise(ptr_redundant, sz_redundant, MADV_HUGEPAGE);
+            std::memset(ptr_redundant, 0, sz_redundant);
+            redundant_data_int8 = std::shared_ptr<int8_t[]>(static_cast<int8_t*>(ptr_redundant), AlignedDeleter());
+
+            // assign
             for (uint64_t i = 0; i < cut_num_; i++) {
                 int* data = (int*)get_linklist0(i);
                 uint64_t size = getListCount((linklistsizeint*)data);
-                auto* code = get_encoded_data(i, code_size_aligned_);
-                memcpy(code + code_size + 8, &size, 8);
+                auto* code = get_redundant_data(i, code_size_aligned_);
 
-                for (uint64_t j = 1; j <= size; j++) {
-                    uint64_t candidate_id = *(data + j);
+                for (uint64_t j = 0; j < size; j++) {
+                    uint64_t candidate_id = *(data + j + 1);
                     auto* neighbor_code = get_encoded_data(candidate_id, code_size_aligned_);
                     memcpy(code + j * code_size_aligned_, neighbor_code, code_size + 8);
                     memcpy(code + j * code_size_aligned_ + (code_size + 8), &candidate_id, 8);
@@ -705,13 +718,13 @@ public:
             for (uint64_t i = 0; i < cut_num_; i++) {
                 int* data = (int*)get_linklist0(i);
                 uint64_t size = getListCount((linklistsizeint*)data);
-                auto* code = get_encoded_data(i, code_size_aligned_);
+                auto* code = get_redundant_data(i, code_size_aligned_);
 
-                uint64_t size_valid = *(uint64_t*)(code + code_size + 8);
-                assert(size_valid == size);
+//                uint64_t size_valid = code;
+//                assert(size_valid == size);
 
-                for (uint64_t j = 1; j <= size; j++) {
-                    uint64_t candidate_id = *(data + j);
+                for (uint64_t j = 0; j < size; j++) {
+                    uint64_t candidate_id = *(data + j + 1);
                     auto* neighbor_code = get_encoded_data(candidate_id, code_size_aligned_);
                     for (int k = 0; k < code_size + 8; k++) {
                         assert((code + j * (code_size_aligned_))[k] == neighbor_code[k]);
@@ -1267,11 +1280,15 @@ public:
         } else if (sq_num_bits_ == 4) {
             code_size = dim / 2;
         }
-        auto* code = get_encoded_data(current_node_pair.second, code_size_aligned_);
-        uint64_t size = *(uint64_t*)(code + code_size + 8);
+        auto* code = get_redundant_data(current_node_pair.second, code_size_aligned_);
+        int* data = (int*)get_linklist0(current_node_pair.second);
+        size_t size = getListCount((linklistsizeint*)data);
 
-        for (int j = 1; j <= size; j++) {
-            _mm_prefetch((char*)(code + (j + 4) * (code_size_aligned_) + code_size + 8), _MM_HINT_T0);
+        for (int j = 0; j < size; j++) {
+            if (j + 4 < size) {
+                _mm_prefetch((char*)(code + (j + 4) * (code_size_aligned_) + code_size + 8),
+                             _MM_HINT_T0);
+            }
             uint64_t candidate_id = *(int64_t*)(code + j * (code_size_aligned_) + code_size + 8);
             if (!(visited_array[candidate_id] == visited_array_tag)) {
                 to_be_visited[count_no_visited++] = j;  // note here return j
@@ -1421,7 +1438,7 @@ public:
                                                             to_be_visited);
                 dist_cmp += count_no_visited;
 
-                auto* code = get_encoded_data(current_node_pair.second, code_size_aligned_);
+                auto* code = get_redundant_data(current_node_pair.second, code_size_aligned_);
                 for (size_t j = 0; j < this->po_; j++) {
                     auto vector_data_ptr = (uint8_t*)(code + to_be_visited[j] * (code_size_aligned_));
 #ifdef USE_SSE

@@ -122,7 +122,7 @@ HNSW::build(const DatasetPtr& base) {
 //                    failed_ids.emplace_back(ids[i]);
 //                }
 //            }
-            vsag::Graph graph(M_ * 2, 1, space->get_dist_func());
+            vsag::NNdescent graph(M_ * 2, 50, space->get_dist_func());
             graph.Build(base);
             alg_hnsw->set_graph(base, graph);
         }

@@ -17,6 +17,8 @@
 #include "../simd/simd.h"
 #include <vector>
 #include <random>
+#include <queue>
+#include <unordered_set>
 #include <iostream>
 #include "../utils.h"
 namespace vsag {
@@ -49,17 +51,27 @@ struct Node {
 
 struct Linklist {
     std::vector<Node> neigbors;
+    float greast_neighbor_distance = std::numeric_limits<float>::max();
 };
 
+
 class Graph {
+public:
+    virtual bool Build(const DatasetPtr dataset) = 0;
+
+    virtual std::vector<std::vector<uint32_t>>
+    GetGraph() = 0;
+};
+
+class RNNdescent: public Graph{
 
 public:
 
-    Graph(int64_t max_degree, int64_t turn, DistanceFunc distance): max_degree_(max_degree), turn_(turn), distance_(distance) {
+    RNNdescent(int64_t max_degree, int64_t turn, DistanceFunc distance): max_degree_(max_degree), turn_(turn), distance_(distance) {
 
     }
 
-    bool Build(const DatasetPtr dataset) {
+    bool Build(const DatasetPtr dataset) override {
         if (is_build_) {
             return false;
         }
@@ -87,7 +99,7 @@ public:
     }
 
     std::vector<std::vector<uint32_t>>
-    GetGraph(){
+    GetGraph() override {
         std::vector<std::vector<uint32_t>> extract_graph;
         extract_graph.resize(data_num_);
         for (int i = 0; i < data_num_; ++i) {
@@ -227,6 +239,269 @@ private:
 
 
 };
+
+
+
+class NNdescent: public Graph{
+
+public:
+
+    NNdescent(int64_t max_degree, int64_t turn, DistanceFunc distance): max_degree_(max_degree), turn_(turn), distance_(distance) {
+
+    }
+
+    bool Build(const DatasetPtr dataset) override {
+        if (is_build_) {
+            return false;
+        }
+        is_build_ = true;
+        dim_ = dataset->GetDim();
+        data_num_ = dataset->GetNumElements();
+        data_ = dataset->GetFloat32Vectors();
+        init_graph();
+        check_turn();
+        {
+            SlowTaskTimer t("hnsw graph");
+            for (int i = 0; i < turn_; ++i) {
+                std::vector<std::vector<uint32_t>> old_neigbors;
+                std::vector<std::vector<uint32_t>> new_neigbors;
+                sample_candidates(old_neigbors, new_neigbors, 0.2);
+                update_neighbors(old_neigbors, new_neigbors);
+                if ((i + 1) % 5 == 0) {
+                    search_neigbors();
+                }
+                check_turn();
+            }
+            for (int i = 0; i < data_num_; ++i) {
+                prune_graph(i);
+            }
+            check_turn();
+        }
+        return true;
+    }
+
+    std::vector<std::vector<uint32_t>>
+    GetGraph() override {
+        std::vector<std::vector<uint32_t>> extract_graph;
+        extract_graph.resize(data_num_);
+        for (int i = 0; i < data_num_; ++i) {
+            extract_graph[i].resize(graph[i].neigbors.size());
+            for (int j = 0; j < graph[i].neigbors.size(); ++j) {
+                extract_graph[i][j] = graph[i].neigbors[j].id;
+            }
+        }
+
+        return extract_graph;
+    }
+
+
+
+
+
+
+private:
+    inline float get_distance(uint32_t loc1, uint32_t loc2) {
+        return distance_(get_data_by_loc(loc1), get_data_by_loc(loc2), &dim_);
+    }
+
+    inline const float* get_data_by_loc(uint32_t loc) {
+        return data_ + loc * dim_;
+    }
+
+    void init_graph() {
+        graph.resize(data_num_);
+        visited_.resize(data_num_);
+        std::random_device rd;
+        std::uniform_int_distribution<int> k_generate(0, data_num_ - 1);
+#pragma omp for
+        for (int i = 0; i < data_num_; ++i) {
+            std::mt19937 rng(rd());
+            std::unordered_set<uint32_t> ids_set;
+            for (int j = 0; j < max_degree_; ++j) {
+                auto id = i;
+                while (id == i || ids_set.find(id) != ids_set.end()) {
+                    id = k_generate(rng);
+                }
+                ids_set.insert(id);
+                auto dist = get_distance(i, id);
+                graph[i].neigbors.emplace_back(id, dist);
+                graph[i].greast_neighbor_distance = std::min(graph[i].greast_neighbor_distance, dist);
+                visited_[i] = false;
+            }
+        }
+    }
+
+
+    void update_neighbors(std::vector<std::vector<uint32_t>>& old_neigbors,
+                     std::vector<std::vector<uint32_t>>& new_neigbors) {
+        std::vector<std::vector<Node>> new_candidates;
+        new_candidates.resize(data_num_);
+        for (int i = 0; i < data_num_; ++i) {
+            for (int j = 0; j < new_neigbors[i].size(); ++j) {
+                for (int k = j + 1; k < new_neigbors[i].size(); ++k) {
+                    if (new_neigbors[i][j] == new_neigbors[i][k]) {
+                        continue;
+                    }
+                    float dist = get_distance(new_neigbors[i][j], new_neigbors[i][k]);
+                    if (dist < graph[new_neigbors[i][j]].greast_neighbor_distance) {
+                        new_candidates[new_neigbors[i][j]].emplace_back(new_neigbors[i][k], dist);
+                    }
+                    if (dist < graph[new_neigbors[i][k]].greast_neighbor_distance) {
+                        new_candidates[new_neigbors[i][k]].emplace_back(new_neigbors[i][j], dist);
+                    }
+                }
+
+                for (int k = 0; k < old_neigbors[i].size(); ++k) {
+                    if (new_neigbors[i][j] == old_neigbors[i][k]) {
+                        continue;
+                    }
+                    float dist = get_distance(new_neigbors[i][j], old_neigbors[i][k]);
+                    if (dist < graph[new_neigbors[i][j]].greast_neighbor_distance) {
+                        new_candidates[new_neigbors[i][j]].emplace_back(old_neigbors[i][k], dist);
+                    }
+                    if (dist < graph[old_neigbors[i][k]].greast_neighbor_distance) {
+                        new_candidates[old_neigbors[i][k]].emplace_back(new_neigbors[i][j], dist);
+                    }
+                }
+            }
+        }
+
+        for (int i = 0; i < data_num_; ++i) {
+            graph[i].neigbors.insert(graph[i].neigbors.end(), new_candidates[i].begin(), new_candidates[i].end());
+            std::sort(graph[i].neigbors.begin(), graph[i].neigbors.end());
+            graph[i].neigbors.erase(std::unique(graph[i].neigbors.begin(), graph[i].neigbors.end()), graph[i].neigbors.end());
+            if (graph[i].neigbors.size() > max_degree_) {
+                graph[i].neigbors.resize(max_degree_);
+            }
+            graph[i].greast_neighbor_distance = graph[i].neigbors.back().distance;
+        }
+    }
+
+
+    void sample_candidates(std::vector<std::vector<uint32_t>>& old_neigbors,
+                      std::vector<std::vector<uint32_t>>& new_neigbors,
+                      float sample_rate) {
+        std::random_device rd;
+        std::uniform_real_distribution<float> p;
+        std::mt19937 rng(rd());
+        old_neigbors.resize(data_num_);
+        new_neigbors.resize(data_num_);
+
+        for (int i = 0; i < data_num_; ++i) {
+            for (int j = 0; j < graph[i].neigbors.size(); ++j) {
+                float current_state = p(rng);
+                if (current_state < sample_rate) {
+                    if (graph[i].neigbors[j].old) {
+                        old_neigbors[i].push_back(graph[i].neigbors[j].id);
+                        old_neigbors[graph[i].neigbors[j].id].push_back(i);
+                    } else {
+                        new_neigbors[i].push_back(graph[i].neigbors[j].id);
+                        new_neigbors[graph[i].neigbors[j].id].push_back(i);
+                        graph[i].neigbors[j].old = true;
+                    }
+                }
+            }
+        }
+    }
+
+
+    void search_neigbors() {
+        std::vector<std::vector<Node>> new_candidates;
+        new_candidates.resize(data_num_);
+        std::random_device rd;
+        std::uniform_int_distribution<int> k_generate(0, data_num_ - 1);
+        std::mt19937 rng(rd());
+        for (int i = 0; i < data_num_ / 100; ++i) {
+            int id = k_generate(rng);
+            while (visited_[id]) {
+                id = k_generate(rng);
+            }
+            std::priority_queue<Node> candidates;
+            std::priority_queue<Node> nearest_nerigbors;
+            std::unordered_set<uint32_t > visited_set;
+            float max_distance = graph[id].neigbors.back().distance;
+            for (int j = 0; j < graph[id].neigbors.size(); ++j) {
+                candidates.emplace(graph[id].neigbors[j].id, -graph[id].neigbors[j].distance);
+                visited_set.insert(graph[id].neigbors[j].id);
+            }
+            for (int j = 0; j < max_degree_ * 2; ++j) {
+                auto cur_node = candidates.top();
+                candidates.pop();
+                for (int k = 0; k < graph[cur_node.id].neigbors.size(); ++k) {
+                    if (visited_set.find(graph[cur_node.id].neigbors[k].id) != visited_set.end() || graph[cur_node.id].neigbors[k].id == id) {
+                        continue;
+                    }
+                    visited_set.insert(graph[cur_node.id].neigbors[k].id);
+                    auto dist = get_distance(id, graph[cur_node.id].neigbors[k].id);
+                    candidates.emplace(graph[cur_node.id].neigbors[k].id, -dist);
+                }
+                nearest_nerigbors.emplace(cur_node.id, cur_node.distance);
+            }
+            for (int j = 0; j < graph[id].neigbors.size(); ++j) {
+                graph[id].neigbors[j] = nearest_nerigbors.top();
+                graph[id].neigbors[j].distance = -graph[id].neigbors[j].distance;
+                nearest_nerigbors.pop();
+            }
+            if (max_distance == graph[id].neigbors.back().distance) {
+                visited_[id] = true;
+            }
+        }
+    }
+
+    void prune_graph(uint32_t loc) {
+        std::sort(graph[loc].neigbors.begin(), graph[loc].neigbors.end());
+        graph[loc].neigbors.erase(std::unique(graph[loc].neigbors.begin(), graph[loc].neigbors.end()), graph[loc].neigbors.end());
+        std::vector<Node> candidates;
+        for (int i = 0; i < graph[loc].neigbors.size(); ++i) {
+            bool flag = true;
+            for (int j = 0; j < candidates.size(); ++j) {
+                if (get_distance(graph[loc].neigbors[i].id, candidates[j].id) < graph[loc].neigbors[i].distance) {
+                    flag = false;
+                    break;
+                }
+            }
+            if (flag) {
+                candidates.push_back(graph[loc].neigbors[i]);
+            }
+        }
+        graph[loc].neigbors.swap(candidates);
+        if (graph[loc].neigbors.size() > max_degree_) {
+            graph[loc].neigbors.resize(max_degree_);
+        }
+    }
+
+    void check_turn() {
+        int edge_count = 0;
+        float loss = 0;
+        for (int i = 0; i < data_num_; ++i) {
+//            std::cout <<"check: ";
+            for (int j = 0; j < graph[i].neigbors.size(); ++j) {
+                loss += graph[i].neigbors[j].distance;
+//                                std::cout << graph[i].neigbors[j].distance << " ";
+            }
+//                        std::cout << std::endl;
+            edge_count += graph[i].neigbors.size();
+        }
+        loss /= edge_count;
+        std::cout << "loss:" << loss << "  edge_count:" << edge_count << std::endl;
+    }
+
+private:
+    size_t dim_;
+    int64_t data_num_;
+    int64_t is_build_ = false;
+    const float* data_;
+
+    int64_t max_degree_;
+    int64_t turn_;
+    std::vector<Linklist> graph;
+    std::vector<bool> visited_;
+
+    DistanceFunc distance_;
+
+
+};
+
 
 
 } // namespace vsag

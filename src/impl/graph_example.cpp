@@ -13,23 +13,11 @@
 // limitations under the License.
 
 #include "graph.h"
-void
-normalize(float* input_vector, int64_t dim) {
-    float magnitude = 0.0f;
-    for (int64_t i = 0; i < dim; ++i) {
-        magnitude += input_vector[i] * input_vector[i];
-    }
-    magnitude = std::sqrt(magnitude);
-
-    for (int64_t i = 0; i < dim; ++i) {
-        input_vector[i] = input_vector[i] / magnitude;
-    }
-}
 int main() {
 
-    int64_t num_vectors = 10000;
+    int64_t num_vectors = 100000;
     size_t dim = 128;
-    int64_t max_degree = 32;
+    int64_t max_degree = 64;
 
     // prepare ids and vectors
     auto ids = new int64_t[num_vectors];
@@ -45,12 +33,17 @@ int main() {
         vectors[i] = distrib_real(rng);
     }
 
-    for (int64_t i = 0; i < num_vectors; ++i) {
-        normalize(vectors + i * dim, dim);
-    }
+    vsag::DistanceFunc dist = vsag::GetL2DistanceFunc(dim);
+    std::vector<std::vector<std::pair<float, uint32_t>>> ground_truths(num_vectors);
 
-    vsag::DistanceFunc dist = vsag::GetL2DistanceFunc(32);
-//    std::vector<std::vector<std::pair<float, uint32_t>>> ground_truths(num_vectors);
+    vsag::DatasetPtr dataset = vsag::Dataset::Make();
+    dataset->NumElements(num_vectors)->Float32Vectors(vectors)->Dim(dim)->Owner(true);
+    vsag::NNdescent graph(max_degree, 30, dist);
+    graph.Build(dataset);
+
+
+//    auto extract_graph = graph.GetGraph();
+//
 //    float min_loss = 0;
 //    for (int i = 0; i < num_vectors; ++i) {
 //        for (int j = 0; j < num_vectors; ++j) {
@@ -59,16 +52,20 @@ int main() {
 //            }
 //        }
 //        std::sort(ground_truths[i].begin(), ground_truths[i].end());
+//        std::cout << i << " ";
 //        for (int j = 0; j < max_degree; ++j) {
+//            std::cout << ground_truths[i][j].second << " ";
 //            min_loss += ground_truths[i][j].first;
 //        }
+//        std::cout << std::endl;
+//        std::cout << i << " ";
+//        for (int j = 0; j < max_degree; ++j) {
+//            std::cout << extract_graph[i][j] << " ";
+//        }
+//        std::cout << std::endl;
+//        std::cout << std::endl;
 //    }
 //    std::cout << "min_loss:" << min_loss / (num_vectors * max_degree) << std::endl;
-
-    vsag::DatasetPtr dataset = vsag::Dataset::Make();
-    dataset->NumElements(num_vectors)->Float32Vectors(vectors)->Dim(dim)->Owner(true);
-    vsag::Graph graph(max_degree, 1, dist);
-    graph.Build(dataset);
 
 
 }

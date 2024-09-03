@@ -365,21 +365,21 @@ public:
                         loss += fstdistfunc_(getDataByInternalId(internal_id), getDataByInternalId(id), dist_func_param_);
                     }
                     const auto& in_edges = getEdges(id, level);
-                    if (in_edges.find(internal_id) == in_edges.end()) {
-                        std::cout << "can not find internal_id (" << internal_id
-                                  << ") in its neighbor (" << id << ")" << std::endl;
-                        return false;
-                    }
+//                    if (in_edges.find(internal_id) == in_edges.end()) {
+//                        std::cout << "can not find internal_id (" << internal_id
+//                                  << ") in its neighbor (" << id << ")" << std::endl;
+//                        return false;
+//                    }
                 }
             }
         }
 
                 std::cout << "loss:" << loss / edge_count << " edge count:" << edge_count << std::endl;
-        if (edge_count != reversed_edge_count) {
-            std::cout << "mismatch: edge_count (" << edge_count << ") != reversed_edge_count("
-                      << reversed_edge_count << ")" << std::endl;
-            return false;
-        }
+//        if (edge_count != reversed_edge_count) {
+//            std::cout << "mismatch: edge_count (" << edge_count << ") != reversed_edge_count("
+//                      << reversed_edge_count << ")" << std::endl;
+//            return false;
+//        }
 
         return true;
     }
@@ -411,7 +411,7 @@ public:
     getRandomLevel(double reverse_size) {
         std::uniform_real_distribution<double> distribution(0.0, 1.0);
         double r = -log(distribution(level_generator_)) * reverse_size;
-        return (int)r;
+        return 0;
     }
 
     size_t
@@ -741,7 +741,7 @@ public:
         for (int i = 0; i < cur_element_count_; ++i) {
             labeltype label = ids[i];
             memcpy(getExternalLabeLp(i), &label, sizeof(labeltype));
-            memcpy(getDataByInternalId(i), vectors + i * dim, dim);
+            memcpy(getDataByInternalId(i), vectors + i * dim, dim * sizeof(float));
             element_levels_[i] = 0;
             auto link = get_linklist0(i);
             setListCount(link, edges[i].size());

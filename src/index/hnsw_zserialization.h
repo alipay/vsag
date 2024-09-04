@@ -23,14 +23,14 @@
 namespace vsag {
 
 class HNSW;
-class test_suite;
+class serial_suite;
 
 class HnswSerialization {
 public:
     /* kv, metadata in key "_metadata" */
     static tl::expected<BinarySet, Error>
     KvSerialize(const HNSW& hnsw,
-                uint64_t version = 0  // should use newest version always, keep for debugging
+                uint64_t version = 1  // should use newest version always, keep for debugging
     );
 
     static tl::expected<void, Error>
@@ -44,32 +44,32 @@ public:
     static tl::expected<void, Error>
     StreamingSerialize(const HNSW& hnsw,
                        std::ostream& out_stream,
-                       uint64_t version = 0  // should use newest version always, keep for debugging
+                       uint64_t version = 1  // should use newest version always, keep for debugging
     );
 
     static tl::expected<void, Error>
     StreamingDeserialize(HNSW& hnsw, std::istream& in_stream);
 
 private:
-    friend class test_suite;
+    friend class serial;
 
     /* persistent format version 1: add metadata */
     class v1 {
     public:
         static tl::expected<BinarySet, Error>
-        kv_serialize(const HNSW& hnsw);
+        KvSerialize(const HNSW& hnsw);
 
         static tl::expected<void, Error>
-        kv_deserialize(HNSW& hnsw, const BinarySet& binary_set);
+        KvDeserialize(HNSW& hnsw, const BinarySet& binary_set);
 
         static tl::expected<void, Error>
-        kv_deserialize(HNSW& hnsw, const ReaderSet& reader_set);
+        KvDeserialize(HNSW& hnsw, const ReaderSet& reader_set);
 
         static tl::expected<void, Error>
-        streaming_serialize(const HNSW& hnsw, std::ostream& out_stream);
+        StreamingSerialize(const HNSW& hnsw, std::ostream& out_stream);
 
         static tl::expected<void, Error>
-        streaming_deserialize(HNSW& hnsw, std::istream& in_stream);
+        StreamingDeserialize(HNSW& hnsw, std::istream& in_stream);
     };
 
 private:
@@ -77,19 +77,19 @@ private:
     class v0 {
     public:
         static tl::expected<BinarySet, Error>
-        kv_serialize(const HNSW& hnsw);
+        KvSerialize(const HNSW& hnsw);
 
         static tl::expected<void, Error>
-        kv_deserialize(HNSW& hnsw, const BinarySet& binary_set);
+        KvDeserialize(HNSW& hnsw, const BinarySet& binary_set);
 
         static tl::expected<void, Error>
-        kv_deserialize(HNSW& hnsw, const ReaderSet& reader_set);
+        KvDeserialize(HNSW& hnsw, const ReaderSet& reader_set);
 
         static tl::expected<void, Error>
-        streaming_serialize(const HNSW& hnsw, std::ostream& out_stream);
+        StreamingSerialize(const HNSW& hnsw, std::ostream& out_stream);
 
         static tl::expected<void, Error>
-        streaming_deserialize(HNSW& hnsw, std::istream& in_stream);
+        StreamingDeserialize(HNSW& hnsw, std::istream& in_stream);
 
     private:
         static BinarySet

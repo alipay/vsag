@@ -32,4 +32,15 @@ struct StringMaker<tl::expected<T, vsag::Error>> {
         }
     }
 };
+template <>
+struct StringMaker<tl::expected<void, vsag::Error>> {
+    static std::string
+    convert(tl::expected<void, vsag::Error> const& value) {
+        if (value.has_value()) {
+            return "";
+        } else {
+            return "null, error message: " + value.error().message;
+        }
+    }
+};
 }  // namespace Catch

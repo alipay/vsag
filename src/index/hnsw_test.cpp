@@ -21,6 +21,7 @@
 
 #include "../logger.h"
 #include "catch2/catch_message.hpp"
+#include "catch2_utils.h"
 #include "fixtures.h"
 #include "vsag/bitset.h"
 #include "vsag/errors.h"
@@ -262,16 +263,15 @@ TEST_CASE("serialize empty index", "[ut][hnsw]") {
 
     SECTION("serialize to binaryset") {
         auto result = index->Serialize();
+        CAPTURE(result);
         REQUIRE(result.has_value());
-        REQUIRE(result.value().Contains(vsag::BLANK_INDEX));
     }
 
     SECTION("serialize to fstream") {
         fixtures::temp_dir dir("hnsw_test_serialize_empty_index");
         std::fstream out_stream(dir.path + "empty_index.bin", std::ios::out | std::ios::binary);
         auto result = index->Serialize(out_stream);
-        REQUIRE_FALSE(result.has_value());
-        REQUIRE(result.error().type == vsag::ErrorType::INDEX_EMPTY);
+        REQUIRE(result.has_value());
     }
 }
 
@@ -323,6 +323,7 @@ TEST_CASE("deserialize on not empty index", "[ut][hnsw]") {
 
         std::fstream in_stream(dir.path + "index.bin", std::ios::in | std::ios::binary);
         auto voidresult = index->Deserialize(in_stream);
+        CAPTURE(voidresult);
         REQUIRE_FALSE(voidresult.has_value());
         REQUIRE(voidresult.error().type == vsag::ErrorType::INDEX_NOT_EMPTY);
         in_stream.close();

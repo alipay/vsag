@@ -30,7 +30,7 @@
 
 namespace vsag {
 
-constexpr bool enable_v1 = false;
+constexpr bool enable_v1 = true;
 constexpr bool enable_v0 = true;
 
 /* ---------------- interfaces ---------------- */
@@ -39,12 +39,12 @@ HnswSerialization::KvSerialize(const HNSW& hnsw, uint64_t version) {
     switch (version) {
         case 1:
             if constexpr (enable_v1) {
-                return v1::kv_serialize(hnsw);
+                return v1::KvSerialize(hnsw);
             }
             // goto next if disable
         case 0:
             if constexpr (enable_v0) {
-                return v0::kv_serialize(hnsw);
+                return v0::KvSerialize(hnsw);
             }
             // goto default if disable
         default: {
@@ -57,12 +57,18 @@ HnswSerialization::KvSerialize(const HNSW& hnsw, uint64_t version) {
 
 tl::expected<void, Error>
 HnswSerialization::KvDeserialize(HNSW& hnsw, const BinarySet& binary_set) {
+    //  check hnsw object
+    if (hnsw.alg_hnsw->getCurrentElementCount() > 0) {
+        LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
+                              "failed to deserialize: index is not empty");
+    }
+
     // try v1
     if constexpr (enable_v1) {  // if stmt for debugging
         try {
-            v1::kv_deserialize(hnsw, binary_set);
+            v1::KvDeserialize(hnsw, binary_set);
             return {};
-        } catch (DeserializeException& e) {
+        } catch (const DesearializationException& e) {
             logger::debug("binaryset is not version 1 format");
         } catch (const std::exception& e) {
             LOG_ERROR_AND_RETURNS(ErrorType::UNKNOWN_ERROR,
@@ -74,7 +80,7 @@ HnswSerialization::KvDeserialize(HNSW& hnsw, const BinarySet& binary_set) {
     // try v0
     if constexpr (enable_v0) {  // if stmt for debugging
         try {
-            return v0::kv_deserialize(hnsw, binary_set);
+            return v0::KvDeserialize(hnsw, binary_set);
         } catch (...) {
             return tl::unexpected(
                 Error(ErrorType::UNKNOWN_ERROR, "failed to (kv-)deserialize index(version 0)"));
@@ -90,9 +96,9 @@ HnswSerialization::KvDeserialize(HNSW& hnsw, const ReaderSet& reader_set) {
     // try v1
     if constexpr (enable_v1) {  // if stmt for debugging
         try {
-            v1::kv_deserialize(hnsw, reader_set);
+            v1::KvDeserialize(hnsw, reader_set);
             return {};
-        } catch (DeserializeException& e) {
+        } catch (const DesearializationException& e) {
             logger::debug("binaryset is not version 1 format");
         } catch (const std::exception& e) {
             LOG_ERROR_AND_RETURNS(ErrorType::UNKNOWN_ERROR,
@@ -104,7 +110,7 @@ HnswSerialization::KvDeserialize(HNSW& hnsw, const ReaderSet& reader_set) {
     // try v0
     if constexpr (enable_v0) {  // if stmt for debugging
         try {
-            return v0::kv_deserialize(hnsw, reader_set);
+            return v0::KvDeserialize(hnsw, reader_set);
         } catch (...) {
             return tl::unexpected(
                 Error(ErrorType::UNKNOWN_ERROR, "failed to (kv-)deserialize index(version 0)"));
@@ -122,14 +128,13 @@ HnswSerialization::StreamingSerialize(const HNSW& hnsw,
     switch (version) {
         case 1:
             if constexpr (enable_v1) {
-                v1::streaming_serialize(hnsw, out_stream);
+                v1::StreamingSerialize(hnsw, out_stream);
                 return {};
             }
-
             // goto next if disable
         case 0:
             if constexpr (enable_v0) {
-                return v0::streaming_serialize(hnsw, out_stream);
+                return v0::StreamingSerialize(hnsw, out_stream);
             }
             // goto default if disable
         default: {
@@ -142,12 +147,18 @@ HnswSerialization::StreamingSerialize(const HNSW& hnsw,
 
 tl::expected<void, Error>
 HnswSerialization::StreamingDeserialize(HNSW& hnsw, std::istream& in_stream) {
+    //  check hnsw object
+    if (hnsw.alg_hnsw->getCurrentElementCount() > 0) {
+        LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
+                              "failed to deserialize: index is not empty");
+    }
+
     // try v1
     if constexpr (enable_v1) {  // if stmt for debugging
         try {
-            v1::streaming_deserialize(hnsw, in_stream);
+            v1::StreamingDeserialize(hnsw, in_stream);
             return {};
-        } catch (DeserializeException& e) {
+        } catch (const DesearializationException& e) {
             logger::debug("binaryset is not version 1 format");
         } catch (const std::exception& e) {
             LOG_ERROR_AND_RETURNS(ErrorType::UNKNOWN_ERROR,
@@ -159,7 +170,7 @@ HnswSerialization::StreamingDeserialize(HNSW& hnsw, std::istream& in_stream) {
     // try v0
     if constexpr (enable_v0) {  // if stmt for debugging
         try {
-            return v0::streaming_deserialize(hnsw, in_stream);
+            return v0::StreamingDeserialize(hnsw, in_stream);
         } catch (...) {
             return tl::unexpected(
                 Error(ErrorType::UNKNOWN_ERROR, "failed to (stream-)deserialize index(version 0)"));
@@ -172,7 +183,7 @@ HnswSerialization::StreamingDeserialize(HNSW& hnsw, std::istream& in_stream) {
 
 /* ---------------- v1 format ---------------- */
 tl::expected<BinarySet, Error>
-HnswSerialization::v1::kv_serialize(const HNSW& hnsw) {
+HnswSerialization::v1::KvSerialize(const HNSW& hnsw) {
     SlowTaskTimer t("hnsw serialize");
 
     BinarySet bs;
@@ -233,29 +244,22 @@ mdata:
 }
 
 tl::expected<void, Error>
-HnswSerialization::v1::kv_deserialize(HNSW& hnsw, const BinarySet& binary_set) {
+HnswSerialization::v1::KvDeserialize(HNSW& hnsw, const BinarySet& binary_set) {
     SlowTaskTimer t("hnsw deserialize");
-
-    //  check hnsw object
-    if (hnsw.alg_hnsw->getCurrentElementCount() > 0) {
-        throw DeserializeException("");
-        LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
-                              "failed to deserialize: index is not empty");
-    }
 
     // check metadata
     if (not binary_set.Contains("_mdata")) {
         // not v1
-        throw DeserializeException("older than v1, not contains metadata");
+        throw DesearializationException("older than v1, not contains metadata");
     }
 
     auto b_mdata = binary_set.Get("_mdata");
     auto metadata = nlohmann::json::parse(std::string((char*)b_mdata.data.get(), b_mdata.size));
     if (not metadata.contains("version")) {
-        throw DeserializeException("unexpected: version must in");
+        throw DesearializationException("unexpected: version must in");
     }
     if (metadata["version"] != 1) {
-        throw DeserializeException("version not match");
+        throw DesearializationException("version not match");
     }
 
     // check if it's an empty index
@@ -291,20 +295,13 @@ HnswSerialization::v1::kv_deserialize(HNSW& hnsw, const BinarySet& binary_set) {
 }
 
 tl::expected<void, Error>
-HnswSerialization::v1::kv_deserialize(HNSW& hnsw, const ReaderSet& reader_set) {
+HnswSerialization::v1::KvDeserialize(HNSW& hnsw, const ReaderSet& reader_set) {
     SlowTaskTimer t("hnsw deserialize");
-
-    //  check hnsw object
-    if (hnsw.alg_hnsw->getCurrentElementCount() > 0) {
-        throw DeserializeException("");
-        LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
-                              "failed to deserialize: index is not empty");
-    }
 
     // check metadata
     if (not reader_set.Contains("_mdata")) {
         // not v1
-        throw DeserializeException("older than v1, not contains metadata");
+        throw DesearializationException("older than v1, not contains metadata");
     }
 
     auto r_mdata = reader_set.Get("_mdata");
@@ -312,10 +309,10 @@ HnswSerialization::v1::kv_deserialize(HNSW& hnsw, const ReaderSet& reader_set) {
     r_mdata->Read(0, r_mdata->Size(), mdata_buf.get());
     auto metadata = nlohmann::json::parse(std::string((char*)mdata_buf.get(), r_mdata->Size()));
     if (not metadata.contains("version")) {
-        throw DeserializeException("unexpected: version must in");
+        throw DesearializationException("unexpected: version must in");
     }
     if (metadata["version"] != 1) {
-        throw DeserializeException("version not match");
+        throw DesearializationException("version not match");
     }
 
     // check if it's an empty index
@@ -340,7 +337,7 @@ HnswSerialization::v1::kv_deserialize(HNSW& hnsw, const ReaderSet& reader_set) {
 }
 
 tl::expected<void, Error>
-HnswSerialization::v1::streaming_serialize(const HNSW& hnsw, std::ostream& out_stream) {
+HnswSerialization::v1::StreamingSerialize(const HNSW& hnsw, std::ostream& out_stream) {
     SlowTaskTimer t("hnsw serialize");
 
     // TODO(wxyu): unify check
@@ -380,35 +377,30 @@ HnswSerialization::v1::streaming_serialize(const HNSW& hnsw, std::ostream& out_s
 }
 
 tl::expected<void, Error>
-HnswSerialization::v1::streaming_deserialize(HNSW& hnsw, std::istream& in_stream) {
+HnswSerialization::v1::StreamingDeserialize(HNSW& hnsw, std::istream& in_stream) {
     SlowTaskTimer t("hnsw deserialize");
-
-    // TODO(wxyu): unify check
-    if (hnsw.alg_hnsw->getCurrentElementCount() > 0) {
-        LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
-                              "failed to deserialize: index is not empty");
-    }
 
     // footer part: check and parse the metadata
     in_stream.seekg(0, std::ios::end);
     uint64_t length = in_stream.tellg();
     logger::debug("in_stream.length=" + std::to_string(length));
     if (length < 4096) {
-        throw DeserializeException("not v1");
+        throw DesearializationException("not v1");
     }
 
     in_stream.seekg(-4096, std::ios::end);
     char buffer[4096] = {};
     in_stream.read(buffer, 4096);
+    in_stream.seekg(0, std::ios::beg);
 
     const char* VSAG = "VSAG";
     if (std::memcmp(buffer, VSAG, 4) != 0) {
-        throw DeserializeException("not v1");
+        throw DesearializationException("not v1");
     }
 
     auto metadata = nlohmann::json::parse(std::string(buffer + 4, 4096 - 4));
     if (not metadata.contains("version") or metadata["version"] != 1) {
-        throw DeserializeException("not v1");
+        throw DesearializationException("not v1");
     }
 
     try {
@@ -429,7 +421,7 @@ HnswSerialization::v1::streaming_deserialize(HNSW& hnsw, std::istream& in_stream
 
 /* ---------------- v0 format ---------------- */
 tl::expected<BinarySet, Error>
-HnswSerialization::v0::kv_serialize(const HNSW& hnsw) {
+HnswSerialization::v0::KvSerialize(const HNSW& hnsw) {
     if (hnsw.GetNumElements() == 0) {
         // return a special binaryset means empty
         return empty_binaryset();
@@ -460,12 +452,8 @@ HnswSerialization::v0::kv_serialize(const HNSW& hnsw) {
 }
 
 tl::expected<void, Error>
-HnswSerialization::v0::kv_deserialize(HNSW& hnsw, const BinarySet& binary_set) {
+HnswSerialization::v0::KvDeserialize(HNSW& hnsw, const BinarySet& binary_set) {
     SlowTaskTimer t("hnsw deserialize");
-    if (hnsw.alg_hnsw->getCurrentElementCount() > 0) {
-        LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
-                              "failed to deserialize: index is not empty");
-    }
 
     // check if binaryset is a empty index
     if (binary_set.Contains(BLANK_INDEX)) {
@@ -496,12 +484,8 @@ HnswSerialization::v0::kv_deserialize(HNSW& hnsw, const BinarySet& binary_set) {
 }
 
 tl::expected<void, Error>
-HnswSerialization::v0::kv_deserialize(HNSW& hnsw, const ReaderSet& reader_set) {
+HnswSerialization::v0::KvDeserialize(HNSW& hnsw, const ReaderSet& reader_set) {
     SlowTaskTimer t("hnsw deserialize");
-    if (hnsw.alg_hnsw->getCurrentElementCount() > 0) {
-        LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
-                              "failed to deserialize: index is not empty");
-    }
 
     // check if readerset is a empty index
     if (reader_set.Contains(BLANK_INDEX)) {
@@ -523,7 +507,7 @@ HnswSerialization::v0::kv_deserialize(HNSW& hnsw, const ReaderSet& reader_set) {
 }
 
 tl::expected<void, Error>
-HnswSerialization::v0::streaming_serialize(const HNSW& hnsw, std::ostream& out_stream) {
+HnswSerialization::v0::StreamingSerialize(const HNSW& hnsw, std::ostream& out_stream) {
     if (hnsw.GetNumElements() == 0) {
         LOG_ERROR_AND_RETURNS(ErrorType::INDEX_EMPTY, "failed to serialize: hnsw index is empty");
 
@@ -549,12 +533,8 @@ HnswSerialization::v0::streaming_serialize(const HNSW& hnsw, std::ostream& out_s
 }
 
 tl::expected<void, Error>
-HnswSerialization::v0::streaming_deserialize(HNSW& hnsw, std::istream& in_stream) {
+HnswSerialization::v0::StreamingDeserialize(HNSW& hnsw, std::istream& in_stream) {
     SlowTaskTimer t("hnsw deserialize");
-    if (hnsw.alg_hnsw->getCurrentElementCount() > 0) {
-        LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
-                              "failed to deserialize: index is not empty");
-    }
 
     try {
         hnsw.alg_hnsw->loadIndex(in_stream, hnsw.space.get());

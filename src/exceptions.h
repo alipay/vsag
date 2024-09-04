@@ -18,10 +18,16 @@
 
 namespace vsag {
 
-class DeserializeException : protected std::runtime_error {
+class DesearializationException : protected std::runtime_error {
 public:
-    DeserializeException(const std::string& msg) : std::runtime_error(msg.c_str()) {
+    DesearializationException(const std::string& msg) : std::runtime_error(msg.c_str()) {
     }
 };
+
+// class VersionMismatch : protected DesearializationException {
+// public:
+//     VersionMismatch(const std::string& msg) : DesearializationException(msg.c_str()) {
+//     }
+// };
 
 }  // namespace vsag

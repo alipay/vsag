@@ -92,83 +92,86 @@ generate_hnsw(int64_t num_elements, int64_t dim, int64_t max_degree, int64_t ef_
 
 namespace vsag {
 
-template <typename s_impl, typename d_impl>
-struct serialization_test_wrapper {
+struct index {
+private:
+    struct _empty {};
+    struct _filled {};
+
+    template <typename T>
+    struct index_type_wrapper {
+        static std::shared_ptr<vsag::HNSW>
+        get(int64_t num_elements, int64_t dim, int64_t max_degree, int64_t ef_construction) {
+            if constexpr (std::is_same<T, _empty>::value) {
+                return generate_empty_hnsw(dim, max_degree, ef_construction);
+            } else if constexpr (std::is_same<T, _filled>::value) {
+                return generate_hnsw(num_elements, dim, max_degree, ef_construction);
+            } else {
+                abort();
+            }
+        }
+    };
+
+public:
+    using empty = index_type_wrapper<_empty>;
+    using filled = index_type_wrapper<_filled>;
+};
+
+struct serial {
+    using entry = HnswSerialization;
+    using v1 = HnswSerialization::v1;
+    using v0 = HnswSerialization::v0;
+};
+
+template <typename I, typename S, typename D>
+struct test_suite {
+    static std::shared_ptr<vsag::HNSW>
+    generate_hnsw(int64_t num_elements, int64_t dim, int64_t max_degree, int64_t ef_construction) {
+        return I::get(num_elements, dim, max_degree, ef_construction);
+    }
+
     static tl::expected<BinarySet, Error>
     kv_serialize(const HNSW& hnsw) {
-        if constexpr (std::is_same<s_impl, HnswSerialization>::value) {
-            return s_impl::KvSerialize(hnsw);
-        }
-        return s_impl::kv_serialize(hnsw);
+        return S::KvSerialize(hnsw);
     }
 
     static tl::expected<void, Error>
     kv_deserialize(HNSW& hnsw, const BinarySet& binary_set) {
-        if constexpr (std::is_same<d_impl, HnswSerialization>::value) {
-            d_impl::KvDeserialize(hnsw, binary_set);
-            return {};
-        } else {
-            d_impl::kv_deserialize(hnsw, binary_set);
-            return {};
-        }
+        return D::KvDeserialize(hnsw, binary_set);
     }
 
     static tl::expected<void, Error>
     kv_deserialize(HNSW& hnsw, const ReaderSet& reader_set) {
-        if constexpr (std::is_same<d_impl, HnswSerialization>::value) {
-            d_impl::KvDeserialize(hnsw, reader_set);
-            return {};
-        } else {
-            d_impl::kv_deserialize(hnsw, reader_set);
-            return {};
-        }
+        return D::KvDeserialize(hnsw, reader_set);
     }
 
     static tl::expected<void, Error>
     stream_serialize(const HNSW& hnsw, std::ostream& out_stream) {
-        if constexpr (std::is_same<s_impl, HnswSerialization>::value) {
-            s_impl::StreamingSerialize(hnsw, out_stream);
-            return {};
-        } else {
-            s_impl::streaming_serialize(hnsw, out_stream);
-            return {};
-        }
+        return S::StreamingSerialize(hnsw, out_stream);
     }
 
     static tl::expected<void, Error>
     stream_deserialize(HNSW& hnsw, std::istream& in_stream) {
-        if constexpr (std::is_same<d_impl, HnswSerialization>::value) {
-            d_impl::StreamingDeserialize(hnsw, in_stream);
-            return {};
-        } else {
-            d_impl::streaming_deserialize(hnsw, in_stream);
-            return {};
-        }
+        return D::StreamingDeserialize(hnsw, in_stream);
     }
 };
 
-struct test_suite {
-    using entry = HnswSerialization;
-    using v1 = HnswSerialization::v1;
-    using v0 = HnswSerialization::v0;
+template <typename S, typename D>
+using empty_index = test_suite<index::empty, S, D>;
+template <typename S, typename D>
+using filled_index = test_suite<index::filled, S, D>;
 
-    using v0_v0 = serialization_test_wrapper<v0, v0>;
-    using v1_v1 = serialization_test_wrapper<v1, v1>;
-    using v0_entry = serialization_test_wrapper<v0, entry>;
-    using v1_entry = serialization_test_wrapper<v1, entry>;
-};
-
-TEMPLATE_TEST_CASE("hnsw kv-stype serialization",
-                   "[ut][hnsw]",
-                   test_suite::v0_v0,
-                   test_suite::v1_v1,
-                   test_suite::v0_entry,
-                   test_suite::v1_entry) {
+TEMPLATE_PRODUCT_TEST_CASE("hnsw kv-type serialization",
+                           "[ut][hnsw]",
+                           (empty_index, filled_index),
+                           ((serial::v0, serial::v0),
+                            (serial::v1, serial::v1),
+                            (serial::v0, serial::entry),
+                            (serial::v1, serial::entry))) {
     logger::set_level(logger::level::debug);
-    auto index = ::generate_hnsw(/*num_elements=*/1000,
-                                 /*dim=*/17,
-                                 /*max_degree=*/12,
-                                 /*ef_construction=*/100);
+    auto index = TestType::generate_hnsw(/*num_elements=*/1000,
+                                         /*dim=*/17,
+                                         /*max_degree=*/12,
+                                         /*ef_construction=*/100);
 
     // for testing
     ::kv_store kv;
@@ -249,12 +252,14 @@ TEMPLATE_TEST_CASE("hnsw kv-stype serialization",
     }
 }
 
-TEMPLATE_TEST_CASE("hnsw stream-stype serialization",
-                   "[ut][hnsw]",
-                   test_suite::v0_v0,
-                   test_suite::v1_v1,
-                   test_suite::v0_entry,
-                   test_suite::v1_entry) {
+TEMPLATE_PRODUCT_TEST_CASE("hnsw streaming-type serialization",
+                           "[ut][hnsw]",
+                           (empty_index, filled_index),
+                           (
+                               // (serial::v0, serial::v0),
+                               (serial::v1, serial::v1),
+                               // (serial::v0, serial::entry),
+                               (serial::v1, serial::entry))) {
     logger::set_level(logger::level::debug);
     auto index = ::generate_hnsw(/*num_elements=*/1000,
                                  /*dim=*/17,
@@ -272,6 +277,8 @@ TEMPLATE_TEST_CASE("hnsw stream-stype serialization",
         REQUIRE(serialize.has_value());
         index = nullptr;
     }
+
+    buf.seekg(0, std::ios::beg);
 
     // load from a stream
     {

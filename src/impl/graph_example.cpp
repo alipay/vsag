@@ -13,11 +13,11 @@
 // limitations under the License.
 
 #include "graph.h"
-int main() {
-
-    int64_t num_vectors = 100000;
+int
+main() {
+    int64_t num_vectors = 1000;
     size_t dim = 128;
-    int64_t max_degree = 64;
+    int64_t max_degree = 32;
 
     // prepare ids and vectors
     auto ids = new int64_t[num_vectors];
@@ -41,31 +41,28 @@ int main() {
     vsag::NNdescent graph(max_degree, 30, dist);
     graph.Build(dataset);
 
-
-//    auto extract_graph = graph.GetGraph();
-//
-//    float min_loss = 0;
-//    for (int i = 0; i < num_vectors; ++i) {
-//        for (int j = 0; j < num_vectors; ++j) {
-//            if (i != j) {
-//                ground_truths[i].emplace_back(dist(vectors + i * dim, vectors + j * dim, &dim), j);
-//            }
-//        }
-//        std::sort(ground_truths[i].begin(), ground_truths[i].end());
-//        std::cout << i << " ";
-//        for (int j = 0; j < max_degree; ++j) {
-//            std::cout << ground_truths[i][j].second << " ";
-//            min_loss += ground_truths[i][j].first;
-//        }
-//        std::cout << std::endl;
-//        std::cout << i << " ";
-//        for (int j = 0; j < max_degree; ++j) {
-//            std::cout << extract_graph[i][j] << " ";
-//        }
-//        std::cout << std::endl;
-//        std::cout << std::endl;
-//    }
-//    std::cout << "min_loss:" << min_loss / (num_vectors * max_degree) << std::endl;
-
-
+    //    auto extract_graph = graph.GetGraph();
+    //
+    //    float min_loss = 0;
+    //    for (int i = 0; i < num_vectors; ++i) {
+    //        for (int j = 0; j < num_vectors; ++j) {
+    //            if (i != j) {
+    //                ground_truths[i].emplace_back(dist(vectors + i * dim, vectors + j * dim, &dim), j);
+    //            }
+    //        }
+    //        std::sort(ground_truths[i].begin(), ground_truths[i].end());
+    //        std::cout << i << " ";
+    //        for (int j = 0; j < max_degree; ++j) {
+    //            std::cout << ground_truths[i][j].second << " ";
+    //            min_loss += ground_truths[i][j].first;
+    //        }
+    //        std::cout << std::endl;
+    //        std::cout << i << " ";
+    //        for (int j = 0; j < max_degree; ++j) {
+    //            std::cout << extract_graph[i][j] << " ";
+    //        }
+    //        std::cout << std::endl;
+    //        std::cout << std::endl;
+    //    }
+    //    std::cout << "min_loss:" << min_loss / (num_vectors * max_degree) << std::endl;
 }

@@ -74,7 +74,7 @@ public:
 
     tl::expected<std::vector<int64_t>, Error>
     Build(const DatasetPtr& base) override {
-        SAFE_CALL(return this->build(base));
+        return this->build(base);
     }
 
     tl::expected<std::vector<int64_t>, Error>

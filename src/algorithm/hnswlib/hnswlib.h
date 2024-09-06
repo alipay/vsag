@@ -71,7 +71,6 @@ xgetbv(unsigned int index) {
 // Adapted from https://github.com/Mysticial/FeatureDetector
 #define _XCR_XFEATURE_ENABLED_MASK 0
 
-
 #include "../../impl/graph.h"
 #include "vsag/dataset.h"
 static bool

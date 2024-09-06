@@ -1037,10 +1037,8 @@ public:
         // output.close();
     }
 
-
     void
     set_graph(vsag::DatasetPtr dataset, vsag::Graph& graph) override {
-
     }
 
     size_t

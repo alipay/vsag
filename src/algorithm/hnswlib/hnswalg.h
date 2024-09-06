@@ -362,24 +362,26 @@ public:
                 for (int j = 0; j < size; ++j) {
                     auto id = link_list[j];
                     if (level == 0) {
-                        loss += fstdistfunc_(getDataByInternalId(internal_id), getDataByInternalId(id), dist_func_param_);
+                        loss += fstdistfunc_(getDataByInternalId(internal_id),
+                                             getDataByInternalId(id),
+                                             dist_func_param_);
                     }
                     const auto& in_edges = getEdges(id, level);
-//                    if (in_edges.find(internal_id) == in_edges.end()) {
-//                        std::cout << "can not find internal_id (" << internal_id
-//                                  << ") in its neighbor (" << id << ")" << std::endl;
-//                        return false;
-//                    }
+                    //                    if (in_edges.find(internal_id) == in_edges.end()) {
+                    //                        std::cout << "can not find internal_id (" << internal_id
+                    //                                  << ") in its neighbor (" << id << ")" << std::endl;
+                    //                        return false;
+                    //                    }
                 }
             }
         }
 
-                std::cout << "loss:" << loss / edge_count << " edge count:" << edge_count << std::endl;
-//        if (edge_count != reversed_edge_count) {
-//            std::cout << "mismatch: edge_count (" << edge_count << ") != reversed_edge_count("
-//                      << reversed_edge_count << ")" << std::endl;
-//            return false;
-//        }
+        std::cout << "loss:" << loss / edge_count << " edge count:" << edge_count << std::endl;
+        //        if (edge_count != reversed_edge_count) {
+        //            std::cout << "mismatch: edge_count (" << edge_count << ") != reversed_edge_count("
+        //                      << reversed_edge_count << ")" << std::endl;
+        //            return false;
+        //        }
 
         return true;
     }
@@ -411,7 +413,7 @@ public:
     getRandomLevel(double reverse_size) {
         std::uniform_real_distribution<double> distribution(0.0, 1.0);
         double r = -log(distribution(level_generator_)) * reverse_size;
-        return 0;
+        return (int)r;
     }
 
     size_t
@@ -487,11 +489,11 @@ public:
 
             for (size_t j = 0; j < size; j++) {
                 tableint candidate_id = *(datal + j);
-#ifdef USE_SSE
-                size_t pre_l = std::min(j, size - 2);
-                _mm_prefetch((char*)(visited_array + *(datal + pre_l + 1)), _MM_HINT_T0);
-                _mm_prefetch(getDataByInternalId(*(datal + pre_l + 1)), _MM_HINT_T0);
-#endif
+                //#ifdef USE_SSE
+                //                size_t pre_l = std::min(j, size - 2);
+                //                _mm_prefetch((char*)(visited_array + *(datal + pre_l + 1)), _MM_HINT_T0);
+                //                _mm_prefetch(getDataByInternalId(*(datal + pre_l + 1)), _MM_HINT_T0);
+                //#endif
                 if (visited_array[candidate_id] == visited_array_tag)
                     continue;
                 visited_array[candidate_id] = visited_array_tag;
@@ -583,13 +585,13 @@ public:
 
             for (size_t j = 1; j <= size; j++) {
                 int candidate_id = *(data + j);
-                size_t pre_l = std::min(j, size - 2);
-                auto vector_data_ptr =
-                    data_level0_memory_->getElementPtr((*(data + pre_l + 1)), offsetData_);
-#ifdef USE_SSE
-                _mm_prefetch((char*)(visited_array + *(data + pre_l + 1)), _MM_HINT_T0);
-                _mm_prefetch(vector_data_ptr, _MM_HINT_T0);  ////////////
-#endif
+                //                size_t pre_l = std::min(j, size - 2);
+                //                auto vector_data_ptr =
+                //                    data_level0_memory_->getElementPtr((*(data + pre_l + 1)), offsetData_);
+                //#ifdef USE_SSE
+                //                _mm_prefetch((char*)(visited_array + *(data + pre_l + 1)), _MM_HINT_T0);
+                //                _mm_prefetch(vector_data_ptr, _MM_HINT_T0);  ////////////
+                //#endif
                 if (!(visited_array[candidate_id] == visited_array_tag)) {
                     visited_array[candidate_id] = visited_array_tag;
 
@@ -683,13 +685,13 @@ public:
 
             for (size_t j = 1; j <= size; j++) {
                 int candidate_id = *(data + j);
-                size_t pre_l = std::min(j, size - 2);
-                auto vector_data_ptr =
-                    data_level0_memory_->getElementPtr((*(data + pre_l + 1)), offsetData_);
-#ifdef USE_SSE
-                _mm_prefetch((char*)(visited_array + *(data + pre_l + 1)), _MM_HINT_T0);
-                _mm_prefetch(vector_data_ptr, _MM_HINT_T0);  ////////////
-#endif
+                //                size_t pre_l = std::min(j, size - 2);
+                //                auto vector_data_ptr =
+                //                    data_level0_memory_->getElementPtr((*(data + pre_l + 1)), offsetData_);
+                //#ifdef USE_SSE
+                //                _mm_prefetch((char*)(visited_array + *(data + pre_l + 1)), _MM_HINT_T0);
+                //                _mm_prefetch(vector_data_ptr, _MM_HINT_T0);  ////////////
+                //#endif
                 if (!(visited_array[candidate_id] == visited_array_tag)) {
                     visited_array[candidate_id] = visited_array_tag;
                     ++visited_count;
@@ -724,7 +726,40 @@ public:
         visited_list_pool_->releaseVisitedList(vl);
         return top_candidates;
     }
+    void
+    printStatistics(const std::vector<int>& data) {
+        if (data.empty()) {
+            std::cout << "数据为空！" << std::endl;
+            return;
+        }
 
+        double sum = 0.0;
+        double sum_of_squares = 0.0;
+        int count = data.size();
+        int min_value = data[0];
+        int max_value = data[0];
+
+        // 计算总和、平方和、最大值和最小值
+        for (int num : data) {
+            sum += num;
+            sum_of_squares += num * num;
+            if (num < min_value)
+                min_value = num;
+            if (num > max_value)
+                max_value = num;
+        }
+
+        double mean = sum / count;
+        double variance = (sum_of_squares / count) - (mean * mean);
+        double standard_deviation = std::sqrt(variance);
+
+        // 打印结果
+        std::cout << "平均值: " << mean << std::endl;
+        std::cout << "方差: " << variance << std::endl;
+        std::cout << "标准差: " << standard_deviation << std::endl;
+        std::cout << "最大值: " << max_value << std::endl;
+        std::cout << "最小值: " << min_value << std::endl;
+    }
     void
     set_graph(vsag::DatasetPtr dataset, vsag::Graph& graph) override {
         auto data_num = dataset->GetNumElements();
@@ -735,9 +770,65 @@ public:
             resizeIndex(data_num);
         }
         cur_element_count_ = data_num;
-
+        //
         enterpoint_node_ = 0;
         auto edges = graph.GetGraph();
+        //
+        //        int hnsw_edge_count = 0;
+        //        float hnsw_loss = 0;
+        //        int nndescent_edge_count = 0;
+        //        float nndescen_loss = 0;
+        //        std::vector<int> hnsw_edge_counts;
+        //        std::vector<int> nndescent_edge_counts;
+        //        for (int i = 0; i < cur_element_count_; ++i) {
+        //            memcpy(getDataByInternalId(i), vectors + i * dim, dim * sizeof(float));
+        //            auto link = get_linklist0(i);
+        //            float size = getListCount(link);
+        //            link += 1;
+        //            if (i > 5000 and i < 5010) {
+        //
+        //            std::cout << "hnsw graph " << size << ": ";
+        //            }
+        //            for (int j = size - 1; j >= 0; --j) {
+        //                auto single_loss = fstdistfunc_(getDataByInternalId(i), getDataByInternalId(link[j]), dist_func_param_);
+        //                if (i > 5000 and i < 5010) {
+        //
+        //                std::cout << link[j] << ":" << single_loss << " ";
+        //                }
+        //                hnsw_loss += single_loss;
+        //            }
+        //            hnsw_edge_counts.push_back(size);
+        //            hnsw_edge_count += size;
+        //            if (i > 5000 and i < 5010) {
+        //
+        //            std::cout << std::endl;
+        //
+        //            std::cout << "nndescent graph " << edges[i].size() << ": ";
+        //            }
+        //            for (int j = 0; j < edges[i].size(); ++j) {
+        //                auto single_loss = fstdistfunc_(getDataByInternalId(i), getDataByInternalId(edges[i][j]), dist_func_param_);
+        //                if (i > 5000 and i < 5010) {
+        //
+        //                std::cout << edges[i][j] << ":" << single_loss << " ";
+        //                }
+        //                nndescen_loss += single_loss;
+        //            }
+        //            nndescent_edge_counts.push_back(edges[i].size());
+        //            nndescent_edge_count += edges[i].size();
+        //            if (i > 5000 and i < 5010) {
+        //
+        //            std::cout << std::endl;
+        //
+        //            std::cout << std::endl;
+        //            }
+        //        }
+        //        std::cout << "hnsw: " <<  hnsw_loss / hnsw_edge_count << " " << hnsw_edge_count << std::endl;
+        //        printStatistics(hnsw_edge_counts);
+        //        std::cout << "nndesent: " <<  nndescen_loss / nndescent_edge_count << " " << nndescent_edge_count << std::endl;
+        //        printStatistics(nndescent_edge_counts);
+        //        exit(0);
+
+        std::vector<int> in_degree(cur_element_count_, 0);
         for (int i = 0; i < cur_element_count_; ++i) {
             labeltype label = ids[i];
             memcpy(getExternalLabeLp(i), &label, sizeof(labeltype));
@@ -746,11 +837,39 @@ public:
             auto link = get_linklist0(i);
             setListCount(link, edges[i].size());
             if (edges[i].size() > M_ * 2) {
-                std::cout << "edges[i].size() is too large:" << i <<std::endl;
+                std::cout << "edges[i].size() is too large:" << i << std::endl;
             }
             link += 1;
             for (int j = 0; j < edges[i].size(); ++j) {
                 link[j] = edges[i][j];
+                in_degree[link[j]] += 1;
+            }
+        }
+        for (int i = 0; i < cur_element_count_; ++i) {
+            if (in_degree[i] == 0) {
+                std::cout << "no in edge:" << i << std::endl;
+            }
+        }
+
+        for (int level = graph.GetLevel() - 1; level > 0; --level) {
+            auto level_graph = graph.GetHGraph(level);
+            for (int i = 0; i < level_graph.size(); ++i) {
+                if (link_lists_[i] == nullptr) {
+                    auto new_link_lists =
+                        (char*)allocator_->Allocate(size_links_per_element_ * level + 1);
+                    if (new_link_lists == nullptr)
+                        throw std::runtime_error(
+                            "Not enough memory: addPoint failed to allocate linklist");
+                    link_lists_[i] = new_link_lists;
+                    memset(link_lists_[i], 0, size_links_per_element_ * level + 1);
+                }
+                auto link = get_linklist_at_level(i, level);
+                setListCount(link, level_graph[i].size());
+                link += 1;
+                for (int j = 0; j < level_graph[i].size(); ++j) {
+                    link[j] = level_graph[i][j];
+                }
+                element_levels_[i] = std::max(element_levels_[i], level);
             }
         }
     }

@@ -17,7 +17,7 @@ int
 main() {
     int64_t num_vectors = 1000;
     size_t dim = 128;
-    int64_t max_degree = 32;
+    int64_t max_degree = 20;
 
     // prepare ids and vectors
     auto ids = new int64_t[num_vectors];

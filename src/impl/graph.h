@@ -264,6 +264,7 @@ class NNdescent : public Graph {
 public:
     NNdescent(int64_t max_degree, int64_t turn, DistanceFunc distance)
         : max_degree_(max_degree), turn_(turn), distance_(distance) {
+        min_in_degree_ = std::min(min_in_degree_, data_num_ - 1);
     }
 
     bool
@@ -286,11 +287,11 @@ public:
                 if ((i + 1) % 5 == 0) {
                     search_neigbors();
                 }
+                repair_no_in_edge();
                 check_turn();
             }
-            for (int i = 0; i < data_num_; ++i) {
-                prune_graph(i);
-            }
+            repair_no_in_edge();
+            prune_graph();
             check_turn();
         }
         return true;
@@ -470,29 +471,74 @@ private:
         }
     }
 
-    void
-    prune_graph(uint32_t loc) {
-        std::sort(graph[loc].neigbors.begin(), graph[loc].neigbors.end());
-        graph[loc].neigbors.erase(
-            std::unique(graph[loc].neigbors.begin(), graph[loc].neigbors.end()),
-            graph[loc].neigbors.end());
-        std::vector<Node> candidates;
-        for (int i = 0; i < graph[loc].neigbors.size(); ++i) {
-            bool flag = true;
-            for (int j = 0; j < candidates.size(); ++j) {
-                if (get_distance(graph[loc].neigbors[i].id, candidates[j].id) <
-                    graph[loc].neigbors[i].distance) {
-                    flag = false;
-                    break;
-                }
-            }
-            if (flag) {
-                candidates.push_back(graph[loc].neigbors[i]);
+    void repair_no_in_edge() {
+        std::vector<int> in_edges_count(data_num_, 0);
+        for (int i = 0; i < data_num_; ++i) {
+            for (int j = 0; j < graph[i].neigbors.size(); ++j) {
+                in_edges_count[graph[i].neigbors[j].id] ++;
             }
         }
-        graph[loc].neigbors.swap(candidates);
-        if (graph[loc].neigbors.size() > max_degree_) {
-            graph[loc].neigbors.resize(max_degree_);
+
+        std::vector<int> replace_pos(data_num_, std::min(data_num_ - 1, max_degree_) - 1);
+        for (int i = 0; i < data_num_; ++i) {
+            auto& link = graph[i].neigbors;
+            int need_replace_loc = 0;
+            while (in_edges_count[i] < min_in_degree_ && need_replace_loc < max_degree_) {
+                uint32_t need_replace_id = link[need_replace_loc].id;
+                if (replace_pos[need_replace_id] > 0) {
+                    auto& replace_node = graph[need_replace_id].neigbors[replace_pos[need_replace_id]];
+                    if (replace_node.distance > link[need_replace_loc].distance) {       
+                        auto replace_id = replace_node.id;
+                        if (in_edges_count[replace_id] > min_in_degree_) {
+                            in_edges_count[replace_id] --;
+                            replace_node.id = i;
+                            replace_node.distance = link[need_replace_loc].distance;
+                            in_edges_count[i] ++;
+                        }
+                        replace_pos[need_replace_id] --; 
+                    }
+                }
+                need_replace_loc ++;
+            }
+        }
+    }
+
+    void
+    prune_graph() {
+        std::vector<int> in_edges_count(data_num_, 0);
+        for (int i = 0; i < data_num_; ++i) {
+            for (int j = 0; j < graph[i].neigbors.size(); ++j) {
+                in_edges_count[graph[i].neigbors[j].id] ++;
+            }
+        }
+
+        for (int loc = 0; loc < data_num_; ++loc) {
+
+            std::sort(graph[loc].neigbors.begin(), graph[loc].neigbors.end());
+            graph[loc].neigbors.erase(
+                std::unique(graph[loc].neigbors.begin(), graph[loc].neigbors.end()),
+                graph[loc].neigbors.end());
+            std::vector<Node> candidates;
+            for (int i = 0; i < graph[loc].neigbors.size(); ++i) {
+                bool flag = true;
+                if (in_edges_count[graph[loc].neigbors[i].id] > min_in_degree_) {
+                    for (int j = 0; j < candidates.size(); ++j) {
+                        if (get_distance(graph[loc].neigbors[i].id, candidates[j].id) <
+                            graph[loc].neigbors[i].distance) {
+                            flag = false;
+                            in_edges_count[graph[loc].neigbors[i].id] --;
+                            break;
+                        }
+                    }
+                }
+                if (flag) {
+                    candidates.push_back(graph[loc].neigbors[i]);
+                }
+            }
+            graph[loc].neigbors.swap(candidates);
+            if (graph[loc].neigbors.size() > max_degree_) {
+                graph[loc].neigbors.resize(max_degree_);
+            }
         }
     }
 
@@ -500,17 +546,27 @@ private:
     check_turn() {
         int edge_count = 0;
         float loss = 0;
+        int no_in_edge_count = 0;
+
+        std::vector<int> in_edges_count(data_num_, 0);
         for (int i = 0; i < data_num_; ++i) {
             //            std::cout <<"check: ";
             for (int j = 0; j < graph[i].neigbors.size(); ++j) {
                 loss += graph[i].neigbors[j].distance;
+                in_edges_count[graph[i].neigbors[j].id] ++;
                 //                                std::cout << graph[i].neigbors[j].distance << " ";
             }
             //                        std::cout << std::endl;
             edge_count += graph[i].neigbors.size();
         }
+        for (int i = 0; i < data_num_; ++i) {
+            if (in_edges_count[i] == 0) {
+                no_in_edge_count ++;
+            }
+        }
+
         loss /= edge_count;
-        std::cout << "loss:" << loss << "  edge_count:" << edge_count << std::endl;
+        std::cout << "loss:" << loss << "  edge_count:" << edge_count << " no_in_edge_count:" << no_in_edge_count << std::endl;
     }
 
 private:
@@ -523,6 +579,7 @@ private:
     int64_t turn_;
     std::vector<Linklist> graph;
     std::vector<bool> visited_;
+    int64_t min_in_degree_ = 20;
 
     DistanceFunc distance_;
 };

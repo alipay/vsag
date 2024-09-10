@@ -30,7 +30,7 @@ TestReadWrite(BasicIO<T>* basicIo) {
     auto codesize = dim * sizeof(float);
     std::unordered_map<uint64_t, float*> maps;
     for (int i = 0; i < 100; ++i) {
-        auto offset = random() % 10000000;
+        auto offset = random() % 100000 * codesize;
         basicIo->Write((uint8_t*)(vector.data() + i * dim), codesize, offset);
         maps[offset] = vector.data() + i * dim;
     }

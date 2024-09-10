@@ -111,9 +111,7 @@ SQ4UniformQuantizer<Metric>::TrainImpl(const DataType* data, uint64_t count) {
         }
     }
 
-    for (uint32_t d = 0; d < this->dim_; d++) {
-        diff_ -= lower_bound_;
-    }
+    diff_ -= lower_bound_;
 
     this->isTrained_ = true;
     return true;

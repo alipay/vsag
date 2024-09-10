@@ -60,7 +60,7 @@ private:
 
 template <MetricType Metric>
 SQ4Quantizer<Metric>::SQ4Quantizer(int dim) : Quantizer<SQ4Quantizer<Metric>>(dim) {
-    vector_encoded_size_ = (dim + 1) >> 1 << 1;
+    vector_encoded_size_ = (dim + 1) / 2;
     lower_bound_.resize(dim, std::numeric_limits<DataType>::max());
     diff_.resize(dim, std::numeric_limits<DataType>::min());
     this->codeSize_ = vector_encoded_size_;

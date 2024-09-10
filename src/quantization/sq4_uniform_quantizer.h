@@ -79,7 +79,7 @@ SQ4UniformQuantizer<Metric>::SQ4UniformQuantizer(int dim)
     this->codeSize_ = 0;
 
     offsets_[OFFSET_KEY_CODE] = this->codeSize_;
-    this->codeSize_ += (dim + 1) >> 1 << 1;
+    this->codeSize_ += (dim + 1) / 2;
 
     if (Metric == MetricType::METRIC_TYPE_L2SQR or Metric == MetricType::METRIC_TYPE_COSINE) {
         offsets_[OFFSET_KEY_NORM] = this->codeSize_;
@@ -149,7 +149,7 @@ SQ4UniformQuantizer<Metric>::EncodeOneImpl(const DataType* data, uint8_t* codes)
         *(norm_type*)(codes + offsets_.at(OFFSET_KEY_NORM)) = norm;
     }
 
-    if (Metric == MetricType::METRIC_TYPE_IP) {
+    if (Metric == MetricType::METRIC_TYPE_IP or Metric == MetricType::METRIC_TYPE_COSINE) {
         *(sum_type*)(codes + offsets_.at(OFFSET_KEY_SUM)) = sum;
     }
 

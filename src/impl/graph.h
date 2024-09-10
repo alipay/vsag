@@ -483,20 +483,18 @@ private:
         for (int i = 0; i < data_num_; ++i) {
             auto& link = graph[i].neigbors;
             int need_replace_loc = 0;
-            while (in_edges_count[i] < min_in_degree_ && need_replace_loc < max_degree_) {
+            while (in_edges_count[i] < min_in_degree_ && need_replace_loc < data_num_) {
                 uint32_t need_replace_id = link[need_replace_loc].id;
                 if (replace_pos[need_replace_id] > 0) {
                     auto& replace_node = graph[need_replace_id].neigbors[replace_pos[need_replace_id]];
-                    if (replace_node.distance > link[need_replace_loc].distance) {       
-                        auto replace_id = replace_node.id;
-                        if (in_edges_count[replace_id] > min_in_degree_) {
-                            in_edges_count[replace_id] --;
-                            replace_node.id = i;
-                            replace_node.distance = link[need_replace_loc].distance;
-                            in_edges_count[i] ++;
-                        }
-                        replace_pos[need_replace_id] --; 
+                    auto replace_id = replace_node.id;
+                    if (in_edges_count[replace_id] > min_in_degree_) {
+                        in_edges_count[replace_id] --;
+                        replace_node.id = i;
+                        replace_node.distance = link[need_replace_loc].distance;
+                        in_edges_count[i] ++;
                     }
+                    replace_pos[need_replace_id] --;
                 }
                 need_replace_loc ++;
             }

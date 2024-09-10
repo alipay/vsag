@@ -150,7 +150,7 @@ TestComputeCodesSame(Quantizer<T>& quantizer, size_t dim, uint32_t size, const M
         } else if (metric == vsag::MetricType::METRIC_TYPE_L2SQR) {
             gt = L2Sqr(data + idx1 * dim, data + idx2 * dim, &dim);
         }
-        REQUIRE(std::abs(gt - value) < 1e-4);
+        REQUIRE(fixtures::dist_t(gt) == fixtures::dist_t(value));
         delete[] codes1;
         delete[] codes2;
     }
@@ -189,7 +189,7 @@ TestComputerSame(Quantizer<T>& quant, size_t dim, uint32_t size, const MetricTyp
         } else if (metric == vsag::MetricType::METRIC_TYPE_L2SQR) {
             gt = L2Sqr(data + idx1 * dim, query + i * dim, &dim);
         }
-        REQUIRE(std::abs(gt - value) < 1e-4);
+        REQUIRE(fixtures::dist_t(gt) == fixtures::dist_t(value));
     }
     delete[] codes;
 

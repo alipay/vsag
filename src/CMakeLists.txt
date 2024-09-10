@@ -1,5 +1,11 @@
 
 add_subdirectory (simd)
+set (SIMD_QUANT_SRCS quantization/sq4_simd.cpp quantization/sq8_simd.cpp quantization/fp32_simd.cpp quantization/sq4_uniform_simd.cpp)
+set_source_files_properties (${SIMD_QUANT_SRCS} PROPERTIES COMPILE_FLAGS "-msse -msse2 -msse3 -mssse3 -msse4 -msse4a -msse4.1 -msse4.2")
+set_source_files_properties (${SIMD_QUANT_SRCS} PROPERTIES COMPILE_FLAGS "-mavx")
+set_source_files_properties (${SIMD_QUANT_SRCS} PROPERTIES COMPILE_FLAGS "-mavx2 -mfma")
+set_source_files_properties (${SIMD_QUANT_SRCS} PROPERTIES COMPILE_FLAGS "-mavx512f -mavx512pf -mavx512er -mavx512cd -mavx512vl -mavx512bw -mavx512dq -mavx512ifma -mavx512vbmi")
+
 
 
 file (GLOB CPP_SRCS "*.cpp")

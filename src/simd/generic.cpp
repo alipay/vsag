@@ -61,6 +61,7 @@ PQDistanceFloat256(const void* single_dim_centers, float single_dim_val, void* r
 }
 
 namespace Generic {
+
 float
 FP32ComputeIP(const float* query, const float* codes, uint64_t dim) {
     float result = 0.;
@@ -70,6 +71,7 @@ FP32ComputeIP(const float* query, const float* codes, uint64_t dim) {
     }
     return result;
 }
+
 float
 FP32ComputeL2Sqr(const float* query, const float* codes, uint64_t dim) {
     float result = 0.;
@@ -79,6 +81,69 @@ FP32ComputeL2Sqr(const float* query, const float* codes, uint64_t dim) {
     }
     return result;
 }
-}  // namespace Generic
 
+float
+SQ8ComputeIP(const float* query,
+             const uint8_t* codes,
+             const float* lowerBound,
+             const float* diff,
+             uint64_t dim) {
+    float result = 0.;
+    for (uint64_t i = 0; i < dim; ++i) {
+        result += query[i] * static_cast<float>(static_cast<float>(codes[i]) / 255.0 * diff[i] +
+                                                lowerBound[i]);
+    }
+    return result;
+}
+
+float
+SQ8ComputeL2Sqr(const float* query,
+                const uint8_t* codes,
+                const float* lowerBound,
+                const float* diff,
+                uint64_t dim) {
+    float result = 0.;
+    for (uint64_t i = 0; i < dim; ++i) {
+        auto val = (query[i] - static_cast<float>(static_cast<float>(codes[i]) / 255.0 * diff[i] +
+                                                  lowerBound[i]));
+        result += val * val;
+    }
+    return result;
+}
+
+float
+SQ8ComputeCodesIP(const uint8_t* codes1,
+                  const uint8_t* codes2,
+                  const float* lowerBound,
+                  const float* diff,
+                  uint64_t dim) {
+    float result = 0.;
+    for (uint64_t i = 0; i < dim; ++i) {
+        auto val1 =
+            static_cast<float>(static_cast<float>(codes1[i]) / 255.0 * diff[i] + lowerBound[i]);
+        auto val2 =
+            static_cast<float>(static_cast<float>(codes2[i]) / 255.0 * diff[i] + lowerBound[i]);
+        result += val1 * val2;
+    }
+    return result;
+}
+
+float
+SQ8ComputeCodesL2Sqr(const uint8_t* codes1,
+                     const uint8_t* codes2,
+                     const float* lowerBound,
+                     const float* diff,
+                     uint64_t dim) {
+    float result = 0.;
+    for (uint64_t i = 0; i < dim; ++i) {
+        auto val1 =
+            static_cast<float>(static_cast<float>(codes1[i]) / 255.0 * diff[i] + lowerBound[i]);
+        auto val2 =
+            static_cast<float>(static_cast<float>(codes2[i]) / 255.0 * diff[i] + lowerBound[i]);
+        result += (val1 - val2) * (val1 - val2);
+    }
+    return result;
+}
+
+}  // namespace Generic
 }  // namespace vsag

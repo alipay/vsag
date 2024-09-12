@@ -19,6 +19,7 @@
 #include <iostream>
 
 #include "fp32_simd.h"
+#include "sq8_simd.h"
 namespace vsag {
 
 #define PORTABLE_ALIGN32 __attribute__((aligned(32)))
@@ -297,9 +298,7 @@ PQDistanceSSEFloat256(const void* single_dim_centers, float single_dim_val, void
     }
 }
 
-}  // namespace vsag
-
-namespace vsag::SSE {
+namespace SSE {
 float
 FP32ComputeIP(const float* query, const float* codes, uint64_t dim) {
 #if defined(ENABLE_SSE)
@@ -320,6 +319,7 @@ FP32ComputeIP(const float* query, const float* codes, uint64_t dim) {
     return vsag::Generic::FP32ComputeIP(query, codes, dim);
 #endif
 }
+
 float
 FP32ComputeL2Sqr(const float* query, const float* codes, uint64_t dim) {
 #if defined(ENABLE_SSE)
@@ -341,4 +341,108 @@ FP32ComputeL2Sqr(const float* query, const float* codes, uint64_t dim) {
 #endif
 }
 
-}  // namespace vsag::SSE
+float
+SQ8ComputeIP(const float* query,
+             const uint8_t* codes,
+             const float* lowerBound,
+             const float* diff,
+             uint64_t dim) {
+#if defined(ENABLE_SSE)
+    // Initialize the sum to 0
+    __m128 sum = _mm_setzero_ps();
+
+    // Process the data in 128-bit chunks
+    uint64_t i = 0;
+    for (; i + 3 < dim; i += 4) {
+        // Load data into registers
+        __m128i code_values = _mm_loadu_si128(reinterpret_cast<const __m128i*>(codes + i));
+        __m128 code_floats = _mm_cvtepi32_ps(_mm_cvtepu8_epi32(code_values));
+        __m128 query_values = _mm_loadu_ps(query + i);
+        __m128 diff_values = _mm_loadu_ps(diff + i);
+        __m128 lowerBound_values = _mm_loadu_ps(lowerBound + i);
+
+        // Perform calculations
+        __m128 scaled_codes = _mm_mul_ps(_mm_div_ps(code_floats, _mm_set1_ps(255.0f)), diff_values);
+        __m128 adjusted_codes = _mm_add_ps(scaled_codes, lowerBound_values);
+        __m128 val = _mm_mul_ps(query_values, adjusted_codes);
+        sum = _mm_add_ps(sum, val);
+    }
+
+    // Horizontal addition
+    sum = _mm_hadd_ps(sum, sum);
+    sum = _mm_hadd_ps(sum, sum);
+
+    // Extract the result from the register
+    alignas(16) float result[4];
+    _mm_store_ps(result, sum);
+
+    return result[0] +
+           Generic::SQ8ComputeIP(query + i, codes + i, lowerBound + i, diff + i, dim - i);
+#else
+    return Generic::SQ8ComputeIP(query, codes, lowerBound, diff, dim);
+#endif
+}
+
+float
+SQ8ComputeL2Sqr(const float* query,
+                const uint8_t* codes,
+                const float* lowerBound,
+                const float* diff,
+                uint64_t dim) {
+#if defined(ENABLE_SSE)
+    __m128 sum = _mm_setzero_ps();
+
+    // Process the data in 128-bit chunks
+    uint64_t i = 0;
+    for (; i + 3 < dim; i += 4) {
+        // Load data into registers
+        __m128i code_values =
+            _mm_cvtepu8_epi32(_mm_loadu_si128(reinterpret_cast<const __m128i*>(codes + i)));
+        __m128 code_floats = _mm_div_ps(_mm_cvtepi32_ps(code_values), _mm_set1_ps(255.0f));
+        __m128 diff_values = _mm_loadu_ps(diff + i);
+        __m128 lowerBound_values = _mm_loadu_ps(lowerBound + i);
+        __m128 query_values = _mm_loadu_ps(query + i);
+
+        // Perform calculations
+        __m128 scaled_codes = _mm_mul_ps(code_floats, diff_values);
+        scaled_codes = _mm_add_ps(scaled_codes, lowerBound_values);
+        __m128 val = _mm_sub_ps(query_values, scaled_codes);
+        val = _mm_mul_ps(val, val);
+        sum = _mm_add_ps(sum, val);
+    }
+    // Perform horizontal addition
+    sum = _mm_hadd_ps(sum, sum);
+    sum = _mm_hadd_ps(sum, sum);
+
+    // Extract the result from the register
+    float result;
+    _mm_store_ss(&result, sum);
+
+    result += Generic::SQ8ComputeL2Sqr(query + i, codes + i, lowerBound + i, diff + i, dim - i);
+
+    return result;
+#else
+    return Generic::SQ8ComputeL2Sqr(query, codes, lowerBound, diff, dim);
+#endif
+}
+
+float
+SQ8ComputeCodesIP(const uint8_t* codes1,
+                  const uint8_t* codes2,
+                  const float* lowerBound,
+                  const float* diff,
+                  uint64_t dim) {
+    return Generic::SQ8ComputeCodesIP(codes1, codes2, lowerBound, diff, dim);
+}
+
+float
+SQ8ComputeCodesL2Sqr(const uint8_t* codes1,
+                     const uint8_t* codes2,
+                     const float* lowerBound,
+                     const float* diff,
+                     uint64_t dim) {
+    return Generic::SQ8ComputeCodesL2Sqr(codes1, codes2, lowerBound, diff, dim);
+}
+}  // namespace SSE
+
+}  // namespace vsag

@@ -31,7 +31,7 @@ using namespace vsag;
         REQUIRE(fixtures::dist_t(gt) == fixtures::dist_t(avx512));                     \
     };
 
-TEST_CASE("FP32Compute", "[FP32SIMD]") {
+TEST_CASE("FP32 SIMD Compute", "[FP32SIMD]") {
     const std::vector<int64_t> dims = {1, 8, 16, 32, 256};
     int64_t count = 100;
     for (const auto& dim : dims) {
@@ -52,9 +52,9 @@ TEST_CASE("FP32Compute", "[FP32SIMD]") {
         return;                                                            \
     }
 
-TEST_CASE("FP32 benchmark", "[benchmark]") {
-    int64_t count = 1000;
-    int64_t dim = 256;
+TEST_CASE("FP32 SIMD benchmark", "[benchmark]") {
+    int64_t count = 200;
+    int64_t dim = 128;
     auto vec1 = fixtures::generate_vectors(count * 2, dim);
     std::vector<float> vec2(vec1.begin() + count, vec1.end());
     BENCHMARK_SIMD_COMPUTE(Generic, FP32ComputeIP);

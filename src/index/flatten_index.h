@@ -20,7 +20,7 @@
 
 #include "../common.h"
 #include "../logger.h"
-#include "../storage/flatten_storage.h"
+#include "../data_cell/flatten_datacell.h"
 #include "vsag/allocator.h"
 #include "vsag/index.h"
 namespace vsag {

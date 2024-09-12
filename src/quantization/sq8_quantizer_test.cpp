@@ -79,7 +79,7 @@ TestComputer(Quantizer<T>& quant, int64_t dim, int count, const MetricType& metr
 TEST_CASE("encode&decode[ut][SQ8Quantizer]") {
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
-    auto dim = 960;
+    auto dim = 256;
     auto size = 1000;
     float error = 0.01;
     float error_same = dim * 255 * 0.01;

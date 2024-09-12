@@ -21,7 +21,7 @@
 #include <vector>
 
 #include "quantizer.h"
-#include "sq8_simd.h"
+#include "simd/sq8_simd.h"
 namespace vsag {
 
 template <MetricType Metric = MetricType::METRIC_TYPE_L2SQR>
@@ -138,12 +138,14 @@ template <MetricType Metric>
 inline float
 SQ8Quantizer<Metric>::ComputeImpl(const uint8_t* codes1, const uint8_t* codes2) {
     if constexpr (Metric == MetricType::METRIC_TYPE_L2SQR) {
-        return SQ8ComputeCodesL2(codes1, codes2, this->lowerBound_, this->diff_, this->dim_);
+        return SQ8ComputeCodesL2Sqr(
+            codes1, codes2, this->lowerBound_.data(), this->diff_.data(), this->dim_);
     } else if constexpr (Metric == MetricType::METRIC_TYPE_IP) {
-        return SQ8ComputeCodesIP(codes1, codes2, this->lowerBound_, this->diff_, this->dim_);
+        return SQ8ComputeCodesIP(
+            codes1, codes2, this->lowerBound_.data(), this->diff_.data(), this->dim_);
     } else if constexpr (Metric == MetricType::METRIC_TYPE_COSINE) {
         return SQ8ComputeCodesIP(
-            codes1, codes2, this->lowerBound_, this->diff_, this->dim_);  // TODO
+            codes1, codes2, this->lowerBound_.data(), this->diff_.data(), this->dim_);  // TODO
     } else {
         return 0.;
     }
@@ -165,11 +167,11 @@ SQ8Quantizer<Metric>::ComputeDistImpl(Computer<SQ8Quantizer>& computer,
     auto* query = reinterpret_cast<float*>(computer.buf_);
 
     if constexpr (Metric == MetricType::METRIC_TYPE_L2SQR) {
-        *dists = SQ8ComputeL2Sqr(query, codes, this->lowerBound_, this->diff_, this->dim_);
+        *dists = SQ8ComputeL2Sqr(query, codes, this->lowerBound_.data(), this->diff_.data(), this->dim_);
     } else if constexpr (Metric == MetricType::METRIC_TYPE_IP) {
-        *dists = SQ8ComputeIP(query, codes, this->lowerBound_, this->diff_, this->dim_);
+        *dists = SQ8ComputeIP(query, codes, this->lowerBound_.data(), this->diff_.data(), this->dim_);
     } else if constexpr (Metric == MetricType::METRIC_TYPE_COSINE) {
-        *dists = SQ8ComputeIP(query, codes, this->lowerBound_, this->diff_, this->dim_);  // TODO
+        *dists = SQ8ComputeIP(query, codes, this->lowerBound_.data(), this->diff_.data(), this->dim_);  // TODO
     } else {
         *dists = 0.;
     }

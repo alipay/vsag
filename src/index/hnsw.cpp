@@ -114,7 +114,7 @@ HNSW::build(const DatasetPtr& base) {
         auto vectors = base->GetFloat32Vectors();
         std::vector<int64_t> failed_ids;
         {
-//            SlowTaskTimer t("hnsw graph");
+            SlowTaskTimer t("hnsw graph");
 //                        for (int64_t i = 0; i < num_elements; ++i) {
 //                            // noexcept runtime
 //                            if (!alg_hnsw->addPoint((const void*)(vectors + i * dim_), ids[i])) {

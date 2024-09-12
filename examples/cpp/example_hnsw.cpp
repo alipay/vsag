@@ -44,7 +44,8 @@ float_hnsw() {
     int max_degree = 32;       // Tightly connected with internal dimensionality of the data
     // strongly affects the memory consumption
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
-    int ef_search = 200;
+    int ef_search = 120;
+    int query_num = 1000;
     float threshold = 8.0;
 
     // Initing index
@@ -75,6 +76,7 @@ float_hnsw() {
     }
     std::shared_ptr<int64_t[]> ids(new int64_t[max_elements]);
     std::shared_ptr<float[]> data(new float[dim * max_elements]);
+    std::shared_ptr<float[]> querys(new float[dim * query_num]);
 
     // Generate random data
     std::mt19937 rng;
@@ -82,6 +84,7 @@ float_hnsw() {
     std::uniform_real_distribution<> distrib_real;
     for (int i = 0; i < max_elements; i++) ids[i] = i;
     for (int i = 0; i < dim * max_elements; i++) data[i] = distrib_real(rng);
+    for (int i = 0; i < dim * query_num; i++) querys[i] = distrib_real(rng);
 
     // Build index
     {
@@ -113,9 +116,9 @@ float_hnsw() {
     float correct = 0;
     float recall = 0;
     {
-        for (int i = 0; i < max_elements; i++) {
+        for (int i = 0; i < query_num; i++) {
             auto query = vsag::Dataset::Make();
-            query->NumElements(1)->Dim(dim)->Float32Vectors(data.get() + i * dim)->Owner(false);
+            query->NumElements(1)->Dim(dim)->Float32Vectors(querys.get() + i * dim)->Owner(false);
             // {
             //   "hnsw": {
             //     "ef_search": 200
@@ -127,15 +130,20 @@ float_hnsw() {
             };
             int64_t k = 10;
             if (auto result = hnsw->KnnSearch(query, k, parameters.dump()); result.has_value()) {
-                if (result.value()->GetIds()[0] != ids[i]) {
-                    std::cout << "no find:" << i << std::endl;
-                }
-                correct += result.value()->GetIds()[0] == ids[i] ? 1 : 0;
+                auto score = vsag::knn_search_recall(data.get(),
+                                                   ids.get(),
+                                                   max_elements,
+                                                   querys.get() + i * dim,
+                                                   dim,
+                                                   result.value()->GetIds(),
+                                                   result.value()->GetDim());
+                correct += score;
+//                std::cout << i << " " << score << std::endl;
             } else if (result.error().type == vsag::ErrorType::INTERNAL_ERROR) {
                 std::cerr << "failed to perform knn search on index" << std::endl;
             }
         }
-        recall = correct / max_elements;
+        recall = correct / query_num;
         std::cout << std::fixed << std::setprecision(3)
                   << "Memory Uasage:" << hnsw->GetMemoryUsage() / 1024.0 << " KB" << std::endl;
         std::cout << "Recall: " << recall << std::endl;

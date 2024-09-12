@@ -264,7 +264,6 @@ class NNdescent : public Graph {
 public:
     NNdescent(int64_t max_degree, int64_t turn, DistanceFunc distance)
         : max_degree_(max_degree), turn_(turn), distance_(distance) {
-        min_in_degree_ = std::min(min_in_degree_, data_num_ - 1);
     }
 
     bool
@@ -276,6 +275,7 @@ public:
         dim_ = dataset->GetDim();
         data_num_ = dataset->GetNumElements();
         data_ = dataset->GetFloat32Vectors();
+        min_in_degree_ = std::min(min_in_degree_, data_num_ - 1);
         init_graph();
         check_turn();
         {
@@ -483,7 +483,7 @@ private:
         for (int i = 0; i < data_num_; ++i) {
             auto& link = graph[i].neigbors;
             int need_replace_loc = 0;
-            while (in_edges_count[i] < min_in_degree_ && need_replace_loc < data_num_) {
+            while (in_edges_count[i] < min_in_degree_ && need_replace_loc < max_degree_) {
                 uint32_t need_replace_id = link[need_replace_loc].id;
                 if (replace_pos[need_replace_id] > 0) {
                     auto& replace_node = graph[need_replace_id].neigbors[replace_pos[need_replace_id]];
@@ -577,7 +577,7 @@ private:
     int64_t turn_;
     std::vector<Linklist> graph;
     std::vector<bool> visited_;
-    int64_t min_in_degree_ = 20;
+    int64_t min_in_degree_ = 5;
 
     DistanceFunc distance_;
 };

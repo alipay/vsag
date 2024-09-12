@@ -41,14 +41,11 @@ public:
 
     template <typename IDType = uint64_t>
     void
-    Query(float* resultDists, const float* queryVector, const IDType* idx, uint64_t idCount);
+    QueryLine(float* resultDists, const float* queryVector, uint64_t id);
 
     template <typename IDType = uint64_t>
     void
-    Query(float* resultDists,
-          std::shared_ptr<Computer<QuantTmpl>>& computer,
-          const IDType* idx,
-          uint64_t idCount);
+    QueryLine(float* resultDists, std::shared_ptr<Computer<QuantTmpl>>& computer, uint64_t id);
 
     inline void
     SetIO(std::unique_ptr<BasicIO<IOTmpl>>& io) = delete;
@@ -185,13 +182,47 @@ MixDataCell<QuantTmpl, IOTmpl>::GetRedundantSizeById(uint64_t id) const {
 
 template <typename QuantTmpl, typename IOTmpl>
 const uint8_t*
-MixDataCell<QuantTmpl, IOTmpl>::GetNeighborCodesById(uint64_t id, uint64_t neighbor_j) const {
+MixDataCell<QuantTmpl, IOTmpl>::GetNeighborCodesById(uint64_t id, uint64_t neighbor_i) const {
     auto iter = redundant_offset_.find(id);
     if (iter == redundant_offset_.end()) {
         return nullptr;
     }
-    auto pos = iter->second +  + neighbor_j * (this->codeSize_ + sizeof(uint64_t));
+    auto pos = iter->second + +neighbor_i * (this->codeSize_ + sizeof(uint64_t));
     return *(uint64_t*)(this->io_->Read(this->codeSize_, pos));
+}
+
+template <typename QuantTmpl, typename IOTmpl>
+template <typename IDType>
+void
+MixDataCell<QuantTmpl, IOTmpl>::QueryLine(float* resultDists,
+                                          const float* queryVector,
+                                          uint64_t id) {
+    std::shared_ptr<Computer<QuantTmpl>> computer = std::move(this->quantizer_->FactoryComputer());
+    computer->SetQuery(queryVector);
+    this->QueryLine(resultDists, computer, id);
+}
+
+template <typename QuantTmpl, typename IOTmpl>
+template <typename IDType>
+void
+MixDataCell<QuantTmpl, IOTmpl>::QueryLine(float* resultDists,
+                                          std::shared_ptr<Computer<QuantTmpl>>& computer,
+                                          uint64_t id) {
+    auto iter = redundant_offset_.find(id);
+    if (iter == redundant_offset_.end()) {
+        std::vector<uint64_t> neighbor_ids;
+        graph_data_cell_->GetNeighbors(id, neighbor_ids);
+        for (int i = 0; i < neighbor_ids.size(); i++) {
+            const auto* codes = this->GetCodesById(id);
+            computer->ComputeDist(codes, resultDists + i);
+        }
+    } else {
+        auto neighbor_size = GetRedundantSizeById(id);
+        for (int i = 0; i < neighbor_size; i++) {
+            const auto* codes = this->GetNeighborCodesById(id, i);
+            computer->ComputeDist(codes, resultDists + i);
+        }
+    };
 }
 
 }  // namespace vsag

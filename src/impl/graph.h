@@ -485,7 +485,14 @@ private:
             int need_replace_loc = 0;
             while (in_edges_count[i] < min_in_degree_ && need_replace_loc < max_degree_) {
                 uint32_t need_replace_id = link[need_replace_loc].id;
-                if (replace_pos[need_replace_id] > 0) {
+                bool has_connect = false;
+                for (int j = 0; j < graph[need_replace_id].neigbors.size(); ++j) {
+                    if (graph[need_replace_id].neigbors[j].id == i) {
+                        has_connect = true;
+                        break;
+                    }
+                }
+                if (replace_pos[need_replace_id] > 0 && not has_connect) {
                     auto& replace_node = graph[need_replace_id].neigbors[replace_pos[need_replace_id]];
                     auto replace_id = replace_node.id;
                     if (in_edges_count[replace_id] > min_in_degree_) {

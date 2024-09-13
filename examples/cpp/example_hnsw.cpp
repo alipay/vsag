@@ -44,7 +44,7 @@ float_hnsw() {
     int max_degree = 32;       // Tightly connected with internal dimensionality of the data
     // strongly affects the memory consumption
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
-    int ef_search = 120;
+    int ef_search = 100;
     int query_num = 1000;
     float threshold = 8.0;
 

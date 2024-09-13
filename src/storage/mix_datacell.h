@@ -31,7 +31,10 @@ enum class REDUNDANT_STRATEGY { ID_FIRST = 0, RANDOM_FIRST = 1, DEGREE_FIRST = 2
 template <typename QuantTmpl, typename IOTmpl>
 class MixDataCell : public FlattenStorage<QuantTmpl, IOTmpl> {
 public:
-    MixDataCell(GraphDataCell<IOTmpl> graph_data_cell);
+    MixDataCell(std::shared_ptr<GraphDataCell<IOTmpl>> graph_data_cell)
+        : FlattenStorage<QuantTmpl, IOTmpl>() {
+        this->graph_data_cell_ = graph_data_cell;
+    };
 
     explicit MixDataCell(const std::string& initializeJson);  // todo
 
@@ -41,7 +44,9 @@ public:
 
     template <typename IDType = uint64_t>
     void
-    QueryLine(float* resultDists, const float* queryVector, uint64_t id);
+    QueryLine(float* resultDists,
+              const float* queryVector,
+              uint64_t id);  // todo: add mask for visited
 
     template <typename IDType = uint64_t>
     void
@@ -55,14 +60,14 @@ public:
 
     inline void
     SetIO(std::unique_ptr<BasicIO<IOTmpl>>& io, std::unique_ptr<BasicIO<IOTmpl>>& redundant_io) {
-        this->io_.swap(io);
-        this->redundant_io_.swap((redundant_io));
+        this->io_ = std::move(io);
+        this->redundant_io_ = std::move(redundant_io);
     }
 
     inline void
-    SetIO(std::unique_ptr<BasicIO<IOTmpl>>&& io, std::unique_ptr<BasicIO<IOTmpl>>& redundant_io) {
-        this->io_.swap(io);
-        this->redundant_io_.swap((redundant_io));
+    SetIO(std::unique_ptr<BasicIO<IOTmpl>>&& io, std::unique_ptr<BasicIO<IOTmpl>>&& redundant_io) {
+        this->io_ = std::move(io);
+        this->redundant_io_ = std::move(redundant_io);
     }
 
 private:
@@ -89,11 +94,6 @@ private:
     std::unordered_map<uint64_t, uint64_t> redundant_offset_;
     uint64_t redundant_total_count_{0};
 };
-
-template <typename QuantTmpl, typename IOTmpl>
-MixDataCell<QuantTmpl, IOTmpl>::MixDataCell(GraphDataCell<IOTmpl> graph_data_cell) {
-    this->graph_data_cell_ = graph_data_cell;
-}
 
 template <typename QuantTmpl, typename IOTmpl>
 void

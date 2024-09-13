@@ -86,7 +86,7 @@ GraphDataCell<IOTmpl>::InsertNode(const std::vector<uint64_t> neighbor_ids) {
     if (neighbor_size > this->maximum_degree_) {
         neighbor_size = maximum_degree_;
     }
-    this->io_->Write(&neighbor_size, sizeof(neighbor_size), cur_offset);
+    this->io_->Write(reinterpret_cast<uint8_t*>(&neighbor_size), sizeof(neighbor_size), cur_offset);
     cur_offset += sizeof(neighbor_size);
 
     this->io_->Write(reinterpret_cast<const uint8_t*>(neighbor_ids.data()),
@@ -121,8 +121,7 @@ GraphDataCell<IOTmpl>::GetNeighbors(uint64_t id, std::vector<uint64_t>& neighbor
     }
     neighbor_ids.resize(size, 0);
     for (int i = 0; i < size; i++) {
-        uint64_t neighbor_id = 0;
-        io_->Read(reinterpret_cast<uint8_t*>(&neighbor_id), sizeof(uint64_t), cur_offset);
+        io_->Read(reinterpret_cast<uint8_t*>(&neighbor_ids[i]), sizeof(uint64_t), cur_offset);
         cur_offset += sizeof(uint64_t);
     }
 }

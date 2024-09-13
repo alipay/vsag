@@ -33,7 +33,7 @@ TestQuantizerEncodeDecode(Quantizer<T>& quant, int64_t dim, int count, float err
     auto* outVec = new float[dim];
     quant.DecodeOne(codes, outVec);
     for (int i = 0; i < dim; ++i) {
-        REQUIRE(std::abs(vecs[idx * dim + i] - outVec[i]) < error);
+        REQUIRE(std::fabs(vecs[idx * dim + i] - outVec[i]) < error);
     }
 
     // Test EncodeBatch & DecodeBatch
@@ -45,7 +45,7 @@ TestQuantizerEncodeDecode(Quantizer<T>& quant, int64_t dim, int count, float err
     outVec = new float[dim * count];
     quant.DecodeBatch(codes, outVec, count);
     for (int64_t i = 0; i < dim * count; ++i) {
-        REQUIRE(std::abs(vecs[i] - outVec[i]) < error);
+        REQUIRE(std::fabs(vecs[i] - outVec[i]) < error);
     }
 
     delete[] outVec;
@@ -74,7 +74,7 @@ TestQuantizerEncodeDecodeSame(
         auto* outVec = new float[dim];
         quant.DecodeOne(codes, outVec);
         for (int i = 0; i < dim; ++i) {
-            REQUIRE(std::abs(data[idx * dim + i] - outVec[i]) < error);
+            REQUIRE(std::fabs(data[idx * dim + i] - outVec[i]) < error);
         }
         delete[] codes;
         delete[] outVec;
@@ -87,7 +87,7 @@ TestQuantizerEncodeDecodeSame(
         auto outVec = new float[dim * count];
         quant.DecodeBatch(codes, outVec, count);
         for (int64_t i = 0; i < dim * count; ++i) {
-            REQUIRE(std::abs(data[i] - outVec[i]) < error);
+            REQUIRE(std::fabs(data[i] - outVec[i]) < error);
         }
 
         delete[] outVec;
@@ -116,7 +116,7 @@ TestComputeCodes(Quantizer<T>& quantizer, size_t dim, uint32_t size, const Metri
         } else if (metric == vsag::MetricType::METRIC_TYPE_L2SQR) {
             gt = L2Sqr(vecs.data() + idx1 * dim, vecs.data() + idx2 * dim, &dim);
         }
-        REQUIRE(std::abs(gt - value) < 1e-4);
+        REQUIRE(std::fabs(gt - value) < 1e-4);
         delete[] codes1;
         delete[] codes2;
     }

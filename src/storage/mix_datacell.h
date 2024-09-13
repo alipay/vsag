@@ -39,7 +39,7 @@ public:
     explicit MixDataCell(const std::string& initializeJson);  // todo
 
     void
-    MakeRedundant(float loading_factor = 1.0,
+    MakeRedundant(double loading_factor = 1.0,
                   REDUNDANT_STRATEGY redundant_strategy = REDUNDANT_STRATEGY::ID_FIRST);
 
     template <typename IDType = uint64_t>
@@ -50,12 +50,12 @@ public:
 
     template <typename IDType = uint64_t>
     void
-    QueryLine(float* resultDists, std::shared_ptr<Computer<QuantTmpl>>& computer, uint64_t id);
+    QueryLine(float* resultDists, std::unique_ptr<Computer<QuantTmpl>>& computer, uint64_t id);
 
-    inline void
+    void
     SetIO(std::unique_ptr<BasicIO<IOTmpl>>& io) = delete;
 
-    inline void
+    void
     SetIO(std::unique_ptr<BasicIO<IOTmpl>>&& io) = delete;
 
     inline void
@@ -70,20 +70,28 @@ public:
         this->redundant_io_ = std::move(redundant_io);
     }
 
+    inline uint64_t
+    GetRedundantTotalCount() const {
+        return redundant_total_count_;
+    }
+
 private:
     std::vector<uint64_t>
-    SelectIds(float loading_factor, REDUNDANT_STRATEGY redundant_strategy);
+    select_ids(double loading_factor, REDUNDANT_STRATEGY redundant_strategy);
 
     void
-    RedundantInsertVector(uint64_t id,
-                          const std::vector<uint64_t> neighbor_ids,
-                          const std::vector<const uint8_t*> neighbor_codes);
+    redundant_insert_neighbors(uint64_t id,
+                               std::vector<uint64_t> neighbor_ids,
+                               std::vector<const uint8_t*> neighbor_codes);
 
-    const uint64_t
-    GetRedundantSizeById(uint64_t id) const;
+    uint64_t
+    get_redundant_size_by_id(uint64_t id) const;
 
     const uint8_t*
-    GetNeighborCodesById(uint64_t id, uint64_t neighbor_j) const;
+    get_neighbor_codes_by_id(uint64_t id, uint64_t neighbor_j) const;
+
+    uint64_t
+    get_neighbor_id_by_id(uint64_t id, uint64_t neighbor_i) const;
 
 private:
     std::shared_ptr<GraphDataCell<IOTmpl>> graph_data_cell_;
@@ -91,33 +99,36 @@ private:
     std::shared_ptr<BasicIO<IOTmpl>> redundant_io_{nullptr};
 
     uint64_t redundant_cur_offset_{0};
+
     std::unordered_map<uint64_t, uint64_t> redundant_offset_;
+
     uint64_t redundant_total_count_{0};
 };
 
 template <typename QuantTmpl, typename IOTmpl>
 void
-MixDataCell<QuantTmpl, IOTmpl>::MakeRedundant(float loading_factor,
+MixDataCell<QuantTmpl, IOTmpl>::MakeRedundant(double loading_factor,
                                               vsag::REDUNDANT_STRATEGY redundant_strategy) {
     std::vector<uint64_t> neighbor_ids;
     std::vector<const uint8_t*> neighbor_codes;
-    auto selected_ids = SelectIds(loading_factor, redundant_strategy);
+    auto selected_ids = select_ids(loading_factor, redundant_strategy);
+    redundant_total_count_ = selected_ids.size();
     for (auto id : selected_ids) {
         uint32_t size = graph_data_cell_->GetNeighborSize(id);
-        graph_data_cell_->GetNeighbors(neighbor_ids);
+        graph_data_cell_->GetNeighbors(id, neighbor_ids);
         neighbor_codes.resize(size);
         for (uint32_t i = 0; i < size; i++) {
             neighbor_codes[i] = this->GetCodesById(neighbor_ids[i]);
         }
-        RedundantInsertVector(id, neighbor_ids, neighbor_codes);
+        redundant_insert_neighbors(id, neighbor_ids, neighbor_codes);
     }
 }
 
 template <typename QuantTmpl, typename IOTmpl>
 std::vector<uint64_t>
-MixDataCell<QuantTmpl, IOTmpl>::SelectIds(float loading_factor,
-                                          REDUNDANT_STRATEGY redundant_strategy) {
-    uint64_t data_size = graph_data_cell_.TotalCount();
+MixDataCell<QuantTmpl, IOTmpl>::select_ids(double loading_factor,
+                                           REDUNDANT_STRATEGY redundant_strategy) {
+    uint64_t data_size = graph_data_cell_->TotalCount();
     std::vector<uint64_t> ids(data_size);
     std::vector<uint64_t> selected_ids(loading_factor * data_size);
     std::iota(ids.begin(), ids.end(), 0);
@@ -125,7 +136,7 @@ MixDataCell<QuantTmpl, IOTmpl>::SelectIds(float loading_factor,
     if (redundant_strategy == REDUNDANT_STRATEGY::DEGREE_FIRST) {
         std::vector<std::pair<uint64_t, uint32_t>> id_degree;
         for (uint64_t i = 0; i < ids.size(); i++) {
-            id_degree.push_back(std::make_pair(ids[i], graph_data_cell_.GetNeighborSize(ids[i])));
+            id_degree.push_back(std::make_pair(ids[i], graph_data_cell_->GetNeighborSize(ids[i])));
         }
         std::sort(id_degree.begin(),
                   id_degree.end(),
@@ -140,9 +151,9 @@ MixDataCell<QuantTmpl, IOTmpl>::SelectIds(float loading_factor,
         std::random_device rd;
         std::mt19937 gen(rd());
         std::shuffle(ids.begin(), ids.end(), gen);
-        selected_ids.assign(ids.begin(), ids.begin() + loading_factor * data_size);
+        selected_ids.assign(ids.begin(), ids.begin() + data_size * loading_factor);
     } else {
-        selected_ids.assign(ids.begin(), ids.begin() + loading_factor * data_size);
+        selected_ids.assign(ids.begin(), ids.begin() + data_size * loading_factor);
     }
 
     return selected_ids;
@@ -150,19 +161,25 @@ MixDataCell<QuantTmpl, IOTmpl>::SelectIds(float loading_factor,
 
 template <typename QuantTmpl, typename IOTmpl>
 void
-MixDataCell<QuantTmpl, IOTmpl>::RedundantInsertVector(
-    uint64_t id,
-    const std::vector<uint64_t> neighbor_ids,
-    const std::vector<const uint8_t*> neighbor_codes) {
+MixDataCell<QuantTmpl, IOTmpl>::redundant_insert_neighbors(
+    uint64_t id, std::vector<uint64_t> neighbor_ids, std::vector<const uint8_t*> neighbor_codes) {
+    // redundant_offset_[id]:
+    // size:      [uint64_t]
+    // neighbor1: [id: uint64_t][code: code_size_]
+    // neighbor2: [id: uint64_t][code: code_size_]
+    // ...
+
     redundant_offset_[id] = redundant_cur_offset_;
 
     uint64_t size = neighbor_codes.size();
 
-    redundant_io_->Write(&size, sizeof(size), redundant_cur_offset_);
+    redundant_io_->Write(reinterpret_cast<uint8_t*>(&size), sizeof(size), redundant_cur_offset_);
     redundant_cur_offset_ += sizeof(size);
 
     for (uint64_t i = 0; i < size; i++) {
-        redundant_io_->Write(neighbor_ids[i], sizeof(neighbor_ids[i]), redundant_cur_offset_);
+        redundant_io_->Write(reinterpret_cast<uint8_t*>(&neighbor_ids[i]),
+                             sizeof(neighbor_ids[i]),
+                             redundant_cur_offset_);
         redundant_cur_offset_ += sizeof(neighbor_ids[i]);
 
         redundant_io_->Write(neighbor_codes[i], this->codeSize_, redundant_cur_offset_);
@@ -171,8 +188,8 @@ MixDataCell<QuantTmpl, IOTmpl>::RedundantInsertVector(
 }
 
 template <typename QuantTmpl, typename IOTmpl>
-const uint64_t
-MixDataCell<QuantTmpl, IOTmpl>::GetRedundantSizeById(uint64_t id) const {
+uint64_t
+MixDataCell<QuantTmpl, IOTmpl>::get_redundant_size_by_id(uint64_t id) const {
     auto iter = redundant_offset_.find(id);
     if (iter == redundant_offset_.end()) {
         return 0;
@@ -182,13 +199,25 @@ MixDataCell<QuantTmpl, IOTmpl>::GetRedundantSizeById(uint64_t id) const {
 
 template <typename QuantTmpl, typename IOTmpl>
 const uint8_t*
-MixDataCell<QuantTmpl, IOTmpl>::GetNeighborCodesById(uint64_t id, uint64_t neighbor_i) const {
+MixDataCell<QuantTmpl, IOTmpl>::get_neighbor_codes_by_id(uint64_t id, uint64_t neighbor_i) const {
     auto iter = redundant_offset_.find(id);
     if (iter == redundant_offset_.end()) {
         return nullptr;
     }
-    auto pos = iter->second + +neighbor_i * (this->codeSize_ + sizeof(uint64_t));
-    return *(uint64_t*)(this->io_->Read(this->codeSize_, pos));
+    auto pos = iter->second + sizeof(uint64_t) + neighbor_i * (this->codeSize_ + sizeof(uint64_t)) +
+               sizeof(uint64_t);
+    return redundant_io_->Read(this->codeSize_, pos);
+}
+
+template <typename QuantTmpl, typename IOTmpl>
+uint64_t
+MixDataCell<QuantTmpl, IOTmpl>::get_neighbor_id_by_id(uint64_t id, uint64_t neighbor_i) const {
+    auto iter = redundant_offset_.find(id);
+    if (iter == redundant_offset_.end()) {
+        return 0;
+    }
+    auto pos = iter->second + sizeof(uint64_t) + neighbor_i * (this->codeSize_ + sizeof(uint64_t));
+    return *(uint64_t*)redundant_io_->Read(sizeof(uint64_t), pos);
 }
 
 template <typename QuantTmpl, typename IOTmpl>
@@ -197,7 +226,7 @@ void
 MixDataCell<QuantTmpl, IOTmpl>::QueryLine(float* resultDists,
                                           const float* queryVector,
                                           uint64_t id) {
-    std::shared_ptr<Computer<QuantTmpl>> computer = std::move(this->quantizer_->FactoryComputer());
+    std::unique_ptr<Computer<QuantTmpl>> computer = std::move(this->quantizer_->FactoryComputer());
     computer->SetQuery(queryVector);
     this->QueryLine(resultDists, computer, id);
 }
@@ -206,20 +235,20 @@ template <typename QuantTmpl, typename IOTmpl>
 template <typename IDType>
 void
 MixDataCell<QuantTmpl, IOTmpl>::QueryLine(float* resultDists,
-                                          std::shared_ptr<Computer<QuantTmpl>>& computer,
+                                          std::unique_ptr<Computer<QuantTmpl>>& computer,
                                           uint64_t id) {
     auto iter = redundant_offset_.find(id);
     if (iter == redundant_offset_.end()) {
         std::vector<uint64_t> neighbor_ids;
         graph_data_cell_->GetNeighbors(id, neighbor_ids);
         for (int i = 0; i < neighbor_ids.size(); i++) {
-            const auto* codes = this->GetCodesById(id);
+            const auto* codes = this->GetCodesById(neighbor_ids[i]);
             computer->ComputeDist(codes, resultDists + i);
         }
     } else {
-        auto neighbor_size = GetRedundantSizeById(id);
+        auto neighbor_size = get_redundant_size_by_id(id);
         for (int i = 0; i < neighbor_size; i++) {
-            const auto* codes = this->GetNeighborCodesById(id, i);
+            const auto* codes = this->get_neighbor_codes_by_id(id, i);
             computer->ComputeDist(codes, resultDists + i);
         }
     };

@@ -212,9 +212,16 @@ private:
     template <typename FilterType>
     tl::expected<DatasetPtr, Error>
     knn_search_internal(const DatasetPtr& query,
-                        int64_t k,
-                        const std::string& parameters,
-                        const FilterType& filter_obj) const;
+                              int64_t k,
+                              const std::string& parameters,
+                              const FilterType& filter_obj) const {
+        if (filter_obj) {
+            BitsetOrCallbackFilter filter(filter_obj);
+            return this->knn_search(query, k, parameters, &filter);
+        } else {
+            return this->knn_search(query, k, parameters, nullptr);
+        }
+    };
 
     tl::expected<DatasetPtr, Error>
     knn_search(const DatasetPtr& query,

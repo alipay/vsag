@@ -363,6 +363,19 @@ public:
         spdlog::debug("correct: " + std::to_string(correct));
         float recall = 1.0 * correct / total;
 
+//        int test_query = 34;
+//        auto query = Dataset::Make();
+//        query->NumElements(1)
+//            ->Dim(test_dataset->GetDim())
+//            ->Float32Vectors(test_dataset->GetTest().get() + test_query * test_dataset->GetDim())
+//            ->Owner(false);
+//
+//        auto result = index->KnnSearch(query, 10, search_parameters);
+//        correct = (result.value()->GetIds()[0] == test_dataset->GetNearestNeighbor(test_query)) ? 1: 0;
+//        spdlog::debug("correct: " + std::to_string(correct));
+//        recall = 1.0 * correct;
+
+
         json output;
         // input
         output["index_name"] = index_name;

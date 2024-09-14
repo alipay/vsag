@@ -534,6 +534,32 @@ public:
         vl_type* visited_array = vl->mass;
         vl_type visited_array_tag = vl->curV;
 
+//        std::unordered_set<uint32_t> has_visits;
+//        std::vector<uint32_t> candidates;
+//        candidates.push_back(ep_id);
+//        int level = 0;
+//        while(has_visits.size() < cur_element_count_ - 1 || candidates.empty()) {
+//            std::vector<uint32_t> new_candidates;
+//            std::cout << "level:" << level << std::endl;
+//            for (int i = 0; i < candidates.size(); ++i) {
+//                has_visits.insert(candidates[i]);
+//                auto data = get_linklist0(candidates[i]);
+//                auto size = getListCount(data);
+//                data += 1;
+//                for (int j = 0; j < size; ++j) {
+//                    if (has_visits.find(data[j]) == has_visits.end()) {
+//                        new_candidates.push_back(data[j]);
+//                    }
+//                }
+//            }
+//            if (has_visits.find(34) != has_visits.end()) {
+//                break;
+//            }
+//            new_candidates.swap(candidates);
+//            level ++;
+//        }
+//        std::cout << "only:" << has_visits.size() << std::endl;
+
         std::priority_queue<std::pair<float, tableint>,
                             std::vector<std::pair<float, tableint>>,
                             CompareByFirst>

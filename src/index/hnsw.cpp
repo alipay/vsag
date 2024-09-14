@@ -115,16 +115,16 @@ HNSW::build(const DatasetPtr& base) {
         std::vector<int64_t> failed_ids;
         {
             SlowTaskTimer t("hnsw graph");
-//                        for (int64_t i = 0; i < num_elements; ++i) {
-//                            // noexcept runtime
-//                            if (!alg_hnsw->addPoint((const void*)(vectors + i * dim_), ids[i])) {
-//                                logger::debug("duplicate point: {}", ids[i]);
-//                                failed_ids.emplace_back(ids[i]);
-//                            }
-//                        }
-            vsag::HierarchicalGraph graph(M_, 30, space->get_dist_func());
-            graph.Build(base);
-            alg_hnsw->set_graph(base, graph);
+                        for (int64_t i = 0; i < num_elements; ++i) {
+                            // noexcept runtime
+                            if (!alg_hnsw->addPoint((const void*)(vectors + i * dim_), ids[i])) {
+                                logger::debug("duplicate point: {}", ids[i]);
+                                failed_ids.emplace_back(ids[i]);
+                            }
+                        }
+//            vsag::HierarchicalGraph graph(M_, 30, space->get_dist_func());
+//            graph.Build(base);
+//            alg_hnsw->set_graph(base, graph);
         }
 
         if (use_static_) {
@@ -172,19 +172,6 @@ HNSW::add(const DatasetPtr& base) {
     }
 }
 
-template <typename FilterType>
-tl::expected<DatasetPtr, Error>
-HNSW::knn_search_internal(const DatasetPtr& query,
-                          int64_t k,
-                          const std::string& parameters,
-                          const FilterType& filter_obj) const {
-    if (filter_obj) {
-        BitsetOrCallbackFilter filter(filter_obj);
-        return this->knn_search(query, k, parameters, &filter);
-    } else {
-        return this->knn_search(query, k, parameters, nullptr);
-    }
-};
 
 tl::expected<DatasetPtr, Error>
 HNSW::knn_search(const DatasetPtr& query,

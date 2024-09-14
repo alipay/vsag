@@ -570,8 +570,30 @@ private:
             }
         }
 
+        std::vector<bool> visits(data_num_, false);
+        int connect_count = 0;
+        for (int i = 0; i < data_num_; ++i) {
+            if (visits[i]) {
+                continue;
+            }
+            std::vector<uint32_t> candidates;
+            candidates.push_back(i);
+            while (not candidates.empty()) {
+                std::vector<uint32_t> new_candidates;
+                for (unsigned int cur_node : candidates) {
+                    for (auto & neigbor : graph[cur_node].neigbors) {
+                        if (not visits[neigbor.id]) {
+                            new_candidates.push_back(neigbor.id);
+                        }
+                    }
+                }
+                candidates.swap(new_candidates);
+            }
+            connect_count ++;
+        }
+
         loss /= edge_count;
-        std::cout << "loss:" << loss << "  edge_count:" << edge_count << " no_in_edge_count:" << no_in_edge_count << std::endl;
+        std::cout << "loss:" << loss << "  edge_count:" << edge_count << " no_in_edge_count:" << no_in_edge_count << "  connections:" << connect_count << std::endl;
     }
 
 private:

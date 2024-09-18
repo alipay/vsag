@@ -15,9 +15,9 @@
 #include "graph.h"
 int
 main() {
-    int64_t num_vectors = 1000;
+    int64_t num_vectors = 100000;
     size_t dim = 128;
-    int64_t max_degree = 20;
+    int64_t max_degree = 32;
 
     // prepare ids and vectors
     auto ids = new int64_t[num_vectors];
@@ -29,8 +29,13 @@ main() {
     for (int64_t i = 0; i < num_vectors; ++i) {
         ids[i] = i;
     }
-    for (int64_t i = 0; i < dim * num_vectors; ++i) {
+    for (int64_t i = 0; i < dim * num_vectors / 2; ++i) {
         vectors[i] = distrib_real(rng);
+    }
+
+
+    for (int64_t i = dim * num_vectors / 2; i < dim * num_vectors; ++i) {
+        vectors[i] = distrib_real(rng) + 10;
     }
 
     vsag::DistanceFunc dist = vsag::GetL2DistanceFunc(dim);

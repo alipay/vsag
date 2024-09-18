@@ -292,6 +292,7 @@ public:
             }
             repair_no_in_edge();
             prune_graph();
+            add_reverse_edges();
             check_turn();
         }
         return true;
@@ -399,6 +400,78 @@ private:
         }
     }
 
+
+    void
+    add_reverse_edges() {
+        std::vector<Linklist> reverse_graph;
+        reverse_graph.resize(data_num_);
+        for (int i = 0; i < data_num_; ++i) {
+            for (int j = 0; j < graph[i].neigbors.size(); ++j) {
+                auto& node = graph[i].neigbors[j];
+                reverse_graph[node.id].neigbors.emplace_back(i, node.distance);
+            }
+        }
+        for (int i = 0; i < data_num_; ++i) {
+            graph[i].neigbors.insert(graph[i].neigbors.end(),
+                                     reverse_graph[i].neigbors.begin(),
+                                     reverse_graph[i].neigbors.end());
+            std::sort(graph[i].neigbors.begin(), graph[i].neigbors.end());
+            graph[i].neigbors.erase(std::unique(graph[i].neigbors.begin(), graph[i].neigbors.end()),
+                                    graph[i].neigbors.end());
+        }
+    }
+
+    void search_and_connect() {
+        std::vector<bool> visits(data_num_, false);
+        std::vector<uint32_t> entry_point;
+        for (int i = 0; i < data_num_; ++i) {
+            if (visits[i]) {
+                continue;
+            }
+            std::vector<uint32_t> candidates;
+            candidates.push_back(i);
+            while (not candidates.empty()) {
+                std::vector<uint32_t> new_candidates;
+                for (unsigned int cur_node : candidates) {
+                    for (auto & neigbor : graph[cur_node].neigbors) {
+                        if (not visits[neigbor.id]) {
+                            new_candidates.push_back(neigbor.id);
+                            visits[neigbor.id] = true;
+                        }
+                    }
+                }
+                candidates.swap(new_candidates);
+            }
+            entry_point.push_back(i);
+        }
+        std::vector<std::vector<Node>> new_candidates;
+        new_candidates.resize(data_num_);
+        for (int i = 1; i < data_num_; ++i) {
+            auto nearest_nerigbors = find_close_neighbor(i, entry_point, max_degree_ * 2);
+            for (int j = 0; j < max_degree_; ++j) {
+                auto& node = nearest_nerigbors.top();
+                if (node.id != i) {
+                    new_candidates[node.id].emplace_back(i, node.distance);
+                }
+                nearest_nerigbors.pop();
+            }
+        }
+        for (int i = 1; i < data_num_; ++i) {
+            graph[i].neigbors.insert(
+                graph[i].neigbors.end(), new_candidates[i].begin(), new_candidates[i].end());
+            std::sort(graph[i].neigbors.begin(), graph[i].neigbors.end());
+            graph[i].neigbors.erase(std::unique(graph[i].neigbors.begin(), graph[i].neigbors.end()),
+                                    graph[i].neigbors.end());
+            graph[i].greast_neighbor_distance = graph[i].neigbors.back().distance;
+        }
+        for (int i = 1; i < entry_point.size(); ++i) {
+            std::cout << entry_point[i] << " ";
+            graph[0].neigbors.emplace_back(entry_point[i], 0.0);
+        }
+        std::cout << std::endl;
+    }
+
+
     void
     sample_candidates(std::vector<std::vector<uint32_t>>& old_neigbors,
                       std::vector<std::vector<uint32_t>>& new_neigbors,
@@ -426,6 +499,32 @@ private:
         }
     }
 
+
+    std::priority_queue<Node> find_close_neighbor(uint32_t id, const std::vector<uint32_t>& start_points, int64_t topk) {
+        std::priority_queue<Node> candidates;
+        std::priority_queue<Node> nearest_nerigbors;
+        std::unordered_set<uint32_t> visited_set;
+        for (int j = 0; j < start_points.size(); ++j) {
+            candidates.emplace(start_points[j], -get_distance(id, start_points[j]));
+            visited_set.insert(start_points[j]);
+        }
+        for (int j = 0; j < topk * 2; ++j) {
+            auto cur_node = candidates.top();
+            candidates.pop();
+            for (int k = 0; k < graph[cur_node.id].neigbors.size(); ++k) {
+                if (visited_set.find(graph[cur_node.id].neigbors[k].id) != visited_set.end() ||
+                    graph[cur_node.id].neigbors[k].id == id) {
+                    continue;
+                }
+                visited_set.insert(graph[cur_node.id].neigbors[k].id);
+                auto dist = get_distance(id, graph[cur_node.id].neigbors[k].id);
+                candidates.emplace(graph[cur_node.id].neigbors[k].id, -dist);
+            }
+            nearest_nerigbors.emplace(cur_node.id, cur_node.distance);
+        }
+        return nearest_nerigbors;
+    }
+
     void
     search_neigbors() {
         std::vector<std::vector<Node>> new_candidates;
@@ -438,28 +537,12 @@ private:
             while (visited_[id]) {
                 id = k_generate(rng);
             }
-            std::priority_queue<Node> candidates;
-            std::priority_queue<Node> nearest_nerigbors;
-            std::unordered_set<uint32_t> visited_set;
             float max_distance = graph[id].neigbors.back().distance;
+            std::vector<uint32_t> start_points;
             for (int j = 0; j < graph[id].neigbors.size(); ++j) {
-                candidates.emplace(graph[id].neigbors[j].id, -graph[id].neigbors[j].distance);
-                visited_set.insert(graph[id].neigbors[j].id);
+                start_points.push_back(graph[id].neigbors[j].id);
             }
-            for (int j = 0; j < max_degree_ * 2; ++j) {
-                auto cur_node = candidates.top();
-                candidates.pop();
-                for (int k = 0; k < graph[cur_node.id].neigbors.size(); ++k) {
-                    if (visited_set.find(graph[cur_node.id].neigbors[k].id) != visited_set.end() ||
-                        graph[cur_node.id].neigbors[k].id == id) {
-                        continue;
-                    }
-                    visited_set.insert(graph[cur_node.id].neigbors[k].id);
-                    auto dist = get_distance(id, graph[cur_node.id].neigbors[k].id);
-                    candidates.emplace(graph[cur_node.id].neigbors[k].id, -dist);
-                }
-                nearest_nerigbors.emplace(cur_node.id, cur_node.distance);
-            }
+            auto nearest_nerigbors = find_close_neighbor(id, start_points, max_degree_);
             for (int j = 0; j < graph[id].neigbors.size(); ++j) {
                 graph[id].neigbors[j] = nearest_nerigbors.top();
                 graph[id].neigbors[j].distance = -graph[id].neigbors[j].distance;
@@ -517,7 +600,7 @@ private:
             }
         }
 
-        for (int loc = 0; loc < data_num_; ++loc) {
+        for (int loc = 1; loc < data_num_; ++loc) {
 
             std::sort(graph[loc].neigbors.begin(), graph[loc].neigbors.end());
             graph[loc].neigbors.erase(
@@ -545,6 +628,75 @@ private:
                 graph[loc].neigbors.resize(max_degree_);
             }
         }
+    }
+
+
+    void repair_no_connection() {
+//        std::random_device rd;
+//        std::uniform_int_distribution<int> k_generate(0, data_num_ - 1);
+//#pragma omp for
+//        for (int i = 0; i < data_num_; ++i) {
+//            std::mt19937 rng(rd());
+//            auto id = k_generate(rng);
+//            auto dist = get_distance(i, id);
+//            if (graph[i].neigbors.size() < max_degree_) {
+//                graph[i].neigbors.emplace_back(id, dist);
+//            } else {
+//                graph[i].neigbors.back().id = id;
+//                graph[i].neigbors.back().distance = dist;
+//            }
+//        }
+
+//        std::vector<bool> visits(data_num_, false);
+//        std::vector<uint32_t> entry_point;
+//        for (int i = 0; i < data_num_; ++i) {
+//            if (visits[i]) {
+//                continue;
+//            }
+//            std::vector<uint32_t> candidates;
+//            candidates.push_back(i);
+//            while (not candidates.empty()) {
+//                std::vector<uint32_t> new_candidates;
+//                for (unsigned int cur_node : candidates) {
+//                    for (auto & neigbor : graph[cur_node].neigbors) {
+//                        if (not visits[neigbor.id]) {
+//                            new_candidates.push_back(neigbor.id);
+//                            visits[neigbor.id] = true;
+//                        }
+//                    }
+//                }
+//                candidates.swap(new_candidates);
+//            }
+//            entry_point.push_back(i);
+//        }
+//        if (entry_point.size() == 1) {
+//            return;
+//        }
+//
+//        for (int i = 0; i < entry_point.size(); ++i) {
+//            uint32_t id = entry_point[i];
+//            std::vector<uint32_t> current_starts;
+//            current_starts.push_back(id);
+//            for (int j = 0; j < entry_point.size(); ++j) {
+//                if (i == j) {
+//                    continue;
+//                }
+//                std::vector<uint32_t> start_points;
+//                start_points.push_back(entry_point[j]);
+//                auto boundary_points = find_close_neighbor(id, start_points, data_num_ / (entry_point.size() * 200));
+//                auto size = boundary_points.size();
+//                for (int k = 0; k < size; ++k) {
+//                    auto another_id = boundary_points.top().id;
+//                    auto current_points = find_close_neighbor(id, current_starts, max_degree_);
+//                    if (graph[another_id].neigbors.size() == max_degree_) {
+//                        graph[another_id].neigbors.back() = current_points.top();
+//                    } else {
+//                        graph[another_id].neigbors.push_back(current_points.top());
+//                    }
+//                    graph[another_id].neigbors.back().distance = -graph[another_id].neigbors.back().distance;
+//                }
+//            }
+//        }
     }
 
     void
@@ -584,6 +736,7 @@ private:
                     for (auto & neigbor : graph[cur_node].neigbors) {
                         if (not visits[neigbor.id]) {
                             new_candidates.push_back(neigbor.id);
+                            visits[neigbor.id] = true;
                         }
                     }
                 }

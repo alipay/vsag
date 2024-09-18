@@ -31,6 +31,14 @@ using namespace nlohmann;
 using namespace spdlog;
 using namespace vsag;
 
+
+namespace vsag {
+
+extern float
+InnerProductDistance(const void* pVect1, const void* pVect2, const void* qty_ptr);
+
+}
+
 json
 run_test(const std::string& index_name,
          const std::string& process,
@@ -328,52 +336,78 @@ public:
 
         auto test_dataset = TestDataset::Load(dataset_path);
 
+        int query_type = 1;
         // search
         auto search_start = std::chrono::steady_clock::now();
         int64_t correct = 0;
         int64_t total = test_dataset->GetNumberOfQuery();
-        spdlog::debug("total: " + std::to_string(total));
+        size_t dim = test_dataset->GetDim();
+        float recall;
         std::vector<DatasetPtr> results;
-        for (int64_t i = 0; i < total; ++i) {
+        if (query_type == 1) {
+            spdlog::debug("total: " + std::to_string(total));
+            for (int64_t i = 0; i < total; ++i) {
+                auto query = Dataset::Make();
+                query->NumElements(1)
+                    ->Dim(test_dataset->GetDim())
+                    ->Float32Vectors(test_dataset->GetTest().get() + i * test_dataset->GetDim())
+                    ->Owner(false);
+
+                auto result = index->KnnSearch(query, 10, search_parameters);
+                if (not result.has_value()) {
+                    std::cerr << "query error: " << result.error().message << std::endl;
+                    exit(-1);
+                }
+                results.emplace_back(result.value());
+            }
+        }
+        auto search_finish = std::chrono::steady_clock::now();
+        // calculate recall
+        if (query_type == 1) {
+            for (int64_t i = 0; i < total; ++i) {
+                int64_t j;
+                for (j = 0; j < 10; ++j) {
+                    // 1@10
+                    if (results[i]->GetIds()[j] == test_dataset->GetNearestNeighbor(i)) {
+                        ++correct;
+                        break;
+                    }
+                }
+//                if (j == 10) {
+//                    std::cout << i << " " << test_dataset->GetNearestNeighbor(i) << " " << vsag::InnerProductDistance(test_dataset->GetTest().get() + i * test_dataset->GetDim(),
+//                                                                                                               test_dataset->GetTrain().get() + test_dataset->GetNearestNeighbor(i) * test_dataset->GetDim(), &dim) << std::endl;
+//
+//                    for (j = 0; j < 10; ++j) {
+//                        // 1@10
+//                        std::cout << results[i]->GetIds()[j] << " " << results[i]->GetDistances()[j] << std::endl;
+//                    }
+//                    std::cout << std::endl;
+//                }
+            }
+            recall = 1.0 * correct / total;;
+        }
+        spdlog::debug("correct: " + std::to_string(correct));
+
+        if (query_type == 2) {
+            int test_query = 9756;
             auto query = Dataset::Make();
             query->NumElements(1)
                 ->Dim(test_dataset->GetDim())
-                ->Float32Vectors(test_dataset->GetTest().get() + i * test_dataset->GetDim())
+                ->Float32Vectors(test_dataset->GetTest().get() + test_query * test_dataset->GetDim())
                 ->Owner(false);
 
             auto result = index->KnnSearch(query, 10, search_parameters);
-            if (not result.has_value()) {
-                std::cerr << "query error: " << result.error().message << std::endl;
-                exit(-1);
-            }
-            results.emplace_back(result.value());
-        }
-        auto search_finish = std::chrono::steady_clock::now();
-
-        // calculate recall
-        for (int64_t i = 0; i < total; ++i) {
-            for (int64_t j = 0; j < results[i]->GetDim(); ++j) {
-                // 1@10
-                if (results[i]->GetIds()[j] == test_dataset->GetNearestNeighbor(i)) {
-                    ++correct;
-                    break;
+            for (int i = 0; i < result.value()->GetDim(); ++i) {
+                if (result.value()->GetIds()[i] == test_dataset->GetNearestNeighbor(test_query)) {
+                    std::cout << "ok" << std::endl;
+                } else {
+                    std::cout << result.value()->GetIds()[i] << " " << result.value()->GetDistances()[i] << std::endl;
                 }
             }
-        }
-        spdlog::debug("correct: " + std::to_string(correct));
-        float recall = 1.0 * correct / total;
+                std::cout << test_query << " " << test_dataset->GetNearestNeighbor(test_query) << " " << vsag::InnerProductDistance(test_dataset->GetTest().get() + test_query * test_dataset->GetDim(),
+                                                                                                                  test_dataset->GetTrain().get() + test_dataset->GetNearestNeighbor(test_query) * test_dataset->GetDim(), &dim) << std::endl;
 
-//        int test_query = 34;
-//        auto query = Dataset::Make();
-//        query->NumElements(1)
-//            ->Dim(test_dataset->GetDim())
-//            ->Float32Vectors(test_dataset->GetTest().get() + test_query * test_dataset->GetDim())
-//            ->Owner(false);
-//
-//        auto result = index->KnnSearch(query, 10, search_parameters);
-//        correct = (result.value()->GetIds()[0] == test_dataset->GetNearestNeighbor(test_query)) ? 1: 0;
-//        spdlog::debug("correct: " + std::to_string(correct));
-//        recall = 1.0 * correct;
+        }
 
 
         json output;

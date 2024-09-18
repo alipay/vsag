@@ -534,26 +534,60 @@ public:
         vl_type* visited_array = vl->mass;
         vl_type visited_array_tag = vl->curV;
 
-//        std::unordered_set<uint32_t> has_visits;
+//        for (int i = 999700; i < 999800; ++i) {
+//            auto data = get_linklist0(i);
+//            auto size = getListCount(data);
+//            data += 1;
+//            std::cout << i << ": ";
+//            for (int j = 0; j < size; ++j) {
+//                std::cout << data[j] << " ";
+//            }
+//            std::cout << std::endl;
+//
+//            std::cout << i << ": ";
+//            for (int j = 0; j < size; ++j) {
+//                std::cout << fstdistfunc_(getDataByInternalId(i), getDataByInternalId(data[j]), dist_func_param_) << " ";
+//            }
+//            std::cout << std::endl;
+//        }
+//        {
+//            int i = 943523;
+//            auto data = get_linklist0(i);
+//            auto size = getListCount(data);
+//            data += 1;
+//            std::cout << i << ": ";
+//            for (int j = 0; j < size; ++j) {
+//                std::cout << data[j] << " ";
+//            }
+//            std::cout << std::endl;
+//
+//            std::cout << i << ": ";
+//            for (int j = 0; j < size; ++j) {
+//                std::cout << fstdistfunc_(getDataByInternalId(i), getDataByInternalId(data[j]), dist_func_param_) << " ";
+//            }
+//            std::cout << std::endl;
+//        }
+        //        std::unordered_set<uint32_t> has_visits;
 //        std::vector<uint32_t> candidates;
 //        candidates.push_back(ep_id);
 //        int level = 0;
-//        while(has_visits.size() < cur_element_count_ - 1 || candidates.empty()) {
+//        while(has_visits.size() < cur_element_count_ - 1 && not candidates.empty()) {
 //            std::vector<uint32_t> new_candidates;
-//            std::cout << "level:" << level << std::endl;
+//            std::cout << "level:" << level << " " << has_visits.size() << " " << candidates[0] << std::endl;
 //            for (int i = 0; i < candidates.size(); ++i) {
-//                has_visits.insert(candidates[i]);
 //                auto data = get_linklist0(candidates[i]);
 //                auto size = getListCount(data);
 //                data += 1;
 //                for (int j = 0; j < size; ++j) {
+//
+//                    if (data[j] == 2) {
+//                        std::cout << candidates[i] << std::endl;
+//                    }
 //                    if (has_visits.find(data[j]) == has_visits.end()) {
 //                        new_candidates.push_back(data[j]);
+//                        has_visits.insert(data[j]);
 //                    }
 //                }
-//            }
-//            if (has_visits.find(34) != has_visits.end()) {
-//                break;
 //            }
 //            new_candidates.swap(candidates);
 //            level ++;
@@ -608,9 +642,10 @@ public:
             _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
             _mm_prefetch((char*)(data + 2), _MM_HINT_T0);
 #endif
-
+//            std::cout << current_node_id << " " << current_node_pair.first << std::endl;
             for (size_t j = 1; j <= size; j++) {
                 int candidate_id = *(data + j);
+//                std::cout << candidate_id << " ";
                 //                size_t pre_l = std::min(j, size - 2);
                 //                auto vector_data_ptr =
                 //                    data_level0_memory_->getElementPtr((*(data + pre_l + 1)), offsetData_);
@@ -623,7 +658,7 @@ public:
 
                     char* currObj1 = (getDataByInternalId(candidate_id));
                     float dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
-
+//                    std::cout << " *" << (top_candidates.size() < ef) << " " << (lowerBound > dist) << "* ";
                     if (top_candidates.size() < ef || lowerBound > dist) {
                         candidate_set.emplace(-dist, candidate_id);
                         auto vector_data_ptr = data_level0_memory_->getElementPtr(
@@ -631,10 +666,12 @@ public:
 #ifdef USE_SSE
                         _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
 #endif
-
+//                        std::cout << " &" << (!has_deletions || !isMarkedDeleted(candidate_id)) << " " << ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id))) << "& ";
                         if ((!has_deletions || !isMarkedDeleted(candidate_id)) &&
-                            ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id))))
+                            ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id)))) {
+//                            std::cout << " ="  << candidate_id << "= ";
                             top_candidates.emplace(dist, candidate_id);
+                        }
 
                         if (top_candidates.size() > ef)
                             top_candidates.pop();
@@ -644,7 +681,9 @@ public:
                     }
                 }
             }
+//            std::cout << std::endl;
         }
+//        std::cout << top_candidates.size() << std::endl;
 
         visited_list_pool_->releaseVisitedList(vl);
         return top_candidates;
@@ -861,12 +900,12 @@ public:
             memcpy(getDataByInternalId(i), vectors + i * dim, dim * sizeof(float));
             element_levels_[i] = 0;
             auto link = get_linklist0(i);
-            setListCount(link, edges[i].size());
-            if (edges[i].size() > M_ * 2) {
-                std::cout << "edges[i].size() is too large:" << i << std::endl;
-            }
+            setListCount(link, std::min(M_ * 2, edges[i].size()));
+//            if (edges[i].size() > M_ * 2) {
+//                std::cout << "edges[i].size() is too large:" << i << std::endl;
+//            }
             link += 1;
-            for (int j = 0; j < edges[i].size(); ++j) {
+            for (int j = 0; j < edges[i].size() && j < M_ * 2; ++j) {
                 link[j] = edges[i][j];
                 in_degree[link[j]] += 1;
             }
@@ -876,8 +915,8 @@ public:
                 std::cout << "no in edge:" << i << std::endl;
             }
         }
-
-        for (int level = graph.GetLevel() - 1; level > 0; --level) {
+        maxlevel_ = graph.GetLevel() - 1;
+        for (int level = maxlevel_; level > 0; --level) {
             auto level_graph = graph.GetHGraph(level);
             for (int i = 0; i < level_graph.size(); ++i) {
                 if (link_lists_[i] == nullptr) {
@@ -2130,6 +2169,7 @@ public:
         float curdist =
             fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
 
+//        std::cout << maxlevel_ << std::endl;
         for (int level = maxlevel_; level > 0; level--) {
             bool changed = true;
             while (changed) {
@@ -2138,6 +2178,7 @@ public:
 
                 data = (unsigned int*)get_linklist(currObj, level);
                 int size = getListCount(data);
+//                std::cout << currObj << " " << level << " " << size << std::endl;
                 metric_hops++;
                 metric_distance_computations += size;
 
@@ -2161,13 +2202,9 @@ public:
                             std::vector<std::pair<float, tableint>>,
                             CompareByFirst>
             top_candidates;
-        if (num_deleted_) {
-            top_candidates =
-                searchBaseLayerST<true, true>(currObj, query_data, std::max(ef_, k), isIdAllowed);
-        } else {
-            top_candidates =
-                searchBaseLayerST<false, true>(currObj, query_data, std::max(ef_, k), isIdAllowed);
-        }
+
+        top_candidates =
+            searchBaseLayerST<false, true>(currObj, query_data, std::max(ef_, k), isIdAllowed);
 
         while (top_candidates.size() > k) {
             top_candidates.pop();

@@ -929,9 +929,9 @@ public:
                     memset(link_lists_[i], 0, size_links_per_element_ * level + 1);
                 }
                 auto link = get_linklist_at_level(i, level);
-                setListCount(link, level_graph[i].size());
+                setListCount(link, std::min(M_, level_graph[i].size()));
                 link += 1;
-                for (int j = 0; j < level_graph[i].size(); ++j) {
+                for (int j = 0; j < level_graph[i].size() && j < M_; ++j) {
                     link[j] = level_graph[i][j];
                 }
                 element_levels_[i] = std::max(element_levels_[i], level);

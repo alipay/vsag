@@ -17,12 +17,18 @@
 #include <random>
 #include <unordered_set>
 #include <vector>
+#include <thread>
+
+#include <omp.h>
 
 #include "../simd/simd.h"
 #include "../utils.h"
 #include "vsag/dataset.h"
+#include "../logger.h"
 namespace vsag {
 
+
+static constexpr uint32_t MAX_LABEL_OPERATION_LOCKS = 65536;
 struct Node {
     bool old = false;
     uint32_t id;
@@ -263,7 +269,8 @@ private:
 class NNdescent : public Graph {
 public:
     NNdescent(int64_t max_degree, int64_t turn, DistanceFunc distance)
-        : max_degree_(max_degree), turn_(turn), distance_(distance) {
+        : max_degree_(max_degree), turn_(turn), distance_(distance),
+          mutexs_(MAX_LABEL_OPERATION_LOCKS){
     }
 
     bool
@@ -271,22 +278,26 @@ public:
         if (is_build_) {
             return false;
         }
+        omp_set_num_threads(4);
         is_build_ = true;
         dim_ = dataset->GetDim();
         data_num_ = dataset->GetNumElements();
         data_ = dataset->GetFloat32Vectors();
         min_in_degree_ = std::min(min_in_degree_, data_num_ - 1);
-
+        std::vector<std::vector<uint32_t>> old_neigbors;
+        std::vector<std::vector<uint32_t>> new_neigbors;
         new_candidates_.resize(data_num_);
+        old_neigbors.resize(data_num_);
+        new_neigbors.resize(data_num_);
         for (int i = 0; i < data_num_; ++i) {
             new_candidates_[i].reserve(max_degree_);
+            old_neigbors[i].reserve(max_degree_);
+            new_neigbors[i].reserve(max_degree_);
         }
         init_graph();
         check_turn();
         {
             for (int i = 0; i < turn_; ++i) {
-                std::vector<std::vector<uint32_t>> old_neigbors;
-                std::vector<std::vector<uint32_t>> new_neigbors;
                 sample_candidates(old_neigbors, new_neigbors, 0.3);
                 update_neighbors(old_neigbors, new_neigbors);
                 repair_no_in_edge();
@@ -330,7 +341,7 @@ private:
         visited_.resize(data_num_);
         std::random_device rd;
         std::uniform_int_distribution<int> k_generate(0, data_num_ - 1);
-#pragma omp for
+#pragma omp parallel for
         for (int i = 0; i < data_num_; ++i) {
             std::mt19937 rng(rd());
             std::unordered_set<uint32_t> ids_set;
@@ -359,6 +370,8 @@ private:
                      std::vector<std::vector<uint32_t>>& new_neigbors) {
         all_calculate_ = 0;
         valid_calculate_ = 0;
+
+#pragma omp parallel for
         for (int i = 0; i < data_num_; ++i) {
             for (int j = 0; j < new_neigbors[i].size(); ++j) {
                 for (int k = j + 1; k < new_neigbors[i].size(); ++k) {
@@ -369,10 +382,14 @@ private:
                     all_calculate_ += 1.0;
                     float update = false;
                     if (dist < graph[new_neigbors[i][j]].greast_neighbor_distance) {
+//                        std::cout << 4 << " " << new_neigbors[i][j] % MAX_LABEL_OPERATION_LOCKS << " " << new_neigbors[i][j] << std::endl;
+                        std::lock_guard<std::mutex> lock(mutexs_[new_neigbors[i][j] % MAX_LABEL_OPERATION_LOCKS]);
                         new_candidates_[new_neigbors[i][j]].emplace_back(new_neigbors[i][k], dist);
                         update = true;
                     }
                     if (dist < graph[new_neigbors[i][k]].greast_neighbor_distance) {
+//                        std::cout << 3 << " " << new_neigbors[i][k] % MAX_LABEL_OPERATION_LOCKS << " " << new_neigbors[i][k] << std::endl;
+                        std::lock_guard<std::mutex> lock(mutexs_[new_neigbors[i][k] % MAX_LABEL_OPERATION_LOCKS]);
                         new_candidates_[new_neigbors[i][k]].emplace_back(new_neigbors[i][j], dist);
                         update = true;
                     }
@@ -389,10 +406,14 @@ private:
                     all_calculate_ += 1.0;
                     float update = false;
                     if (dist < graph[new_neigbors[i][j]].greast_neighbor_distance) {
+//                        std::cout << 2 << " " << new_neigbors[i][j] % MAX_LABEL_OPERATION_LOCKS << " " << new_neigbors[i][j] << std::endl;
+                        std::lock_guard<std::mutex> lock(mutexs_[new_neigbors[i][j] % MAX_LABEL_OPERATION_LOCKS]);
                         new_candidates_[new_neigbors[i][j]].emplace_back(old_neigbors[i][k], dist);
                         update = true;
                     }
                     if (dist < graph[old_neigbors[i][k]].greast_neighbor_distance) {
+//                        std::cout << 1 << " " << old_neigbors[i][j] % MAX_LABEL_OPERATION_LOCKS << " " << old_neigbors[i][j] << std::endl;
+                        std::lock_guard<std::mutex> lock(mutexs_[old_neigbors[i][k] % MAX_LABEL_OPERATION_LOCKS]);
                         new_candidates_[old_neigbors[i][k]].emplace_back(new_neigbors[i][j], dist);
                         update = true;
                     }
@@ -401,9 +422,13 @@ private:
                     }
                 }
             }
+            old_neigbors[i].clear();
+            new_neigbors[i].clear();
         }
         float unique_count = 0;
         float all_count = 0;
+
+#pragma omp parallel for
         for (uint32_t i = 0; i < data_num_; ++i) {
             graph[i].neigbors.insert(
                 graph[i].neigbors.end(), new_candidates_[i].begin(), new_candidates_[i].end());
@@ -432,6 +457,8 @@ private:
                 reverse_graph[node.id].neigbors.emplace_back(i, node.distance);
             }
         }
+
+#pragma omp parallel for
         for (int i = 0; i < data_num_; ++i) {
             graph[i].neigbors.insert(graph[i].neigbors.end(),
                                      reverse_graph[i].neigbors.begin(),
@@ -624,6 +651,7 @@ private:
             }
         }
 
+#pragma omp parallel for
         for (int loc = 1; loc < data_num_; ++loc) {
 
             std::sort(graph[loc].neigbors.begin(), graph[loc].neigbors.end());
@@ -631,6 +659,7 @@ private:
                 std::unique(graph[loc].neigbors.begin(), graph[loc].neigbors.end()),
                 graph[loc].neigbors.end());
             std::vector<Node> candidates;
+            candidates.reserve(max_degree_);
             for (int i = 0; i < graph[loc].neigbors.size(); ++i) {
                 bool flag = true;
                 if (in_edges_count[graph[loc].neigbors[i].id] > min_in_degree_) {
@@ -770,8 +799,8 @@ private:
         }
         auto rate = (all_calculate_ == 0 ? 0 : valid_calculate_ / all_calculate_);
         loss /= edge_count;
-        std::cout << "loss:" << loss << "  edge_count:" << edge_count << " no_in_edge_count:" << no_in_edge_count << "  connections:" << connect_count <<
-            "  valid_cal_rate:" << rate << " duplicate_rate:" << duplicate_rate << std::endl;
+        logger::info(fmt::format("loss:{} edge_count:{} no_in_edge_count:{}  connections:{} valid_cal_rate:{} duplicate_rate:{}"
+                                 , loss, edge_count, no_in_edge_count, connect_count, rate, duplicate_rate));
     }
 
 private:
@@ -791,6 +820,7 @@ private:
     float duplicate_rate = 0;
 
     std::vector<std::vector<Node>> new_candidates_;
+    std::vector<std::mutex> mutexs_;
 
     DistanceFunc distance_;
 };

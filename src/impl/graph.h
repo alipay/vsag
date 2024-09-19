@@ -276,21 +276,22 @@ public:
         data_num_ = dataset->GetNumElements();
         data_ = dataset->GetFloat32Vectors();
         min_in_degree_ = std::min(min_in_degree_, data_num_ - 1);
+
+        new_candidates_.resize(data_num_);
+        for (int i = 0; i < data_num_; ++i) {
+            new_candidates_[i].reserve(max_degree_);
+        }
         init_graph();
         check_turn();
         {
             for (int i = 0; i < turn_; ++i) {
                 std::vector<std::vector<uint32_t>> old_neigbors;
                 std::vector<std::vector<uint32_t>> new_neigbors;
-                sample_candidates(old_neigbors, new_neigbors, 0.2);
+                sample_candidates(old_neigbors, new_neigbors, 0.3);
                 update_neighbors(old_neigbors, new_neigbors);
-                if ((i + 1) % 5 == 0) {
-                    search_neigbors();
-                }
                 repair_no_in_edge();
                 check_turn();
             }
-            repair_no_in_edge();
             prune_graph();
             add_reverse_edges();
             check_turn();
@@ -333,6 +334,7 @@ private:
         for (int i = 0; i < data_num_; ++i) {
             std::mt19937 rng(rd());
             std::unordered_set<uint32_t> ids_set;
+            graph[i].neigbors.reserve(max_degree_);
             for (int j = 0; j < std::min(data_num_ - 1, max_degree_); ++j) {
                 auto id = i;
                 if (data_num_ - 1 < max_degree_) {
@@ -355,8 +357,8 @@ private:
     void
     update_neighbors(std::vector<std::vector<uint32_t>>& old_neigbors,
                      std::vector<std::vector<uint32_t>>& new_neigbors) {
-        std::vector<std::vector<Node>> new_candidates;
-        new_candidates.resize(data_num_);
+        all_calculate_ = 0;
+        valid_calculate_ = 0;
         for (int i = 0; i < data_num_; ++i) {
             for (int j = 0; j < new_neigbors[i].size(); ++j) {
                 for (int k = j + 1; k < new_neigbors[i].size(); ++k) {
@@ -364,11 +366,18 @@ private:
                         continue;
                     }
                     float dist = get_distance(new_neigbors[i][j], new_neigbors[i][k]);
+                    all_calculate_ += 1.0;
+                    float update = false;
                     if (dist < graph[new_neigbors[i][j]].greast_neighbor_distance) {
-                        new_candidates[new_neigbors[i][j]].emplace_back(new_neigbors[i][k], dist);
+                        new_candidates_[new_neigbors[i][j]].emplace_back(new_neigbors[i][k], dist);
+                        update = true;
                     }
                     if (dist < graph[new_neigbors[i][k]].greast_neighbor_distance) {
-                        new_candidates[new_neigbors[i][k]].emplace_back(new_neigbors[i][j], dist);
+                        new_candidates_[new_neigbors[i][k]].emplace_back(new_neigbors[i][j], dist);
+                        update = true;
+                    }
+                    if (update) {
+                        valid_calculate_ += 1.0;
                     }
                 }
 
@@ -377,27 +386,39 @@ private:
                         continue;
                     }
                     float dist = get_distance(new_neigbors[i][j], old_neigbors[i][k]);
+                    all_calculate_ += 1.0;
+                    float update = false;
                     if (dist < graph[new_neigbors[i][j]].greast_neighbor_distance) {
-                        new_candidates[new_neigbors[i][j]].emplace_back(old_neigbors[i][k], dist);
+                        new_candidates_[new_neigbors[i][j]].emplace_back(old_neigbors[i][k], dist);
+                        update = true;
                     }
                     if (dist < graph[old_neigbors[i][k]].greast_neighbor_distance) {
-                        new_candidates[old_neigbors[i][k]].emplace_back(new_neigbors[i][j], dist);
+                        new_candidates_[old_neigbors[i][k]].emplace_back(new_neigbors[i][j], dist);
+                        update = true;
+                    }
+                    if (update) {
+                        valid_calculate_ += 1.0;
                     }
                 }
             }
         }
-
-        for (int i = 0; i < data_num_; ++i) {
+        float unique_count = 0;
+        float all_count = 0;
+        for (uint32_t i = 0; i < data_num_; ++i) {
             graph[i].neigbors.insert(
-                graph[i].neigbors.end(), new_candidates[i].begin(), new_candidates[i].end());
+                graph[i].neigbors.end(), new_candidates_[i].begin(), new_candidates_[i].end());
+            all_count += graph[i].neigbors.size();
             std::sort(graph[i].neigbors.begin(), graph[i].neigbors.end());
             graph[i].neigbors.erase(std::unique(graph[i].neigbors.begin(), graph[i].neigbors.end()),
                                     graph[i].neigbors.end());
+            unique_count += graph[i].neigbors.size();
             if (graph[i].neigbors.size() > max_degree_) {
                 graph[i].neigbors.resize(max_degree_);
             }
             graph[i].greast_neighbor_distance = graph[i].neigbors.back().distance;
+            new_candidates_[i].clear();
         }
+        duplicate_rate = (all_count - unique_count) / all_count;
     }
 
 
@@ -418,6 +439,9 @@ private:
             std::sort(graph[i].neigbors.begin(), graph[i].neigbors.end());
             graph[i].neigbors.erase(std::unique(graph[i].neigbors.begin(), graph[i].neigbors.end()),
                                     graph[i].neigbors.end());
+            if (graph[i].neigbors.size() > max_degree_) {
+                graph[i].neigbors.resize(max_degree_);
+            }
         }
     }
 
@@ -744,9 +768,10 @@ private:
             }
             connect_count ++;
         }
-
+        auto rate = (all_calculate_ == 0 ? 0 : valid_calculate_ / all_calculate_);
         loss /= edge_count;
-        std::cout << "loss:" << loss << "  edge_count:" << edge_count << " no_in_edge_count:" << no_in_edge_count << "  connections:" << connect_count << std::endl;
+        std::cout << "loss:" << loss << "  edge_count:" << edge_count << " no_in_edge_count:" << no_in_edge_count << "  connections:" << connect_count <<
+            "  valid_cal_rate:" << rate << " duplicate_rate:" << duplicate_rate << std::endl;
     }
 
 private:
@@ -760,6 +785,12 @@ private:
     std::vector<Linklist> graph;
     std::vector<bool> visited_;
     int64_t min_in_degree_ = 5;
+
+    float all_calculate_ = 0;
+    float valid_calculate_ = 0;
+    float duplicate_rate = 0;
+
+    std::vector<std::vector<Node>> new_candidates_;
 
     DistanceFunc distance_;
 };

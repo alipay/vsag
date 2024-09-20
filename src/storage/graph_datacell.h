@@ -135,7 +135,7 @@ GraphDataCell<IOTmpl>::GetNeighborSize(uint64_t id) {
         return 0;
     }
 
-    io_->Read(reinterpret_cast<uint8_t*>(&size), sizeof(size), id * this->get_single_offset());
+    size = *(uint32_t*)(io_->Read(sizeof(size), id * this->get_single_offset()));
 
     return size;
 }
@@ -150,7 +150,7 @@ GraphDataCell<IOTmpl>::GetNeighbors(uint64_t id, std::vector<uint64_t>& neighbor
     }
     neighbor_ids.resize(size, 0);
     for (int i = 0; i < size; i++) {
-        io_->Read(reinterpret_cast<uint8_t*>(&neighbor_ids[i]), sizeof(uint64_t), cur_offset);
+        neighbor_ids[i] = *(uint64_t*)(io_->Read(sizeof(uint64_t), cur_offset));
         cur_offset += sizeof(uint64_t);
     }
 }

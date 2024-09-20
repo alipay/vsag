@@ -62,11 +62,39 @@ TestMixDataCellBasicUsage(std::unique_ptr<MixDataCell<QuantT, IOT>>& data_cell,
     REQUIRE(data_cell->TotalCount() == base_size);
 }
 
+uint32_t
+generate_to_be_visited(uint32_t neighbor_size, std::vector<uint32_t>& to_be_visit) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<uint32_t> dist(0, neighbor_size + 1);
+    uint32_t count_no_visit = dist(gen);
+    if (count_no_visit >= neighbor_size) {
+        if (neighbor_size != 0) {
+            count_no_visit = neighbor_size - 1;
+        } else {
+            count_no_visit = 0;
+        }
+    }
+
+    for (uint32_t i = 0; i < count_no_visit; ++i) {
+        auto idx = dist(gen);
+        if (neighbor_size != 0) {
+            idx = neighbor_size - 1;
+        } else {
+            idx = 0;
+        }
+        to_be_visit[i] = idx;
+    }
+
+    return count_no_visit;
+}
+
 template <typename QuantT, typename IOT>
 void
 TestMixDataCellBasicRedundant(std::unique_ptr<MixDataCell<QuantT, IOT>>& data_cell,
                               std::shared_ptr<GraphDataCell<IOT>> graph,
                               uint64_t dim,
+                              uint32_t M,
                               MetricType metric,
                               float error = 1e-5) {
     uint64_t base_size = 1000;
@@ -74,6 +102,7 @@ TestMixDataCellBasicRedundant(std::unique_ptr<MixDataCell<QuantT, IOT>>& data_ce
     double redundant_rate = 0.3;
     auto vectors = fixtures::generate_vectors(base_size, dim);
     auto queries = fixtures::generate_vectors(query_size, dim);
+    std::vector<uint32_t> to_be_visited(M, 0);
 
     data_cell->TrainQuantizer(vectors.data(), base_size);
     data_cell->BatchInsertVector(vectors.data(), base_size);
@@ -89,18 +118,20 @@ TestMixDataCellBasicRedundant(std::unique_ptr<MixDataCell<QuantT, IOT>>& data_ce
         std::vector<float> dists(neighbor_ids.size());
 
         for (int j = 0; j < query_size; j++) {
-            auto computer = data_cell->FactoryComputer(queries.data() + j * dim);
-            data_cell->QueryLine(dists.data(), computer, i);
+            auto query = queries.data() + j * dim;
+            auto count_no_visit = generate_to_be_visited(neighbor_ids.size(), to_be_visited);
+            std::unique_ptr<Computer<QuantT>> computer =
+                std::move(data_cell->FactoryComputer(query));
+            data_cell->QueryLine(dists.data(), computer, i, to_be_visited, count_no_visit);
 
-            for (int k = 0; k < neighbor_ids.size(); k++) {
-                float gt;
+            for (int k = 0; k < count_no_visit; k++) {
+                float gt = 0;
                 if (metric == vsag::MetricType::METRIC_TYPE_IP ||
                     metric == vsag::MetricType::METRIC_TYPE_COSINE) {
                     gt = InnerProduct(
-                        vectors.data() + neighbor_ids[k] * dim, queries.data() + j * dim, &dim);
+                        vectors.data() + neighbor_ids[to_be_visited[k]] * dim, query, &dim);
                 } else if (metric == vsag::MetricType::METRIC_TYPE_L2SQR) {
-                    gt = L2Sqr(
-                        vectors.data() + neighbor_ids[k] * dim, queries.data() + j * dim, &dim);
+                    gt = L2Sqr(vectors.data() + neighbor_ids[to_be_visited[k]] * dim, query, &dim);
                 }
                 REQUIRE(std::fabs(gt - dists[k]) < error);
             }
@@ -173,7 +204,7 @@ TEST_CASE("fp32 redundant usage in mix data cell", "[ut][flatten_storage]") {
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),
                          std::make_unique<MemoryIO>(allocator));
         TestMixDataCellBasicRedundant(
-            data_cell, graph_data_cell, dim, vsag::MetricType::METRIC_TYPE_L2SQR);
+            data_cell, graph_data_cell, dim, M, vsag::MetricType::METRIC_TYPE_L2SQR);
     }
     {
         auto data_cell = std::make_unique<
@@ -184,7 +215,7 @@ TEST_CASE("fp32 redundant usage in mix data cell", "[ut][flatten_storage]") {
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),
                          std::make_unique<MemoryIO>(allocator));
         TestMixDataCellBasicRedundant(
-            data_cell, graph_data_cell, dim, vsag::MetricType::METRIC_TYPE_IP);
+            data_cell, graph_data_cell, dim, M, vsag::MetricType::METRIC_TYPE_IP);
     }
     {
         auto data_cell = std::make_unique<
@@ -195,7 +226,7 @@ TEST_CASE("fp32 redundant usage in mix data cell", "[ut][flatten_storage]") {
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),
                          std::make_unique<MemoryIO>(allocator));
         TestMixDataCellBasicRedundant(
-            data_cell, graph_data_cell, dim, vsag::MetricType::METRIC_TYPE_COSINE);
+            data_cell, graph_data_cell, dim, M, vsag::MetricType::METRIC_TYPE_COSINE);
     }
 }
 
@@ -279,7 +310,7 @@ TEST_CASE("sq8 redundant usage in mix data cell", "[ut][flatten_storage]") {
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),
                          std::make_unique<MemoryIO>(allocator));
         TestMixDataCellBasicRedundant(
-            data_cell, graph_data_cell, dim, vsag::MetricType::METRIC_TYPE_L2SQR, error);
+            data_cell, graph_data_cell, dim, M, vsag::MetricType::METRIC_TYPE_L2SQR, error);
     }
     {
         auto data_cell =
@@ -290,7 +321,7 @@ TEST_CASE("sq8 redundant usage in mix data cell", "[ut][flatten_storage]") {
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),
                          std::make_unique<MemoryIO>(allocator));
         TestMixDataCellBasicRedundant(
-            data_cell, graph_data_cell, dim, vsag::MetricType::METRIC_TYPE_IP, error);
+            data_cell, graph_data_cell, dim, M, vsag::MetricType::METRIC_TYPE_IP, error);
     }
     {
         auto data_cell = std::make_unique<
@@ -301,6 +332,6 @@ TEST_CASE("sq8 redundant usage in mix data cell", "[ut][flatten_storage]") {
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),
                          std::make_unique<MemoryIO>(allocator));
         TestMixDataCellBasicRedundant(
-            data_cell, graph_data_cell, dim, vsag::MetricType::METRIC_TYPE_COSINE, error);
+            data_cell, graph_data_cell, dim, M, vsag::MetricType::METRIC_TYPE_COSINE, error);
     }
 }

@@ -1,4 +1,18 @@
 
+// Copyright 2024-present the vsag project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 #include <limits>
 #include <memory>
@@ -62,9 +76,24 @@ public:
         return this->totalCount_;
     }
 
+    /****
+     * prefetch neighbors of a base point with id
+     * @param id of base point
+     * @param neighbor_i index of neighbor, 0 for neighbor size, 1 for first neighbor
+     */
+    inline void
+    Prefetch(uint64_t id, uint64_t neighbor_i) {
+        io_->Prefetch(id * get_single_offset() + neighbor_i * sizeof(uint64_t));
+    }
+
+    inline uint64_t
+    GetMaximumDegree() {
+        return this->maximum_degree_;
+    }
+
 private:
     inline uint64_t
-    GetSingleOffset() {
+    get_single_offset() {
         return maximum_degree_ * sizeof(uint64_t) + sizeof(uint32_t);
     }
 
@@ -81,7 +110,7 @@ private:
 template <typename IOTmpl>
 uint64_t
 GraphDataCell<IOTmpl>::InsertNode(const std::vector<uint64_t> neighbor_ids) {
-    auto cur_offset = totalCount_ * this->GetSingleOffset();
+    auto cur_offset = totalCount_ * this->get_single_offset();
     uint32_t neighbor_size = neighbor_ids.size();
     if (neighbor_size > this->maximum_degree_) {
         neighbor_size = maximum_degree_;
@@ -106,7 +135,7 @@ GraphDataCell<IOTmpl>::GetNeighborSize(uint64_t id) {
         return 0;
     }
 
-    io_->Read(reinterpret_cast<uint8_t*>(&size), sizeof(size), id * this->GetSingleOffset());
+    io_->Read(reinterpret_cast<uint8_t*>(&size), sizeof(size), id * this->get_single_offset());
 
     return size;
 }
@@ -115,7 +144,7 @@ template <typename IOTmpl>
 void
 GraphDataCell<IOTmpl>::GetNeighbors(uint64_t id, std::vector<uint64_t>& neighbor_ids) {
     uint32_t size = GetNeighborSize(id);
-    uint64_t cur_offset = id * this->GetSingleOffset() + sizeof(size);
+    uint64_t cur_offset = id * this->get_single_offset() + sizeof(size);
     if (size == 0) {
         return;
     }

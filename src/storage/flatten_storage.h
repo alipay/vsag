@@ -102,6 +102,28 @@ public:
         return this->totalCount_;
     }
 
+    inline void
+    PrefetchCode(uint64_t id, uint64_t cacheLine = 64) {
+        const auto* codes = GetCodesById(id);
+        io_->Prefetch(codes, cacheLine);
+    }
+
+    inline void
+    DecodeById(DataType* data, uint64_t id) {
+        const auto* codes = GetCodesById(id);
+        quantizer_->DecodeOne(codes, data);
+    }
+
+    inline uint64_t
+    GetDim() {
+        return quantizer_->GetDim();
+    }
+
+    inline uint64_t
+    GetCodeSize() {
+        return quantizer_->GetCodeSize();
+    }
+
 public:
     std::unique_ptr<Quantizer<QuantTmpl>> quantizer_{nullptr};
 

@@ -240,34 +240,35 @@ MixDataCell<QuantTmpl, IOTmpl>::QueryLine(float* resultDists,
                                           std::vector<uint32_t>& to_be_visit,
                                           uint32_t count_no_visit) {
     if (id >= redundant_total_count_) {
+        const uint8_t* codes;
         std::vector<uint64_t> neighbor_ids;
         graph_data_cell_->GetNeighbors(id, neighbor_ids);
+
+        for (uint32_t i = 0; i < prefetch_neighbor_codes_num and i < count_no_visit; i++) {
+            this->io_->Prefetch(neighbor_ids[to_be_visit[i]] * this->GetCodeSize(),
+                                prefetch_cache_line);
+        }
+
         for (uint32_t i = 0; i < count_no_visit; i++) {
-            if (to_be_visit[i] >= neighbor_ids.size()) {
-                continue;
+            if (i + prefetch_neighbor_codes_num < count_no_visit) {
+                this->io_->Prefetch(neighbor_ids[to_be_visit[i + prefetch_neighbor_codes_num]] *
+                                        this->GetCodeSize(),
+                                    prefetch_cache_line);
             }
-            const auto* codes = this->GetCodesById(neighbor_ids[to_be_visit[i]]);
+
+            codes = this->GetCodesById(neighbor_ids[to_be_visit[i]]);
             computer->ComputeDist(codes, resultDists + i);
         }
     } else {
         uint64_t code_offset;
         const uint8_t* codes;
-        uint64_t neighbor_size = get_redundant_size_by_id(id);
 
         for (uint32_t i = 0; i < prefetch_neighbor_codes_num and i < count_no_visit; i++) {
-            if (to_be_visit[i] >= neighbor_size) {
-                continue;
-            }
             code_offset = this->get_neighbor_codes_offset_by_id(id, to_be_visit[i]);
             redundant_io_->Prefetch(code_offset, prefetch_cache_line);
         }
         for (uint32_t i = 0; i < count_no_visit; i++) {
-            if (to_be_visit[i] >= neighbor_size) {
-                continue;
-            }
-
-            if (i + prefetch_neighbor_codes_num < count_no_visit and
-                to_be_visit[i + prefetch_neighbor_codes_num] < neighbor_size) {
+            if (i + prefetch_neighbor_codes_num < count_no_visit) {
                 code_offset = this->get_neighbor_codes_offset_by_id(
                     id, to_be_visit[i + prefetch_neighbor_codes_num]);
                 redundant_io_->Prefetch(code_offset, prefetch_cache_line);

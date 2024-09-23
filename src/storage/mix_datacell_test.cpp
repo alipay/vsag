@@ -24,9 +24,9 @@
 
 using namespace vsag;
 
-template <typename QuantT, typename IOT>
+template <typename QuantT, typename IOT, typename GraphT>
 void
-TestMixDataCellBasicUsage(std::unique_ptr<MixDataCell<QuantT, IOT>>& data_cell,
+TestMixDataCellBasicUsage(std::unique_ptr<MixDataCell<QuantT, IOT, GraphT>>& data_cell,
                           uint64_t dim,
                           MetricType metric,
                           float error = 1e-5) {
@@ -89,10 +89,10 @@ generate_to_be_visited(uint32_t neighbor_size, std::vector<uint32_t>& to_be_visi
     return count_no_visit;
 }
 
-template <typename QuantT, typename IOT>
+template <typename QuantT, typename IOT, typename GraphT>
 void
-TestMixDataCellBasicRedundant(std::unique_ptr<MixDataCell<QuantT, IOT>>& data_cell,
-                              std::shared_ptr<GraphDataCell<IOT>> graph,
+TestMixDataCellBasicRedundant(std::unique_ptr<MixDataCell<QuantT, IOT, GraphT>>& data_cell,
+                              std::shared_ptr<GraphT> graph,
                               uint64_t dim,
                               uint32_t M,
                               MetricType metric,
@@ -144,20 +144,23 @@ TEST_CASE("fp32 basic usage in mix data cell", "[ut][flatten_storage]") {
     int M = 32;
     auto allocator = new DefaultAllocator();
     auto graph_io = std::make_shared<MemoryIO>(allocator);
-    auto graph_data_cell = std::make_shared<GraphDataCell<MemoryIO>>(M);
+    auto graph_data_cell = std::make_shared<GraphDataCell<MemoryIO, false>>(M);
     {
-        auto data_cell = std::make_unique<
-            MixDataCell<FP32Quantizer<vsag::MetricType::METRIC_TYPE_L2SQR>, MemoryIO>>(
-            graph_data_cell);
-        data_cell->SetQuantizer(std::make_unique<FP32Quantizer<>>(dim));
+        auto data_cell =
+            std::make_unique<MixDataCell<FP32Quantizer<vsag::MetricType::METRIC_TYPE_L2SQR>,
+                                         MemoryIO,
+                                         GraphDataCell<MemoryIO, false>>>(graph_data_cell);
+        data_cell->SetQuantizer(
+            std::make_unique<FP32Quantizer<vsag::MetricType::METRIC_TYPE_L2SQR>>(dim));
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),
                          std::make_unique<MemoryIO>(allocator));
         TestMixDataCellBasicUsage(data_cell, dim, vsag::MetricType::METRIC_TYPE_L2SQR);
     }
     {
-        auto data_cell = std::make_unique<
-            MixDataCell<FP32Quantizer<vsag::MetricType::METRIC_TYPE_IP>, MemoryIO>>(
-            graph_data_cell);
+        auto data_cell =
+            std::make_unique<MixDataCell<FP32Quantizer<vsag::MetricType::METRIC_TYPE_IP>,
+                                         MemoryIO,
+                                         GraphDataCell<MemoryIO, false>>>(graph_data_cell);
         data_cell->SetQuantizer(
             std::make_unique<FP32Quantizer<vsag::MetricType::METRIC_TYPE_IP>>(dim));
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),
@@ -165,9 +168,10 @@ TEST_CASE("fp32 basic usage in mix data cell", "[ut][flatten_storage]") {
         TestMixDataCellBasicUsage(data_cell, dim, vsag::MetricType::METRIC_TYPE_IP);
     }
     {
-        auto data_cell = std::make_unique<
-            MixDataCell<FP32Quantizer<vsag::MetricType::METRIC_TYPE_COSINE>, MemoryIO>>(
-            graph_data_cell);
+        auto data_cell =
+            std::make_unique<MixDataCell<FP32Quantizer<vsag::MetricType::METRIC_TYPE_COSINE>,
+                                         MemoryIO,
+                                         GraphDataCell<MemoryIO, false>>>(graph_data_cell);
         data_cell->SetQuantizer(
             std::make_unique<FP32Quantizer<vsag::MetricType::METRIC_TYPE_COSINE>>(dim));
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),
@@ -185,7 +189,7 @@ TEST_CASE("fp32 redundant usage in mix data cell", "[ut][flatten_storage]") {
     std::mt19937 gen(rd());
     auto allocator = new DefaultAllocator();
     auto graph_io = std::make_shared<MemoryIO>(allocator);
-    auto graph_data_cell = std::make_shared<GraphDataCell<MemoryIO>>(M);
+    auto graph_data_cell = std::make_shared<GraphDataCell<MemoryIO, false>>(M);
     graph_data_cell->SetIO(graph_io);
     for (int i = 0; i < data_size; i++) {
         std::vector<uint64_t> neighbor_ids(gen() % (M + 1));
@@ -197,19 +201,22 @@ TEST_CASE("fp32 redundant usage in mix data cell", "[ut][flatten_storage]") {
     }
 
     {
-        auto data_cell = std::make_unique<
-            MixDataCell<FP32Quantizer<vsag::MetricType::METRIC_TYPE_L2SQR>, MemoryIO>>(
-            graph_data_cell);
-        data_cell->SetQuantizer(std::make_unique<FP32Quantizer<>>(dim));
+        auto data_cell =
+            std::make_unique<MixDataCell<FP32Quantizer<vsag::MetricType::METRIC_TYPE_L2SQR>,
+                                         MemoryIO,
+                                         GraphDataCell<MemoryIO, false>>>(graph_data_cell);
+        data_cell->SetQuantizer(
+            std::make_unique<FP32Quantizer<vsag::MetricType::METRIC_TYPE_L2SQR>>(dim));
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),
                          std::make_unique<MemoryIO>(allocator));
         TestMixDataCellBasicRedundant(
             data_cell, graph_data_cell, dim, M, vsag::MetricType::METRIC_TYPE_L2SQR);
     }
     {
-        auto data_cell = std::make_unique<
-            MixDataCell<FP32Quantizer<vsag::MetricType::METRIC_TYPE_IP>, MemoryIO>>(
-            graph_data_cell);
+        auto data_cell =
+            std::make_unique<MixDataCell<FP32Quantizer<vsag::MetricType::METRIC_TYPE_IP>,
+                                         MemoryIO,
+                                         GraphDataCell<MemoryIO, false>>>(graph_data_cell);
         data_cell->SetQuantizer(
             std::make_unique<FP32Quantizer<vsag::MetricType::METRIC_TYPE_IP>>(dim));
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),
@@ -218,9 +225,10 @@ TEST_CASE("fp32 redundant usage in mix data cell", "[ut][flatten_storage]") {
             data_cell, graph_data_cell, dim, M, vsag::MetricType::METRIC_TYPE_IP);
     }
     {
-        auto data_cell = std::make_unique<
-            MixDataCell<FP32Quantizer<vsag::MetricType::METRIC_TYPE_COSINE>, MemoryIO>>(
-            graph_data_cell);
+        auto data_cell =
+            std::make_unique<MixDataCell<FP32Quantizer<vsag::MetricType::METRIC_TYPE_COSINE>,
+                                         MemoryIO,
+                                         GraphDataCell<MemoryIO, false>>>(graph_data_cell);
         data_cell->SetQuantizer(
             std::make_unique<FP32Quantizer<vsag::MetricType::METRIC_TYPE_COSINE>>(dim));
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),
@@ -237,13 +245,15 @@ TEST_CASE("sq8 basic usage in mix data cell", "[ut][flatten_storage]") {
     {
         auto allocator = new DefaultAllocator();
         auto graph_io = std::make_shared<MemoryIO>(allocator);
-        auto graph_data_cell = std::make_shared<GraphDataCell<MemoryIO>>(M);
+        auto graph_data_cell = std::make_shared<GraphDataCell<MemoryIO, false>>(M);
         graph_data_cell->SetIO(graph_io);
 
-        auto data_cell = std::make_unique<
-            MixDataCell<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_L2SQR>, MemoryIO>>(
-            graph_data_cell);
-        data_cell->SetQuantizer(std::make_unique<SQ8Quantizer<>>(dim));
+        auto data_cell =
+            std::make_unique<MixDataCell<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_L2SQR>,
+                                         MemoryIO,
+                                         GraphDataCell<MemoryIO, false>>>(graph_data_cell);
+        data_cell->SetQuantizer(
+            std::make_unique<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_L2SQR>>(dim));
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),
                          std::make_unique<MemoryIO>(allocator));
         TestMixDataCellBasicUsage(data_cell, dim, vsag::MetricType::METRIC_TYPE_L2SQR, error);
@@ -251,12 +261,13 @@ TEST_CASE("sq8 basic usage in mix data cell", "[ut][flatten_storage]") {
     {
         auto allocator = new DefaultAllocator();
         auto graph_io = std::make_shared<MemoryIO>(allocator);
-        auto graph_data_cell = std::make_shared<GraphDataCell<MemoryIO>>(M);
+        auto graph_data_cell = std::make_shared<GraphDataCell<MemoryIO, false>>(M);
         graph_data_cell->SetIO(graph_io);
 
         auto data_cell =
-            std::make_unique<MixDataCell<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_IP>, MemoryIO>>(
-                graph_data_cell);
+            std::make_unique<MixDataCell<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_IP>,
+                                         MemoryIO,
+                                         GraphDataCell<MemoryIO, false>>>(graph_data_cell);
         data_cell->SetQuantizer(
             std::make_unique<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_IP>>(dim));
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),
@@ -267,12 +278,13 @@ TEST_CASE("sq8 basic usage in mix data cell", "[ut][flatten_storage]") {
         auto allocator = new DefaultAllocator();
 
         auto graph_io = std::make_shared<MemoryIO>(allocator);
-        auto graph_data_cell = std::make_shared<GraphDataCell<MemoryIO>>(M);
+        auto graph_data_cell = std::make_shared<GraphDataCell<MemoryIO, false>>(M);
         graph_data_cell->SetIO(graph_io);
 
-        auto data_cell = std::make_unique<
-            MixDataCell<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_COSINE>, MemoryIO>>(
-            graph_data_cell);
+        auto data_cell =
+            std::make_unique<MixDataCell<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_COSINE>,
+                                         MemoryIO,
+                                         GraphDataCell<MemoryIO, false>>>(graph_data_cell);
         data_cell->SetQuantizer(
             std::make_unique<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_COSINE>>(dim));
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),
@@ -291,7 +303,7 @@ TEST_CASE("sq8 redundant usage in mix data cell", "[ut][flatten_storage]") {
     std::mt19937 gen(rd());
     auto allocator = new DefaultAllocator();
     auto graph_io = std::make_shared<MemoryIO>(allocator);
-    auto graph_data_cell = std::make_shared<GraphDataCell<MemoryIO>>(M);
+    auto graph_data_cell = std::make_shared<GraphDataCell<MemoryIO, false>>(M);
     graph_data_cell->SetIO(graph_io);
     for (int i = 0; i < data_size; i++) {
         std::vector<uint64_t> neighbor_ids(gen() % (M + 1));
@@ -303,10 +315,12 @@ TEST_CASE("sq8 redundant usage in mix data cell", "[ut][flatten_storage]") {
     }
 
     {
-        auto data_cell = std::make_unique<
-            MixDataCell<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_L2SQR>, MemoryIO>>(
-            graph_data_cell);
-        data_cell->SetQuantizer(std::make_unique<SQ8Quantizer<>>(dim));
+        auto data_cell =
+            std::make_unique<MixDataCell<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_L2SQR>,
+                                         MemoryIO,
+                                         GraphDataCell<MemoryIO, false>>>(graph_data_cell);
+        data_cell->SetQuantizer(
+            std::make_unique<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_L2SQR>>(dim));
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),
                          std::make_unique<MemoryIO>(allocator));
         TestMixDataCellBasicRedundant(
@@ -314,8 +328,9 @@ TEST_CASE("sq8 redundant usage in mix data cell", "[ut][flatten_storage]") {
     }
     {
         auto data_cell =
-            std::make_unique<MixDataCell<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_IP>, MemoryIO>>(
-                graph_data_cell);
+            std::make_unique<MixDataCell<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_IP>,
+                                         MemoryIO,
+                                         GraphDataCell<MemoryIO, false>>>(graph_data_cell);
         data_cell->SetQuantizer(
             std::make_unique<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_IP>>(dim));
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),
@@ -324,9 +339,10 @@ TEST_CASE("sq8 redundant usage in mix data cell", "[ut][flatten_storage]") {
             data_cell, graph_data_cell, dim, M, vsag::MetricType::METRIC_TYPE_IP, error);
     }
     {
-        auto data_cell = std::make_unique<
-            MixDataCell<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_COSINE>, MemoryIO>>(
-            graph_data_cell);
+        auto data_cell =
+            std::make_unique<MixDataCell<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_COSINE>,
+                                         MemoryIO,
+                                         GraphDataCell<MemoryIO, false>>>(graph_data_cell);
         data_cell->SetQuantizer(
             std::make_unique<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_COSINE>>(dim));
         data_cell->SetIO(std::make_unique<MemoryIO>(allocator),

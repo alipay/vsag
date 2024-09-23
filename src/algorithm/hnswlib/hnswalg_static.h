@@ -238,6 +238,11 @@ public:
     }
 
     size_t
+    getMaxDegree() override {
+        return maxM0_;
+    };
+
+    size_t
     getMaxElements() override {
         return max_elements_;
     }

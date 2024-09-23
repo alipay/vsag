@@ -225,6 +225,9 @@ public:
     virtual size_t
     getMaxElements() = 0;
 
+    virtual size_t
+    getMaxDegree() = 0;
+
     virtual float
     getDistanceByLabel(labeltype label, const void* data_point) = 0;
 

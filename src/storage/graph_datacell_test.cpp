@@ -16,13 +16,12 @@
 #include "graph_datacell.h"
 
 #include "catch2/catch_template_test_macros.hpp"
-#include "default_allocator.h"
 #include "fixtures.h"
 #include "io/memory_io.h"
 
 using namespace vsag;
 
-TEST_CASE("graph data cell basic usage", "[ut][GraphDataCell]") {
+TEST_CASE("basic usage for graph data cell (original)", "[ut][GraphDataCell]") {
     uint32_t M = 32;
     uint32_t data_size = 1000;
     std::vector<size_t> neighbor_sizes(data_size);
@@ -31,7 +30,7 @@ TEST_CASE("graph data cell basic usage", "[ut][GraphDataCell]") {
 
     auto allocator = new DefaultAllocator();
     auto io = std::make_shared<MemoryIO>(allocator);
-    auto graph_data_cell = std::make_shared<GraphDataCell<MemoryIO>>(M);
+    auto graph_data_cell = std::make_shared<GraphDataCell<MemoryIO, false>>(M);
     graph_data_cell->SetIO(io);
 
     for (uint32_t i = 0; i < data_size; i++) {
@@ -54,6 +53,48 @@ TEST_CASE("graph data cell basic usage", "[ut][GraphDataCell]") {
         REQUIRE(neighbor_size == neighbor_ids.size());
         for (uint32_t j = 0; j < neighbor_ids.size(); j++) {
             REQUIRE(neighbor_ids[j] == i + j);
+        }
+    }
+}
+
+TEST_CASE("basic usage for graph data cell (adapter of hnsw)", "[ut][GraphDataCell]") {
+    uint32_t M = 32;
+    uint32_t data_size = 1000;
+    uint32_t ef_construction = 100;
+    uint64_t DEFAULT_MAX_ELEMENT = 1;
+    uint64_t dim = 960;
+    auto vectors = fixtures::generate_vectors(data_size, dim);
+    std::vector<int64_t> ids(data_size);
+    std::iota(ids.begin(), ids.end(), 0);
+
+    auto allocator = new DefaultAllocator();
+    auto space = std::make_shared<hnswlib::L2Space>(dim);
+    auto io = std::make_shared<MemoryIO>(allocator);
+    auto alg_hnsw =
+        std::make_shared<hnswlib::HierarchicalNSW>(space.get(),
+                                                   DEFAULT_MAX_ELEMENT,
+                                                   allocator,
+                                                   M / 2,
+                                                   ef_construction,
+                                                   Options::Instance().block_size_limit());
+    for (int64_t i = 0; i < data_size; ++i) {
+        auto successful_insert =
+            alg_hnsw->addPoint((const void*)(vectors.data() + i * dim), ids[i]);
+        REQUIRE(successful_insert == true);
+    }
+
+    auto graph_data_cell = std::make_shared<GraphDataCell<MemoryIO, true>>(alg_hnsw);
+
+    for (uint32_t i = 0; i < data_size; i++) {
+        auto neighbor_size = graph_data_cell->GetNeighborSize(i);
+        std::vector<uint64_t> neighbor_ids(neighbor_size);
+        graph_data_cell->GetNeighbors(i, neighbor_ids);
+
+        int* data = (int*)alg_hnsw->get_linklist0(i);
+        REQUIRE(neighbor_size == alg_hnsw->getListCount((hnswlib::linklistsizeint*)data));
+
+        for (uint32_t j = 0; j < neighbor_size; j++) {
+            REQUIRE(neighbor_ids[j] == *(data + j + 1));
         }
     }
 }

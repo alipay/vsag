@@ -250,6 +250,11 @@ public:
         }
     }
 
+    size_t
+    getMaxDegree() override {
+        return maxM0_;
+    };
+
     float
     getDistanceByLabel(labeltype label, const void* data_point) override {
         std::unique_lock<std::mutex> lock_table(label_lookup_lock);

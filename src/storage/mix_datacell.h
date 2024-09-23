@@ -21,15 +21,15 @@
 #include <unordered_map>
 #include <vector>
 
+#include "algorithm/hnswlib/hnswalg.h"
 #include "flatten_storage.h"
 #include "graph_datacell.h"
 
 namespace vsag {
-template <typename QuantTmpl, typename IOTmpl>
+template <typename QuantTmpl, typename IOTmpl, typename GraphTmpl>
 class MixDataCell : public FlattenStorage<QuantTmpl, IOTmpl> {
 public:
-    MixDataCell(std::shared_ptr<GraphDataCell<IOTmpl>> graph_data_cell)
-        : FlattenStorage<QuantTmpl, IOTmpl>() {
+    MixDataCell(std::shared_ptr<GraphTmpl> graph_data_cell) : FlattenStorage<QuantTmpl, IOTmpl>() {
         this->graph_data_cell_ = graph_data_cell;
     };
 
@@ -102,7 +102,7 @@ private:
     get_neighbor_id_by_id(uint64_t id, uint64_t neighbor_i) const;
 
 private:
-    std::shared_ptr<GraphDataCell<IOTmpl>> graph_data_cell_;
+    std::shared_ptr<GraphTmpl> graph_data_cell_;
 
     std::shared_ptr<BasicIO<IOTmpl>> redundant_io_{nullptr};
 
@@ -115,9 +115,9 @@ private:
     uint32_t prefetch_cache_line{0};
 };
 
-template <typename QuantTmpl, typename IOTmpl>
+template <typename QuantTmpl, typename IOTmpl, typename GraphTmpl>
 void
-MixDataCell<QuantTmpl, IOTmpl>::MakeRedundant(double loading_factor) {
+MixDataCell<QuantTmpl, IOTmpl, GraphTmpl>::MakeRedundant(double loading_factor) {
     std::vector<uint64_t> neighbor_ids;
     std::vector<const uint8_t*> neighbor_codes;
     redundant_total_count_ = loading_factor * this->TotalCount();
@@ -140,9 +140,9 @@ MixDataCell<QuantTmpl, IOTmpl>::MakeRedundant(double loading_factor) {
     }
 }
 
-template <typename QuantTmpl, typename IOTmpl>
+template <typename QuantTmpl, typename IOTmpl, typename GraphTmpl>
 void
-MixDataCell<QuantTmpl, IOTmpl>::redundant_insert_neighbors(
+MixDataCell<QuantTmpl, IOTmpl, GraphTmpl>::redundant_insert_neighbors(
     uint64_t id, std::vector<uint64_t> neighbor_ids, std::vector<const uint8_t*> neighbor_codes) {
     // storage structure
     // 1. offset(uint64_t): offset[0] offset[1] ... offset[redundant_total_count_ - 1]
@@ -175,18 +175,18 @@ MixDataCell<QuantTmpl, IOTmpl>::redundant_insert_neighbors(
     }
 }
 
-template <typename QuantTmpl, typename IOTmpl>
+template <typename QuantTmpl, typename IOTmpl, typename GraphTmpl>
 uint64_t
-MixDataCell<QuantTmpl, IOTmpl>::get_codes_offset_by_id(uint64_t id) const {
+MixDataCell<QuantTmpl, IOTmpl, GraphTmpl>::get_codes_offset_by_id(uint64_t id) const {
     if (id > redundant_total_count_) {
         return std::numeric_limits<uint64_t>::max();
     }
     return *(uint64_t*)(redundant_io_->Read(sizeof(uint64_t), id * sizeof(uint64_t)));
 }
 
-template <typename QuantTmpl, typename IOTmpl>
+template <typename QuantTmpl, typename IOTmpl, typename GraphTmpl>
 uint64_t
-MixDataCell<QuantTmpl, IOTmpl>::get_redundant_size_by_id(uint64_t id) const {
+MixDataCell<QuantTmpl, IOTmpl, GraphTmpl>::get_redundant_size_by_id(uint64_t id) const {
     uint64_t code_offset = get_codes_offset_by_id(id);
     if (code_offset == std::numeric_limits<uint64_t>::max()) {
         return 0;
@@ -194,10 +194,10 @@ MixDataCell<QuantTmpl, IOTmpl>::get_redundant_size_by_id(uint64_t id) const {
     return *(uint64_t*)(redundant_io_->Read(sizeof(uint64_t), code_offset));
 }
 
-template <typename QuantTmpl, typename IOTmpl>
+template <typename QuantTmpl, typename IOTmpl, typename GraphTmpl>
 uint64_t
-MixDataCell<QuantTmpl, IOTmpl>::get_neighbor_codes_offset_by_id(uint64_t id,
-                                                                uint64_t neighbor_i) const {
+MixDataCell<QuantTmpl, IOTmpl, GraphTmpl>::get_neighbor_codes_offset_by_id(
+    uint64_t id, uint64_t neighbor_i) const {
     uint64_t code_offset = get_codes_offset_by_id(id);
     if (code_offset == std::numeric_limits<uint64_t>::max()) {
         return code_offset;
@@ -207,9 +207,10 @@ MixDataCell<QuantTmpl, IOTmpl>::get_neighbor_codes_offset_by_id(uint64_t id,
            sizeof(uint64_t);
 }
 
-template <typename QuantTmpl, typename IOTmpl>
+template <typename QuantTmpl, typename IOTmpl, typename GraphTmpl>
 uint64_t
-MixDataCell<QuantTmpl, IOTmpl>::get_neighbor_id_by_id(uint64_t id, uint64_t neighbor_i) const {
+MixDataCell<QuantTmpl, IOTmpl, GraphTmpl>::get_neighbor_id_by_id(uint64_t id,
+                                                                 uint64_t neighbor_i) const {
     uint64_t code_offset = get_codes_offset_by_id(id);
     if (code_offset == std::numeric_limits<uint64_t>::max()) {
         return 0;
@@ -218,27 +219,27 @@ MixDataCell<QuantTmpl, IOTmpl>::get_neighbor_id_by_id(uint64_t id, uint64_t neig
     return *(uint64_t*)redundant_io_->Read(sizeof(uint64_t), pos);
 }
 
-template <typename QuantTmpl, typename IOTmpl>
+template <typename QuantTmpl, typename IOTmpl, typename GraphTmpl>
 template <typename IDType>
 void
-MixDataCell<QuantTmpl, IOTmpl>::QueryLine(float* resultDists,
-                                          const float* queryVector,
-                                          uint64_t id,
-                                          std::vector<uint32_t>& to_be_visit,
-                                          uint32_t count_no_visit) {
+MixDataCell<QuantTmpl, IOTmpl, GraphTmpl>::QueryLine(float* resultDists,
+                                                     const float* queryVector,
+                                                     uint64_t id,
+                                                     std::vector<uint32_t>& to_be_visit,
+                                                     uint32_t count_no_visit) {
     std::unique_ptr<Computer<QuantTmpl>> computer = std::move(this->quantizer_->FactoryComputer());
     computer->SetQuery(queryVector);
     this->QueryLine(resultDists, computer, id, to_be_visit, count_no_visit);
 }
 
-template <typename QuantTmpl, typename IOTmpl>
+template <typename QuantTmpl, typename IOTmpl, typename GraphTmpl>
 template <typename IDType>
 void
-MixDataCell<QuantTmpl, IOTmpl>::QueryLine(float* resultDists,
-                                          std::unique_ptr<Computer<QuantTmpl>>& computer,
-                                          uint64_t id,
-                                          std::vector<uint32_t>& to_be_visit,
-                                          uint32_t count_no_visit) {
+MixDataCell<QuantTmpl, IOTmpl, GraphTmpl>::QueryLine(float* resultDists,
+                                                     std::unique_ptr<Computer<QuantTmpl>>& computer,
+                                                     uint64_t id,
+                                                     std::vector<uint32_t>& to_be_visit,
+                                                     uint32_t count_no_visit) {
     if (id >= redundant_total_count_) {
         const uint8_t* codes;
         std::vector<uint64_t> neighbor_ids;

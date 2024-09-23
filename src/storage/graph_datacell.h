@@ -19,6 +19,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "algorithm/hnswlib/hnswalg.h"
 #include "io/basic_io.h"
 #include "quantization/quantizer.h"
 
@@ -29,9 +30,11 @@ namespace vsag {
  * add neighbors and pruning
  * retrieve neighbors
  */
+template <typename IOTmpl, bool is_adapter>
+class GraphDataCell;
 
 template <typename IOTmpl>
-class GraphDataCell {
+class GraphDataCell<IOTmpl, false> {
 public:
     GraphDataCell(uint64_t maximum_degree = 32) : maximum_degree_(maximum_degree){};
 
@@ -91,6 +94,16 @@ public:
         return this->maximum_degree_;
     }
 
+    void
+    SetMaximumDegree(uint32_t maximum_degree) {
+        this->maximum_degree_ = maximum_degree;
+    }
+
+    void
+    SetTotalCount(uint64_t total_count) {
+        this->maxCapacity_ = total_count;
+    }
+
 private:
     inline uint64_t
     get_single_offset() {
@@ -109,7 +122,7 @@ private:
 
 template <typename IOTmpl>
 uint64_t
-GraphDataCell<IOTmpl>::InsertNode(const std::vector<uint64_t> neighbor_ids) {
+GraphDataCell<IOTmpl, false>::InsertNode(const std::vector<uint64_t> neighbor_ids) {
     auto cur_offset = totalCount_ * this->get_single_offset();
     uint32_t neighbor_size = neighbor_ids.size();
     if (neighbor_size > this->maximum_degree_) {
@@ -129,7 +142,7 @@ GraphDataCell<IOTmpl>::InsertNode(const std::vector<uint64_t> neighbor_ids) {
 
 template <typename IOTmpl>
 uint32_t
-GraphDataCell<IOTmpl>::GetNeighborSize(uint64_t id) {
+GraphDataCell<IOTmpl, false>::GetNeighborSize(uint64_t id) {
     uint32_t size = 0;
     if (id >= totalCount_) {
         return 0;
@@ -142,7 +155,7 @@ GraphDataCell<IOTmpl>::GetNeighborSize(uint64_t id) {
 
 template <typename IOTmpl>
 void
-GraphDataCell<IOTmpl>::GetNeighbors(uint64_t id, std::vector<uint64_t>& neighbor_ids) {
+GraphDataCell<IOTmpl, false>::GetNeighbors(uint64_t id, std::vector<uint64_t>& neighbor_ids) {
     uint32_t size = GetNeighborSize(id);
     uint64_t cur_offset = id * this->get_single_offset() + sizeof(size);
     if (size == 0) {
@@ -153,6 +166,43 @@ GraphDataCell<IOTmpl>::GetNeighbors(uint64_t id, std::vector<uint64_t>& neighbor
         neighbor_ids[i] = *(uint64_t*)(io_->Read(sizeof(uint64_t), cur_offset));
         cur_offset += sizeof(uint64_t);
     }
+}
+
+template <typename IOTmpl>
+class GraphDataCell<IOTmpl, true> : public GraphDataCell<IOTmpl, false> {
+public:
+    GraphDataCell(std::shared_ptr<hnswlib::HierarchicalNSW> alg_hnsw = nullptr)
+        : alg_hnsw_(alg_hnsw) {
+        this->SetMaximumDegree(alg_hnsw_->getMaxDegree());
+        this->SetTotalCount(alg_hnsw->getCurrentElementCount());
+    };
+
+    void
+    GetNeighbors(uint64_t id, std::vector<uint64_t>& neighbor_ids);
+
+    uint32_t
+    GetNeighborSize(uint64_t id);
+
+private:
+    std::shared_ptr<hnswlib::HierarchicalNSW> alg_hnsw_;
+};
+
+template <typename IOTmpl>
+void
+GraphDataCell<IOTmpl, true>::GetNeighbors(uint64_t id, std::vector<uint64_t>& neighbor_ids) {
+    int* data = (int*)alg_hnsw_->get_linklist0(id);
+    uint32_t size = alg_hnsw_->getListCount((hnswlib::linklistsizeint*)data);
+    neighbor_ids.resize(size);
+    for (uint32_t i = 0; i < size; i++) {
+        neighbor_ids[i] = *(data + i + 1);
+    }
+}
+
+template <typename IOTmpl>
+uint32_t
+GraphDataCell<IOTmpl, true>::GetNeighborSize(uint64_t id) {
+    int* data = (int*)alg_hnsw_->get_linklist0(id);
+    return alg_hnsw_->getListCount((hnswlib::linklistsizeint*)data);
 }
 
 }  // namespace vsag

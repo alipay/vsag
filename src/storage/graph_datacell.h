@@ -36,7 +36,7 @@ class GraphDataCell;
 template <typename IOTmpl>
 class GraphDataCell<IOTmpl, false> {
 public:
-    GraphDataCell(uint64_t maximum_degree = 32) : maximum_degree_(maximum_degree){};
+    GraphDataCell(uint32_t maximum_degree = 32) : maximum_degree_(maximum_degree){};
 
     explicit GraphDataCell(const std::string& initializeJson){};  // todo
 
@@ -84,7 +84,7 @@ public:
         io_->Prefetch(id * get_single_offset() + neighbor_i * sizeof(uint64_t));
     }
 
-    inline uint64_t
+    inline uint32_t
     GetMaximumDegree() {
         return this->maximum_degree_;
     }
@@ -112,7 +112,7 @@ private:
 
     uint64_t maxCapacity_{1000000};
 
-    uint64_t maximum_degree_{0};
+    uint32_t maximum_degree_{0};
 };
 
 template <typename IOTmpl>
@@ -178,6 +178,9 @@ public:
     uint32_t
     GetNeighborSize(uint64_t id);
 
+    void
+    Prefetch(uint64_t id, uint64_t neighbor_i);
+
 private:
     std::shared_ptr<hnswlib::HierarchicalNSW> alg_hnsw_;
 };
@@ -198,6 +201,13 @@ uint32_t
 GraphDataCell<IOTmpl, true>::GetNeighborSize(uint64_t id) {
     int* data = (int*)alg_hnsw_->get_linklist0(id);
     return alg_hnsw_->getListCount((hnswlib::linklistsizeint*)data);
+}
+
+template <typename IOTmpl>
+void
+GraphDataCell<IOTmpl, true>::Prefetch(uint64_t id, uint64_t neighbor_i) {
+    int* data = (int*)alg_hnsw_->get_linklist0(id);
+    _mm_prefetch(data + neighbor_i + 1, _MM_HINT_T0);
 }
 
 }  // namespace vsag

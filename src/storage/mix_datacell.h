@@ -281,7 +281,7 @@ MixDataCell<QuantTmpl, IOTmpl, GraphTmpl>::QueryLine(float* resultDists,
             codes = redundant_io_->Read(this->GetCodeSize(), code_offset);
             computer->ComputeDist(codes, resultDists + i);
         }
-    };
+    }
 }
 
 }  // namespace vsag

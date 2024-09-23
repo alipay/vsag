@@ -130,11 +130,11 @@ BasicSearcher<GraphTmpl, VectorDataStorageTmpl, FilterTmpl>::Optimize(uint32_t e
 template <typename GraphTmpl, typename VectorDataTmpl, typename FilterTmpl>
 uint32_t
 BasicSearcher<GraphTmpl, VectorDataTmpl, FilterTmpl>::visit(
-    std::false_type,
     hnswlib::VisitedList* vl,
     std::pair<float, uint64_t>& current_node_pair,
     std::pair<float, uint64_t>& next_node_pair,
-    std::vector<uint32_t>& to_be_visited) const {
+    std::vector<uint32_t>& to_be_visited,
+    bool is_redundant) const {
     uint32_t count_no_visited = 0;
     std::vector<uint64_t> neighbors;
 
@@ -151,22 +151,15 @@ BasicSearcher<GraphTmpl, VectorDataTmpl, FilterTmpl>::visit(
             filter_->Prefetch(neighbors[i + prefetch_neighbor_visit_num]);
         }
         if (filter_->IsValid(neighbors[i])) {
-            to_be_visited[count_no_visited++] = i;
+            if (is_redundant) {
+                to_be_visited[count_no_visited++] = i;
+            } else {
+                to_be_visited[count_no_visited++] = neighbors[i];
+            }
         }
         filter_->SetVisited(neighbors[i], vl);
     }
     return count_no_visited;
-}
-template <typename GraphTmpl, typename VectorDataTmpl, typename FilterTmpl>
-uint32_t
-BasicSearcher<GraphTmpl, VectorDataTmpl, FilterTmpl>::visit(
-    std::true_type,
-    hnswlib::VisitedList* vl,
-    std::pair<float, uint64_t>& current_node_pair,
-    std::pair<float, uint64_t>& next_node_pair,
-    std::vector<uint32_t>& to_be_visited) const {
-    std::false_type false_type_instance;
-    return visit(false_type_instance, vl, current_node_pair, next_node_pair, to_be_visited);
 }
 
 template <typename GraphTmpl, typename VectorDataStorageTmpl, typename FilterTmpl>
@@ -211,11 +204,11 @@ BasicSearcher<GraphTmpl, VectorDataStorageTmpl, FilterTmpl>::KNNSearch(const flo
         candidate_set.pop();
         std::pair<float, uint64_t> next_node_pair = candidate_set.top();
 
-        count_no_visited = visit(typename is_mix_data_cell<VectorDataStorageTmpl>::type(),
+        count_no_visited = visit(vl,
                                  current_node_pair,
                                  next_node_pair,
-                                 vl,
-                                 to_be_visited);
+                                 to_be_visited,
+                                 vector_data_cell_->IsRedundant(current_node_pair.second));
 
         dist_cmp += count_no_visited;
 

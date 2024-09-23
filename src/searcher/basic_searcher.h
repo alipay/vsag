@@ -94,25 +94,12 @@ public:
     };
 
 private:
-    /**
-     * used for mix data cell
-     */
     uint32_t
-    visit(std::true_type,
-          hnswlib::VisitedList* vl,
+    visit(hnswlib::VisitedList* vl,
           std::pair<float, uint64_t>& current_node_pair,
           std::pair<float, uint64_t>& next_node_pair,
-          std::vector<uint32_t>& to_be_visited) const;
-
-    /**
-     * used for flatten data cell
-     */
-    uint32_t
-    visit(std::false_type,
-          hnswlib::VisitedList* vl,
-          std::pair<float, uint64_t>& current_node_pair,
-          std::pair<float, uint64_t>& next_node_pair,
-          std::vector<uint32_t>& to_be_visited) const;
+          std::vector<uint32_t>& to_be_visited,
+          bool is_redundant = false) const;
 
 private:
     std::shared_ptr<GraphTmpl> graph_;

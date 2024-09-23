@@ -78,10 +78,12 @@ generate_to_be_visited(uint32_t neighbor_size, std::vector<uint32_t>& to_be_visi
 
     for (uint32_t i = 0; i < count_no_visit; ++i) {
         auto idx = dist(gen);
-        if (neighbor_size != 0) {
-            idx = neighbor_size - 1;
-        } else {
-            idx = 0;
+        if (idx >= neighbor_size) {
+            if (neighbor_size != 0) {
+                idx = neighbor_size - 1;
+            } else {
+                idx = 0;
+            }
         }
         to_be_visit[i] = idx;
     }
@@ -114,24 +116,35 @@ TestMixDataCellBasicRedundant(std::unique_ptr<MixDataCell<QuantT, IOT, GraphT>>&
 
     for (int i = 0; i < base_size; i++) {
         std::vector<uint64_t> neighbor_ids;
+        uint64_t neighbor_id;
         graph->GetNeighbors(i, neighbor_ids);
         std::vector<float> dists(neighbor_ids.size());
 
         for (int j = 0; j < query_size; j++) {
             auto query = queries.data() + j * dim;
             auto count_no_visit = generate_to_be_visited(neighbor_ids.size(), to_be_visited);
+            if (not data_cell->IsRedundant(i)) {
+                for (int k = 0; k < count_no_visit; k++) {
+                    to_be_visited[k] = neighbor_ids[to_be_visited[k]];
+                }
+            }
+
             std::unique_ptr<Computer<QuantT>> computer =
                 std::move(data_cell->FactoryComputer(query));
             data_cell->QueryLine(dists.data(), computer, i, to_be_visited, count_no_visit);
 
             for (int k = 0; k < count_no_visit; k++) {
+                if (data_cell->IsRedundant(i)) {
+                    neighbor_id = neighbor_ids[to_be_visited[k]];
+                } else {
+                    neighbor_id = to_be_visited[k];
+                }
                 float gt = 0;
                 if (metric == vsag::MetricType::METRIC_TYPE_IP ||
                     metric == vsag::MetricType::METRIC_TYPE_COSINE) {
-                    gt = InnerProduct(
-                        vectors.data() + neighbor_ids[to_be_visited[k]] * dim, query, &dim);
+                    gt = InnerProduct(vectors.data() + neighbor_id * dim, query, &dim);
                 } else if (metric == vsag::MetricType::METRIC_TYPE_L2SQR) {
-                    gt = L2Sqr(vectors.data() + neighbor_ids[to_be_visited[k]] * dim, query, &dim);
+                    gt = L2Sqr(vectors.data() + neighbor_id * dim, query, &dim);
                 }
                 REQUIRE(std::fabs(gt - dists[k]) < error);
             }

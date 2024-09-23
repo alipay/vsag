@@ -83,6 +83,11 @@ public:
         return redundant_total_count_;
     }
 
+    inline bool
+    IsRedundant(uint64_t id) const {
+        return (id < redundant_total_count_);
+    }
+
 private:
     void
     redundant_insert_neighbors(uint64_t id,
@@ -240,24 +245,21 @@ MixDataCell<QuantTmpl, IOTmpl, GraphTmpl>::QueryLine(float* resultDists,
                                                      uint64_t id,
                                                      std::vector<uint32_t>& to_be_visit,
                                                      uint32_t count_no_visit) {
-    if (id >= redundant_total_count_) {
+    if (not IsRedundant(id)) {
         const uint8_t* codes;
-        std::vector<uint64_t> neighbor_ids;
-        graph_data_cell_->GetNeighbors(id, neighbor_ids);
 
         for (uint32_t i = 0; i < prefetch_neighbor_codes_num and i < count_no_visit; i++) {
-            this->io_->Prefetch(neighbor_ids[to_be_visit[i]] * this->GetCodeSize(),
-                                prefetch_cache_line);
+            this->io_->Prefetch(to_be_visit[i] * this->GetCodeSize(), prefetch_cache_line);
         }
 
         for (uint32_t i = 0; i < count_no_visit; i++) {
             if (i + prefetch_neighbor_codes_num < count_no_visit) {
-                this->io_->Prefetch(neighbor_ids[to_be_visit[i + prefetch_neighbor_codes_num]] *
-                                        this->GetCodeSize(),
-                                    prefetch_cache_line);
+                this->io_->Prefetch(
+                    to_be_visit[i + prefetch_neighbor_codes_num] * this->GetCodeSize(),
+                    prefetch_cache_line);
             }
 
-            codes = this->GetCodesById(neighbor_ids[to_be_visit[i]]);
+            codes = this->GetCodesById(to_be_visit[i]);
             computer->ComputeDist(codes, resultDists + i);
         }
     } else {

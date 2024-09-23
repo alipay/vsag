@@ -38,20 +38,15 @@ class GraphDataCell<IOTmpl, false> {
 public:
     GraphDataCell(uint64_t maximum_degree = 32) : maximum_degree_(maximum_degree){};
 
-    explicit GraphDataCell(const std::string& initializeJson);  // todo
+    explicit GraphDataCell(const std::string& initializeJson){};  // todo
 
     uint64_t
-    InsertNode(const std::vector<uint64_t> neighbor_ids);
+    InsertNode(const std::vector<uint64_t>& neighbor_ids);
 
     void
-    InsertNeighbors(uint64_t id, const std::vector<uint64_t> neighbor_ids) {  // todo
+    InsertNeighbors(uint64_t id, const std::vector<uint64_t>& neighbor_ids) {  // todo
         return;
     };
-
-    void
-    Prune(uint64_t id) {
-        return;
-    }
 
     uint32_t
     GetNeighborSize(uint64_t id);
@@ -122,7 +117,7 @@ private:
 
 template <typename IOTmpl>
 uint64_t
-GraphDataCell<IOTmpl, false>::InsertNode(const std::vector<uint64_t> neighbor_ids) {
+GraphDataCell<IOTmpl, false>::InsertNode(const std::vector<uint64_t>& neighbor_ids) {
     auto cur_offset = totalCount_ * this->get_single_offset();
     uint32_t neighbor_size = neighbor_ids.size();
     if (neighbor_size > this->maximum_degree_) {

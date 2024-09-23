@@ -16,7 +16,7 @@
 #pragma once
 #include <math.h>
 
-#include <cstring>
+#include <string>
 #include <limits>
 #include <unordered_map>
 #include <vector>
@@ -29,9 +29,9 @@ namespace vsag {
 typedef uint64_t norm_type;
 typedef float sum_type;
 
-const char* OFFSET_KEY_CODE = "code";
-const char* OFFSET_KEY_NORM = "norm";
-const char* OFFSET_KEY_SUM = "sum";
+const char* const OFFSET_KEY_CODE = "code";
+const char* const OFFSET_KEY_NORM = "norm";
+const char* const OFFSET_KEY_SUM = "sum";
 
 template <MetricType Metric = MetricType::METRIC_TYPE_L2SQR>
 class SQ4UniformQuantizer : public Quantizer<SQ4UniformQuantizer<Metric>> {
@@ -88,7 +88,7 @@ SQ4UniformQuantizer<Metric>::SQ4UniformQuantizer(int dim)
 
     if (Metric == MetricType::METRIC_TYPE_IP or Metric == MetricType::METRIC_TYPE_COSINE) {
         offsets_[OFFSET_KEY_SUM] = this->codeSize_;
-        this->codeSize_ += sizeof(sum_type);  // sum  of vector
+        this->codeSize_ += sizeof(sum_type);  // sum of vector
     }
 }
 
@@ -212,7 +212,6 @@ SQ4UniformQuantizer<Metric>::ComputeImpl(const uint8_t* codes1, const uint8_t* c
         result = lower_bound_ * (sum1 + sum2) + (diff_ / 15.0) * (diff_ / 15.0) * result -
                  lower_bound_ * lower_bound_;
 
-        //        result = -1 * result;
     } else if (Metric == MetricType::METRIC_TYPE_COSINE) {
         result = SQ4UniformComputeCodesIP(codes1, codes2, this->dim_);
 
@@ -221,15 +220,6 @@ SQ4UniformQuantizer<Metric>::ComputeImpl(const uint8_t* codes1, const uint8_t* c
 
         result = lower_bound_ * (sum1 + sum2) + (diff_ / 15.0) * (diff_ / 15.0) * result -
                  lower_bound_ * lower_bound_;
-
-        //        norm_type norm1 =
-        //            *((norm_type*)(codes1 + offsets_.at(OFFSET_KEY_NORM)));
-        //        norm_type norm2 = *((norm_type*)(codes2 + offsets_.at(OFFSET_KEY_NORM)));
-        //
-        //        result =
-        //            lower_bound_ * (sum1 + sum2) + (diff_ / 15.0) * (diff_ / 15.0) * result - lower_bound_ * lower_bound_;
-        //
-        //        result = 1.0 - result / (sqrt(norm1) * sqrt(norm2));
     } else {
         result = 0;
     }

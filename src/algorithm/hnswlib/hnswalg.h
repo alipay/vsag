@@ -1692,13 +1692,9 @@ public:
                             vsag::Vector<std::pair<float, tableint>>,
                             CompareByFirst>
             top_candidates(allocator_);
-        if (num_deleted_) {
-            top_candidates =
-                searchBaseLayerST<true, true>(currObj, query_data, std::max(ef, k), isIdAllowed);
-        } else {
-            top_candidates =
-                searchBaseLayerST<false, true>(currObj, query_data, std::max(ef, k), isIdAllowed);
-        }
+
+        top_candidates =
+            searchBaseLayerST<false, true>(currObj, query_data, std::max(ef, k), isIdAllowed);
 
         while (top_candidates.size() > k) {
             top_candidates.pop();
@@ -1757,14 +1753,9 @@ public:
                             vsag::Vector<std::pair<float, tableint>>,
                             CompareByFirst>
             top_candidates(allocator_);
-        if (num_deleted_) {
-            throw std::runtime_error(
-                "not support perform range search on a index that deleted some vectors");
-        } else {
-            top_candidates =
-                searchBaseLayerST<false, true>(currObj, query_data, radius, ef, isIdAllowed);
-            // std::cout << "top_candidates.size(): " << top_candidates.size() << std::endl;
-        }
+
+        top_candidates =
+            searchBaseLayerST<false, true>(currObj, query_data, radius, ef, isIdAllowed);
 
         while (top_candidates.size() > 0) {
             std::pair<float, tableint> rez = top_candidates.top();

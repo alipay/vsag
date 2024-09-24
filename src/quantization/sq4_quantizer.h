@@ -19,7 +19,7 @@
 #include <vector>
 
 #include "quantizer.h"
-#include "sq4_simd.h"
+#include "simd/sq4_simd.h"
 
 namespace vsag {
 
@@ -63,8 +63,7 @@ SQ4Quantizer<Metric>::SQ4Quantizer(int dim) : Quantizer<SQ4Quantizer<Metric>>(di
     vector_encoded_size_ = (dim + 1) >> 1 << 1;
     lower_bound_.resize(dim, std::numeric_limits<DataType>::max());
     diff_.resize(dim, std::numeric_limits<DataType>::min());
-    this->codeSize_ = vector_encoded_size_;
-    //    this->codeSize_ = vector_encoded_size_ + sizeof(norm_size_t);
+    this->code_size_ = vector_encoded_size_;
 }
 
 template <MetricType Metric>
@@ -90,7 +89,7 @@ SQ4Quantizer<Metric>::TrainImpl(const DataType* data, uint64_t count) {
         diff_[d] -= lower_bound_[d];
     }
 
-    this->isTrained_ = true;
+    this->is_trained_ = true;
     return true;
 }
 
@@ -100,7 +99,6 @@ SQ4Quantizer<Metric>::EncodeOneImpl(const DataType* data, uint8_t* codes) const 
     float delta;
     uint8_t scaled;
 
-    //    norm_size_t norm = 0;
     for (uint32_t d = 0; d < this->dim_; d++) {
         delta = ((data[d] - lower_bound_[d]) / diff_[d]);
         if (delta < 0.0) {
@@ -117,11 +115,7 @@ SQ4Quantizer<Metric>::EncodeOneImpl(const DataType* data, uint8_t* codes) const 
             codes[d / 2] = 0;
             codes[d / 2] |= scaled;
         }
-        //        norm += (norm_size_t)(data[d] * data[d]);
     }
-    //    if (Metric == MetricType::METRIC_TYPE_L2SQR) {
-    //        *(norm_size_t*)(codes + this->vector_encoded_size_) = norm;
-    //    }
 
     return true;
 }
@@ -130,7 +124,7 @@ template <MetricType Metric>
 bool
 SQ4Quantizer<Metric>::EncodeBatchImpl(const DataType* data, uint8_t* codes, uint64_t count) {
     for (uint64_t i = 0; i < count; ++i) {
-        this->EncodeOneImpl(data + i * this->dim_, codes + i * this->codeSize_);
+        this->EncodeOneImpl(data + i * this->dim_, codes + i * this->code_size_);
     }
     return true;
 }
@@ -155,7 +149,7 @@ template <MetricType Metric>
 bool
 SQ4Quantizer<Metric>::DecodeBatchImpl(const uint8_t* codes, DataType* data, uint64_t count) {
     for (uint64_t i = 0; i < count; ++i) {
-        this->DecodeOneImpl(codes + i * this->codeSize_, data + i * this->dim_);
+        this->DecodeOneImpl(codes + i * this->code_size_, data + i * this->dim_);
     }
     return true;
 }
@@ -164,7 +158,7 @@ template <MetricType Metric>
 inline float
 SQ4Quantizer<Metric>::ComputeImpl(const uint8_t* codes1, const uint8_t* codes2) {
     if (Metric == MetricType::METRIC_TYPE_L2SQR) {
-        return SQ4ComputeCodesL2(codes1, codes2, lower_bound_.data(), diff_.data(), this->dim_);
+        return SQ4ComputeCodesL2Sqr(codes1, codes2, lower_bound_.data(), diff_.data(), this->dim_);
     } else if (Metric == MetricType::METRIC_TYPE_IP) {
         return SQ4ComputeCodesIP(codes1, codes2, lower_bound_.data(), diff_.data(), this->dim_);
     } else if (Metric == MetricType::METRIC_TYPE_COSINE) {
@@ -178,7 +172,7 @@ template <MetricType Metric>
 void
 SQ4Quantizer<Metric>::ProcessQueryImpl(const DataType* query,
                                        Computer<SQ4Quantizer>& computer) const {
-    computer.buf_ = new uint8_t[this->codeSize_];
+    computer.buf_ = new uint8_t[this->code_size_];
     this->EncodeOneImpl(query, computer.buf_);
 }
 
@@ -188,8 +182,8 @@ SQ4Quantizer<Metric>::ComputeDistImpl(Computer<SQ4Quantizer>& computer,
                                       const uint8_t* codes,
                                       float* dists) const {
     if (Metric == MetricType::METRIC_TYPE_L2SQR) {
-        dists[0] =
-            SQ4ComputeCodesL2(computer.buf_, codes, lower_bound_.data(), diff_.data(), this->dim_);
+        dists[0] = SQ4ComputeCodesL2Sqr(
+            computer.buf_, codes, lower_bound_.data(), diff_.data(), this->dim_);
     } else if (Metric == MetricType::METRIC_TYPE_IP) {
         dists[0] =
             SQ4ComputeCodesIP(computer.buf_, codes, lower_bound_.data(), diff_.data(), this->dim_);

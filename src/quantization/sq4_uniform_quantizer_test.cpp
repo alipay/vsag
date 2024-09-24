@@ -49,7 +49,6 @@ TEST_CASE("SQ4 Uniform Encode and Decode", "[ut][SQ4UniformQuantizer]") {
 TEST_CASE("SQ4 Uniform Compute Code with Code", "[ut][SQ4UniformQuantizer]") {
     std::vector<int> dims = {10, 20, 32, 42, 50, 64, 65, 96, 128, 129, 250, 256, 512, 784, 960};
     uint32_t size = 1000;
-    SQ4UniformSetSIMD();
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
 
@@ -74,7 +73,6 @@ TEST_CASE("SQ4 Uniform Compute Code with Code", "[ut][SQ4UniformQuantizer]") {
 TEST_CASE("SQ4 Uniform Compute Computer with Code", "[ut][SQ4UniformQuantizer]") {
     std::vector<int> dims = {10, 20, 32, 42, 50, 64, 65, 96, 128, 129, 250, 256, 512, 784, 960};
     uint32_t size = 1000;
-    SQ4UniformSetSIMD();
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
     for (auto dim : dims) {

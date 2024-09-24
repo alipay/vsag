@@ -144,5 +144,101 @@ SQ8ComputeCodesL2Sqr(const uint8_t* codes1,
     return result;
 }
 
+float
+SQ4ComputeIP(const float* query,
+             const uint8_t* codes,
+             const float* lowerBound,
+             const float* diff,
+             uint64_t dim) {
+    float result = 0;
+
+    for (uint32_t d = 0; d < dim; d += 2) {
+        float x_lo = query[d];
+        float x_hi = query[d + 1];
+        float y_lo = (codes[d / 2] & 0x0f) * 15.0 / diff[d] + lowerBound[d];
+        float y_hi = ((codes[d / 2] & 0xf0) >> 4) * 15.0 / diff[d + 1] + lowerBound[d + 1];
+
+        result += (x_lo * y_lo + x_hi * y_hi);
+    }
+
+    return result;
+}
+
+float
+SQ4ComputeL2Sqr(const float* query,
+                const uint8_t* codes,
+                const float* lowerBound,
+                const float* diff,
+                uint64_t dim) {
+    float result = 0;
+
+    for (uint32_t d = 0; d < dim; d += 2) {
+        float x_lo = query[d];
+        float x_hi = query[d + 1];
+        float y_lo = (codes[d / 2] & 0x0f) * 15.0 / diff[d] + lowerBound[d];
+        float y_hi = ((codes[d / 2] & 0xf0) >> 4) * 15.0 / diff[d + 1] + lowerBound[d + 1];
+
+        result += (x_lo - y_lo) * (x_lo - y_lo) + (x_hi - y_hi) * (x_hi - y_hi);
+    }
+
+    return result;
+}
+
+float
+SQ4ComputeCodesIP(const uint8_t* codes1,
+                  const uint8_t* codes2,
+                  const float* lowerBound,
+                  const float* diff,
+                  uint64_t dim) {
+    float result = 0;
+
+    for (uint32_t d = 0; d < dim; d += 2) {
+        float x_lo = (codes1[d / 2] & 0x0f) * 15.0 / diff[d] + lowerBound[d];
+        float x_hi = ((codes1[d / 2] & 0xf0) >> 4) * 15.0 / diff[d + 1] + lowerBound[d + 1];
+        float y_lo = (codes2[d / 2] & 0x0f) * 15.0 / diff[d] + lowerBound[d];
+        float y_hi = ((codes2[d / 2] & 0xf0) >> 4) * 15.0 / diff[d + 1] + lowerBound[d + 1];
+
+        result += (x_lo * y_lo + x_hi * y_hi);
+    }
+
+    return result;
+}
+
+float
+SQ4ComputeCodesL2Sqr(const uint8_t* codes1,
+                     const uint8_t* codes2,
+                     const float* lowerBound,
+                     const float* diff,
+                     uint64_t dim) {
+    float result = 0;
+
+    for (uint32_t d = 0; d < dim; d += 2) {
+        float x_lo = (codes1[d / 2] & 0x0f) * 15.0 / diff[d] + lowerBound[d];
+        float x_hi = ((codes1[d / 2] & 0xf0) >> 4) * 15.0 / diff[d + 1] + lowerBound[d + 1];
+        float y_lo = (codes2[d / 2] & 0x0f) * 15.0 / diff[d] + lowerBound[d];
+        float y_hi = ((codes2[d / 2] & 0xf0) >> 4) * 15.0 / diff[d + 1] + lowerBound[d + 1];
+
+        result += (x_lo - y_lo) * (x_lo - y_lo) + (x_hi - y_hi) * (x_hi - y_hi);
+    }
+
+    return result;
+}
+
+float
+SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim) {
+    int32_t result = 0;
+
+    for (uint32_t d = 0; d < dim; d += 2) {
+        float x_lo = codes1[d / 2] & 0x0f;
+        float x_hi = (codes1[d / 2] & 0xf0) >> 4;
+        float y_lo = codes2[d / 2] & 0x0f;
+        float y_hi = (codes2[d / 2] & 0xf0) >> 4;
+
+        result += (x_lo * y_lo + x_hi * y_hi);
+    }
+
+    return result;
+}
+
 }  // namespace generic
 }  // namespace vsag

@@ -16,7 +16,10 @@
 #include <immintrin.h>
 
 #include "fp32_simd.h"
+#include "sq4_simd.h"
+#include "sq4_uniform_simd.h"
 #include "sq8_simd.h"
+
 namespace vsag {
 
 #define PORTABLE_ALIGN32 __attribute__((aligned(32)))
@@ -277,6 +280,72 @@ SQ8ComputeCodesL2Sqr(const uint8_t* codes1,
     return result;
 #else
     return Generic::SQ8ComputeL2Sqr(query, codes, lowerBound, diff, dim);
+#endif
+}
+
+float
+SQ4ComputeIP(const float* query,
+             const uint8_t* codes,
+             const float* lowerBound,
+             const float* diff,
+             uint64_t dim) {
+    return generic::SQ4ComputeIP(query, codes, lowerBound, diff, dim);
+}
+
+float
+SQ4ComputeL2Sqr(const float* query,
+                const uint8_t* codes,
+                const float* lowerBound,
+                const float* diff,
+                uint64_t dim) {
+    return generic::SQ4ComputeL2Sqr(query, codes, lowerBound, diff, dim);
+}
+
+float
+SQ4ComputeCodesIP(const uint8_t* codes1,
+                  const uint8_t* codes2,
+                  const float* lowerBound,
+                  const float* diff,
+                  uint64_t dim) {
+    return generic::SQ4ComputeCodesIP(codes1, codes2, lowerBound, diff, dim);
+}
+
+float
+SQ4ComputeCodesL2Sqr(const uint8_t* codes1,
+                     const uint8_t* codes2,
+                     const float* lowerBound,
+                     const float* diff,
+                     uint64_t dim) {
+    return generic::SQ4ComputeCodesL2Sqr(codes1, codes2, lowerBound, diff, dim);
+}
+
+float
+SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim) {
+#if defined(ENABLE_AVX512)
+    alignas(512) int16_t temp[32];
+    int32_t result = 0;
+    uint32_t d = 0;
+    __m512i sum = _mm512_setzero_si512();
+    __m512i mask = _mm512_set1_epi8(0xf);
+    for (; d < (dim + 1) / 2; d += 64) {
+        auto xx = _mm512_loadu_si512((__m512i*)(codes1 + d));
+        auto yy = _mm512_loadu_si512((__m512i*)(codes2 + d));
+        auto xx1 = _mm512_and_si512(xx, mask);                        // 64 * 8bits
+        auto xx2 = _mm512_and_si512(_mm512_srli_epi16(xx, 4), mask);  // 64 * 8bits
+        auto yy1 = _mm512_and_si512(yy, mask);
+        auto yy2 = _mm512_and_si512(_mm512_srli_epi16(yy, 4), mask);
+
+        sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(xx1, yy1));
+        sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(xx2, yy2));
+    }
+    _mm512_store_si512((__m512i*)temp, sum);
+    for (int i = 0; i < 32; ++i) {
+        result += temp[i];
+    }
+    result += avx2::SQ4UniformComputeCodesIP(codes1 + d, codes2 + d, dim - d);
+    return result;
+#else
+    return avx2::SQ4UniformComputeCodesIP(codes1, codes2, dim);
 #endif
 }
 

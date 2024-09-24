@@ -16,13 +16,13 @@
 #pragma once
 #include <math.h>
 
-#include <string>
 #include <limits>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "quantizer.h"
-#include "sq4_uniform_simd.h"
+#include "simd/sq4_uniform_simd.h"
 
 namespace vsag {
 
@@ -76,19 +76,19 @@ SQ4UniformQuantizer<Metric>::SQ4UniformQuantizer(int dim)
     lower_bound_ = std::numeric_limits<DataType>::max();
     diff_ = std::numeric_limits<DataType>::min();
 
-    this->codeSize_ = 0;
+    this->code_size_ = 0;
 
-    offsets_[OFFSET_KEY_CODE] = this->codeSize_;
-    this->codeSize_ += (dim + 1) >> 1 << 1;
+    offsets_[OFFSET_KEY_CODE] = this->code_size_;
+    this->code_size_ += (dim + 1) >> 1 << 1;
 
     if (Metric == MetricType::METRIC_TYPE_L2SQR or Metric == MetricType::METRIC_TYPE_COSINE) {
-        offsets_[OFFSET_KEY_NORM] = this->codeSize_;
-        this->codeSize_ += sizeof(norm_type);  // norm of vector
+        offsets_[OFFSET_KEY_NORM] = this->code_size_;
+        this->code_size_ += sizeof(norm_type);  // norm of vector
     }
 
     if (Metric == MetricType::METRIC_TYPE_IP or Metric == MetricType::METRIC_TYPE_COSINE) {
-        offsets_[OFFSET_KEY_SUM] = this->codeSize_;
-        this->codeSize_ += sizeof(sum_type);  // sum of vector
+        offsets_[OFFSET_KEY_SUM] = this->code_size_;
+        this->code_size_ += sizeof(sum_type);  // sum of vector
     }
 }
 
@@ -115,7 +115,7 @@ SQ4UniformQuantizer<Metric>::TrainImpl(const DataType* data, uint64_t count) {
         diff_ -= lower_bound_;
     }
 
-    this->isTrained_ = true;
+    this->is_trained_ = true;
     return true;
 }
 
@@ -162,7 +162,7 @@ template <MetricType Metric>
 bool
 SQ4UniformQuantizer<Metric>::EncodeBatchImpl(const DataType* data, uint8_t* codes, uint64_t count) {
     for (uint64_t i = 0; i < count; ++i) {
-        this->EncodeOneImpl(data + i * this->dim_, codes + i * this->codeSize_);
+        this->EncodeOneImpl(data + i * this->dim_, codes + i * this->code_size_);
     }
     return true;
 }
@@ -187,7 +187,7 @@ template <MetricType Metric>
 bool
 SQ4UniformQuantizer<Metric>::DecodeBatchImpl(const uint8_t* codes, DataType* data, uint64_t count) {
     for (uint64_t i = 0; i < count; ++i) {
-        this->DecodeOneImpl(codes + i * this->codeSize_, data + i * this->dim_);
+        this->DecodeOneImpl(codes + i * this->code_size_, data + i * this->dim_);
     }
     return true;
 }
@@ -230,7 +230,7 @@ template <MetricType Metric>
 void
 SQ4UniformQuantizer<Metric>::ProcessQueryImpl(const DataType* query,
                                               Computer<SQ4UniformQuantizer>& computer) const {
-    computer.buf_ = new uint8_t[this->codeSize_];
+    computer.buf_ = new uint8_t[this->code_size_];
     this->EncodeOneImpl(query, computer.buf_);
 }
 

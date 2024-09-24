@@ -49,7 +49,6 @@ TEST_CASE("Encode and Decode", "[ut][SQ4Quantizer]") {
 TEST_CASE("Compute Code with Code", "[ut][SQ4Quantizer]") {
     int dim = 960;
     uint32_t size = 1000;
-    SetSIMD();
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
 
@@ -70,7 +69,6 @@ TEST_CASE("Compute Code with Code", "[ut][SQ4Quantizer]") {
 TEST_CASE("Compute Computer with Code", "[ut][SQ4Quantizer]") {
     auto dim = 960;
     uint32_t size = 1000;
-    SetSIMD();
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
 

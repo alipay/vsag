@@ -35,7 +35,7 @@ TEST_CASE("search with alg_hnsw", "[ut][basic_searcher]") {
     uint32_t M = 32;
     uint32_t ef_construction = 100;
     uint32_t ef_search = 300;
-    uint32_t k = 10;
+    uint32_t k = ef_search;
     float redundant_rate = 0.5;
     uint64_t fixed_entry_point_id = 0;
     uint64_t DEFAULT_MAX_ELEMENT = 1;
@@ -89,10 +89,25 @@ TEST_CASE("search with alg_hnsw", "[ut][basic_searcher]") {
     //    searcher->Optimize(ef_search, k);
 
     for (int i = 0; i < query_size; i++) {
+        std::unordered_set<uint64_t> valid_set, set;
         auto result = searcher->KNNSearch(base_vectors.data() + i * dim, ef_search, k);
+        auto valid_result = alg_hnsw->searchBaseLayerST<false, false>(
+            fixed_entry_point_id, base_vectors.data() + i * dim, ef_search, nullptr);
+        REQUIRE(result.size() == valid_result.size());
+
         for (int j = 0; j < k - 1; j++) {
+            valid_set.insert(valid_result.top().second);
+            set.insert(result.top().second);
             result.pop();
+            valid_result.pop();
         }
+        for (auto id : set) {
+            REQUIRE(valid_set.find(id) != valid_set.end());
+        }
+        for (auto id : valid_set) {
+            REQUIRE(set.find(id) != set.end());
+        }
+        REQUIRE(result.top().second == valid_result.top().second);
         REQUIRE(result.top().second == ids[i]);
     }
 }

@@ -140,7 +140,16 @@ AVX512Capable() {
 #include <vector>
 
 namespace hnswlib {
+using tableint = unsigned int;
 typedef size_t labeltype;
+
+struct CompareByFirst {
+    constexpr bool
+    operator()(std::pair<float, tableint> const& a,
+               std::pair<float, tableint> const& b) const noexcept {
+        return a.first < b.first;
+    }
+};
 
 // This can be extended to store state for filtering (e.g. from a std::set)
 class BaseFilterFunctor {
@@ -259,6 +268,17 @@ public:
 
     virtual bool
     isValidLabel(labeltype label) = 0;
+
+    //    virtual
+    //    std::priority_queue<std::pair<float, tableint>,
+    //                        std::vector<std::pair<float, tableint>>,
+    //                        CompareByFirst>
+    //        searchBaseLayerST(tableint ep_id,
+    //                          const void* data_point,
+    //                          size_t ef,
+    //                          BaseFilterFunctor* isIdAllowed = nullptr) const {
+    //        throw std::runtime_error("unsupported func");
+    //    };
 
     virtual ~AlgorithmInterface() {
     }

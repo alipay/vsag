@@ -39,7 +39,6 @@
 #include "visited_list_pool.h"
 
 namespace hnswlib {
-using tableint = unsigned int;
 using linklistsizeint = unsigned int;
 using reverselinklist = std::
     unordered_set<tableint, std::hash<tableint>, std::equal_to<>, vsag::AllocatorWrapper<tableint>>;
@@ -278,14 +277,6 @@ public:
         lock_table.unlock();
         return is_valid;
     }
-
-    struct CompareByFirst {
-        constexpr bool
-        operator()(std::pair<float, tableint> const& a,
-                   std::pair<float, tableint> const& b) const noexcept {
-            return a.first < b.first;
-        }
-    };
 
     inline std::mutex&
     getLabelOpMutex(labeltype label) const {

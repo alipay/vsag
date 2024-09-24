@@ -1463,8 +1463,7 @@ HierarchicalNSW::searchRange(const void* query_data,
 
     MaxHeap top_candidates;
 
-    top_candidates =
-        searchBaseLayerST<false, true>(currObj, query_data, radius, ef, isIdAllowed);
+    top_candidates = searchBaseLayerST<false, true>(currObj, query_data, radius, ef, isIdAllowed);
 
     while (not top_candidates.empty()) {
         std::pair<float, tableint> rez = top_candidates.top();

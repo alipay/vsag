@@ -23,31 +23,33 @@
 using namespace vsag;
 
 TEST_CASE("SQ4 Uniform Encode and Decode", "[ut][SQ4UniformQuantizer]") {
-    int dim = 960;
+    auto dims = fixtures::get_common_used_dims();
     uint32_t size = 1000;
-    float error = 1;
+    float error = 0.1;
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
 
-    {
-        SQ4UniformQuantizer<metrics[0]> quantizer{dim};
-        TestQuantizerEncodeDecode<>(quantizer, dim, size, error);
-        TestQuantizerEncodeDecodeSame<>(quantizer, dim, size, 15);
-    }
-    {
-        SQ4UniformQuantizer<metrics[1]> quantizer{dim};
-        TestQuantizerEncodeDecode<>(quantizer, dim, size, error);
-        TestQuantizerEncodeDecodeSame<>(quantizer, dim, size, 15);
-    }
-    {
-        SQ4UniformQuantizer<metrics[2]> quantizer{dim};
-        TestQuantizerEncodeDecode<>(quantizer, dim, size, error);
-        TestQuantizerEncodeDecodeSame<>(quantizer, dim, size, 15);
+    for (auto dim : dims) {
+        {
+            SQ4UniformQuantizer<metrics[0]> quantizer{dim};
+            TestQuantizerEncodeDecode<>(quantizer, dim, size, error);
+            TestQuantizerEncodeDecodeSame<>(quantizer, dim, size, 15);
+        }
+        {
+            SQ4UniformQuantizer<metrics[1]> quantizer{dim};
+            TestQuantizerEncodeDecode<>(quantizer, dim, size, error);
+            TestQuantizerEncodeDecodeSame<>(quantizer, dim, size, 15);
+        }
+        {
+            SQ4UniformQuantizer<metrics[2]> quantizer{dim};
+            TestQuantizerEncodeDecode<>(quantizer, dim, size, error);
+            TestQuantizerEncodeDecodeSame<>(quantizer, dim, size, 15);
+        }
     }
 }
 
 TEST_CASE("SQ4 Uniform Compute Code with Code", "[ut][SQ4UniformQuantizer]") {
-    std::vector<int> dims = {10, 20, 32, 42, 50, 64, 65, 96, 128, 129, 250, 256, 512, 784, 960};
+    auto dims = fixtures::get_common_used_dims();
     uint32_t size = 1000;
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
@@ -71,7 +73,7 @@ TEST_CASE("SQ4 Uniform Compute Code with Code", "[ut][SQ4UniformQuantizer]") {
 }
 
 TEST_CASE("SQ4 Uniform Compute Computer with Code", "[ut][SQ4UniformQuantizer]") {
-    std::vector<int> dims = {10, 20, 32, 42, 50, 64, 65, 96, 128, 129, 250, 256, 512, 784, 960};
+    auto dims = fixtures::get_common_used_dims();
     uint32_t size = 1000;
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};

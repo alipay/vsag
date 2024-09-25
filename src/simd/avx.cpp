@@ -426,14 +426,17 @@ SQ4ComputeCodesL2Sqr(const uint8_t* codes1,
 float
 SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim) {
 #if defined(ENABLE_AVX2)
+    if (dim == 0) {
+        return 0;
+    }
     alignas(256) int16_t temp[16];
     int32_t result = 0;
     uint32_t d = 0;
     __m256i sum = _mm256_setzero_si256();
     __m256i mask = _mm256_set1_epi8(0xf);
-    for (; d < (dim + 1) / 2; d += 32) {
-        auto xx = _mm256_loadu_si256((__m256i*)(codes1 + d));
-        auto yy = _mm256_loadu_si256((__m256i*)(codes2 + d));
+    for (; d + 63 < dim; d += 64) {
+        auto xx = _mm256_loadu_si256((__m256i*)(codes1 + d / 2));
+        auto yy = _mm256_loadu_si256((__m256i*)(codes2 + d / 2));
         auto xx1 = _mm256_and_si256(xx, mask);                        // 32 * 8bits
         auto xx2 = _mm256_and_si256(_mm256_srli_epi16(xx, 4), mask);  // 32 * 8bits
         auto yy1 = _mm256_and_si256(yy, mask);
@@ -446,7 +449,7 @@ SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t 
     for (int i = 0; i < 16; ++i) {
         result += temp[i];
     }
-    result += sse::SQ4UniformComputeCodesIP(codes1 + d, codes2 + d, dim - d);
+    result += sse::SQ4UniformComputeCodesIP(codes1 + d / 2, codes2 + d / 2, dim - d);
     return result;
 #else
     return sse::SQ4UniformComputeCodesIP(codes1, codes2, dim);

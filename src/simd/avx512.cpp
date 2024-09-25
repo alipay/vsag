@@ -322,14 +322,17 @@ SQ4ComputeCodesL2Sqr(const uint8_t* codes1,
 float
 SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim) {
 #if defined(ENABLE_AVX512)
+    if (dim == 0) {
+        return 0;
+    }
     alignas(512) int16_t temp[32];
     int32_t result = 0;
     uint32_t d = 0;
     __m512i sum = _mm512_setzero_si512();
     __m512i mask = _mm512_set1_epi8(0xf);
-    for (; d < (dim + 1) / 2; d += 64) {
-        auto xx = _mm512_loadu_si512((__m512i*)(codes1 + d));
-        auto yy = _mm512_loadu_si512((__m512i*)(codes2 + d));
+    for (; d + 127 < dim; d += 128) {
+        auto xx = _mm512_loadu_si512((__m512i*)(codes1 + d / 2));
+        auto yy = _mm512_loadu_si512((__m512i*)(codes2 + d / 2));
         auto xx1 = _mm512_and_si512(xx, mask);                        // 64 * 8bits
         auto xx2 = _mm512_and_si512(_mm512_srli_epi16(xx, 4), mask);  // 64 * 8bits
         auto yy1 = _mm512_and_si512(yy, mask);
@@ -342,7 +345,7 @@ SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t 
     for (int i = 0; i < 32; ++i) {
         result += temp[i];
     }
-    result += avx2::SQ4UniformComputeCodesIP(codes1 + d, codes2 + d, dim - d);
+    result += avx2::SQ4UniformComputeCodesIP(codes1 + d / 2, codes2 + d / 2, dim - d);
     return result;
 #else
     return avx2::SQ4UniformComputeCodesIP(codes1, codes2, dim);

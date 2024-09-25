@@ -23,65 +23,71 @@
 using namespace vsag;
 
 TEST_CASE("Encode and Decode", "[ut][SQ4Quantizer]") {
-    int dim = 960;
+    auto dims = fixtures::get_common_used_dims();
     uint32_t size = 1000;
-    float error = 1;
+    float error = 0.1;
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
 
-    {
-        SQ4Quantizer<metrics[0]> quantizer{dim};
-        TestQuantizerEncodeDecode<>(quantizer, dim, size, error);
-        TestQuantizerEncodeDecodeSame<>(quantizer, dim, size, 15);
-    }
-    {
-        SQ4Quantizer<metrics[1]> quantizer{dim};
-        TestQuantizerEncodeDecode<>(quantizer, dim, size, error);
-        TestQuantizerEncodeDecodeSame<>(quantizer, dim, size, 15);
-    }
-    {
-        SQ4Quantizer<metrics[2]> quantizer{dim};
-        TestQuantizerEncodeDecode<>(quantizer, dim, size, error);
-        TestQuantizerEncodeDecodeSame<>(quantizer, dim, size, 15);
+    for (const auto& dim : dims) {
+        {
+            SQ4Quantizer<metrics[0]> quantizer{dim};
+            TestQuantizerEncodeDecode<>(quantizer, dim, size, error);
+            TestQuantizerEncodeDecodeSame<>(quantizer, dim, size, 15);
+        }
+        {
+            SQ4Quantizer<metrics[1]> quantizer{dim};
+            TestQuantizerEncodeDecode<>(quantizer, dim, size, error);
+            TestQuantizerEncodeDecodeSame<>(quantizer, dim, size, 15);
+        }
+        {
+            SQ4Quantizer<metrics[2]> quantizer{dim};
+            TestQuantizerEncodeDecode<>(quantizer, dim, size, error);
+            TestQuantizerEncodeDecodeSame<>(quantizer, dim, size, 15);
+        }
     }
 }
 
 TEST_CASE("Compute Code with Code", "[ut][SQ4Quantizer]") {
-    int dim = 960;
+    auto dims = fixtures::get_common_used_dims();
     uint32_t size = 1000;
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
 
-    {
-        SQ4Quantizer<metrics[0]> quantizer{dim};
-        TestComputeCodesSame<>(quantizer, dim, size, metrics[0]);
-    }
-    {
-        SQ4Quantizer<metrics[1]> quantizer{dim};
-        TestComputeCodesSame<>(quantizer, dim, size, metrics[1]);
-    }
-    {
-        SQ4Quantizer<metrics[2]> quantizer{dim};
-        TestComputeCodesSame<>(quantizer, dim, size, metrics[2]);
+    for (const auto& dim : dims) {
+        {
+            SQ4Quantizer<metrics[0]> quantizer{dim};
+            TestComputeCodesSame<>(quantizer, dim, size, metrics[0]);
+        }
+        {
+            SQ4Quantizer<metrics[1]> quantizer{dim};
+            TestComputeCodesSame<>(quantizer, dim, size, metrics[1]);
+        }
+        {
+            SQ4Quantizer<metrics[2]> quantizer{dim};
+            TestComputeCodesSame<>(quantizer, dim, size, metrics[2]);
+        }
     }
 }
 
 TEST_CASE("Compute Computer with Code", "[ut][SQ4Quantizer]") {
-    auto dim = 960;
+    auto dims = fixtures::get_common_used_dims();
     uint32_t size = 1000;
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
 
-    {
-        SQ4Quantizer<metrics[0]> quantizer{dim};
-        TestComputerSame<>(quantizer, dim, size, metrics[0]);
-    }
-    {
-        SQ4Quantizer<metrics[1]> quantizer{dim};
-        TestComputerSame<>(quantizer, dim, size, metrics[1]);
-    }
-    {
-        SQ4Quantizer<metrics[2]> quantizer{dim};
-        TestComputerSame<>(quantizer, dim, size, metrics[2]);
+    for (const auto& dim : dims) {
+        {
+            SQ4Quantizer<metrics[0]> quantizer{dim};
+            TestComputerSame<>(quantizer, dim, size, metrics[0]);
+        }
+        {
+            SQ4Quantizer<metrics[1]> quantizer{dim};
+            TestComputerSame<>(quantizer, dim, size, metrics[1]);
+        }
+        {
+            SQ4Quantizer<metrics[2]> quantizer{dim};
+            TestComputerSame<>(quantizer, dim, size, metrics[2]);
+        }
     }
 }

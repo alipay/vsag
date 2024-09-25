@@ -554,14 +554,17 @@ SQ4ComputeCodesL2Sqr(const uint8_t* codes1,
 float
 SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim) {
 #if defined(ENABLE_SSE)
+    if (dim == 0) {
+        return 0;
+    }
     alignas(128) int16_t temp[8];
     int32_t result = 0;
     uint32_t d = 0;
     __m128i sum = _mm_setzero_si128();
     __m128i mask = _mm_set1_epi8(0xf);
-    for (; d < (dim + 1) / 2; d += 16) {
-        auto xx = _mm_loadu_si128((__m128i*)(codes1 + d));
-        auto yy = _mm_loadu_si128((__m128i*)(codes2 + d));
+    for (; d + 31 < dim; d += 32) {
+        auto xx = _mm_loadu_si128((__m128i*)(codes1 + d / 2));
+        auto yy = _mm_loadu_si128((__m128i*)(codes2 + d / 2));
         auto xx1 = _mm_and_si128(xx, mask);                     // 16 * 8bits
         auto xx2 = _mm_and_si128(_mm_srli_epi16(xx, 4), mask);  // 16 * 8bits
         auto yy1 = _mm_and_si128(yy, mask);
@@ -574,7 +577,7 @@ SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t 
     for (int i = 0; i < 8; ++i) {
         result += temp[i];
     }
-    result += generic::SQ4UniformComputeCodesIP(codes1 + d, codes2 + d, dim - d);
+    result += generic::SQ4UniformComputeCodesIP(codes1 + d / 2, codes2 + d / 2, dim - d);
     return result;
 #else
     return generic::SQ4UniformComputeCodesIP(codes1, codes2, dim);

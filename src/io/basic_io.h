@@ -16,6 +16,8 @@
 #pragma once
 
 #include <cstdint>
+#include "stream_writer.h"
+#include "stream_reader.h"
 
 namespace vsag {
 
@@ -24,7 +26,7 @@ class BasicIO {
 public:
     BasicIO<IOTmpl>() = default;
 
-    ~BasicIO() = default;
+    virtual ~BasicIO() = default;
 
     inline void
     Write(const uint8_t* data, uint64_t size, uint64_t offset) {
@@ -49,6 +51,11 @@ public:
     inline void
     Prefetch(uint64_t offset, uint64_t cache_line = 64) {
         return cast().PrefetchImpl(offset, cache_line);
+    }
+
+    inline void
+    Serialize(StreamWriter& writer) {
+        return cast().SerializeImpl(writer);
     }
 
 private:

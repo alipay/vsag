@@ -28,7 +28,9 @@ class FlattenDataCell : public FlattenInterface {
 public:
     FlattenDataCell() = default;
 
-    explicit FlattenDataCell(const std::string& initializeJson);
+    explicit FlattenDataCell(const nlohmann::json& quantization_obj,
+                             const nlohmann::json& io_obj,
+                             const IndexCommonParam& common_param);
 
     void
     Query(float* result_dists,
@@ -61,13 +63,16 @@ public:
         this->max_capacity_ = std::max(capacity, this->total_count_);  // TODO(LHT): add warning
     }
 
-    [[nodiscard]] uint64_t
-    TotalCount() const override {
-        return this->total_count_;
-    }
+    void
+    Prefetch(uint64_t id) override {
+        io_->Prefetch(id * code_size_);
+    };
 
     [[nodiscard]] const uint8_t*
     GetCodesById(uint64_t id) const override;
+
+    void
+    Serialize(StreamWriter& writer) override;
 
     inline void
     SetQuantizer(std::shared_ptr<Quantizer<QuantTmpl>> quantizer) {
@@ -103,8 +108,12 @@ private:
 };
 
 template <typename QuantTmpl, typename IOTmpl>
-FlattenDataCell<QuantTmpl, IOTmpl>::FlattenDataCell(const std::string& initializeJson) {
-    // TODO(LHT): implement initial function
+FlattenDataCell<QuantTmpl, IOTmpl>::FlattenDataCell(const nlohmann::json& quantization_obj,
+                                                    const nlohmann::json& io_obj,
+                                                    const IndexCommonParam& common_param) {
+    this->quantizer_ = std::make_shared<QuantTmpl>(quantization_obj, common_param);
+    this->io_ = std::make_shared<IOTmpl>(io_obj, common_param);
+    this->code_size_ = quantizer_->GetCodeSize();
 }
 
 template <typename QuantTmpl, typename IOTmpl>
@@ -174,7 +183,7 @@ template <typename QuantTmpl, typename IOTmpl>
 float
 FlattenDataCell<QuantTmpl, IOTmpl>::ComputePairVectors(uint64_t id1, uint64_t id2) {
     const auto* codes1 = this->GetCodesById(id1);
-    const auto* codes2 = this->GetCodesById(id1);
+    const auto* codes2 = this->GetCodesById(id2);
     return this->quantizer_->Compute(codes1, codes2);
 }
 
@@ -182,6 +191,14 @@ template <typename QuantTmpl, typename IOTmpl>
 const uint8_t*
 FlattenDataCell<QuantTmpl, IOTmpl>::GetCodesById(uint64_t id) const {
     return io_->Read(code_size_, id * code_size_);
+}
+
+template <typename QuantTmpl, typename IOTmpl>
+void
+FlattenDataCell<QuantTmpl, IOTmpl>::Serialize(StreamWriter& writer) {
+    FlattenInterface::Serialize(writer);
+    this->io_->Serialize(writer);
+    this->quantizer_->Serialize(writer);
 }
 
 }  // namespace vsag

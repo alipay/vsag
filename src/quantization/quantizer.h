@@ -20,6 +20,9 @@
 
 #include "computer.h"
 #include "metric_type.h"
+#include "stream_reader.h"
+#include "stream_writer.h"
+
 namespace vsag {
 using DataType = float;
 
@@ -120,6 +123,15 @@ public:
     inline float
     Compute(const uint8_t* codes1, const uint8_t* codes2) {
         return cast().ComputeImpl(codes1, codes2);
+    }
+
+    inline void
+    Serialize(StreamWriter& writer) {
+        StreamWriter::WriteObj(writer, this->dim_);
+        StreamWriter::WriteObj(writer, this->metric_);
+        StreamWriter::WriteObj(writer, this->code_size_);
+        StreamWriter::WriteObj(writer, this->is_trained_);
+        return cast().SerializeImpl(writer);
     }
 
     std::shared_ptr<Computer<T>>

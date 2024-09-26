@@ -20,6 +20,7 @@
 
 #include "default_allocator.h"
 #include "fixtures.h"
+#include "memory_block_io.h"
 using namespace vsag;
 
 template <typename T>
@@ -47,5 +48,11 @@ TestReadWrite(BasicIO<T>* basicIo) {
 TEST_CASE("read&write[ut][memory_io]") {
     auto allocator = std::make_unique<DefaultAllocator>();
     auto io = std::make_unique<MemoryIO>(allocator.get());
+    TestReadWrite(io.get());
+}
+
+TEST_CASE("read&write[ut][memory_block_io]") {
+    auto allocator = std::make_unique<DefaultAllocator>();
+    auto io = std::make_unique<MemoryBlockIO>(allocator.get());
     TestReadWrite(io.get());
 }

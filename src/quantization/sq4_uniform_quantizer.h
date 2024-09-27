@@ -29,10 +29,6 @@ namespace vsag {
 typedef uint64_t norm_type;
 typedef float sum_type;
 
-const char* const OFFSET_KEY_CODE = "code";
-const char* const OFFSET_KEY_NORM = "norm";
-const char* const OFFSET_KEY_SUM = "sum";
-
 template <MetricType metric = MetricType::METRIC_TYPE_L2SQR>
 class SQ4UniformQuantizer : public Quantizer<SQ4UniformQuantizer<metric>> {
 public:
@@ -67,7 +63,9 @@ public:
 private:
     DataType lower_bound_;
     DataType diff_;
-    std::unordered_map<std::string, uint64_t> offsets_;
+    uint64_t offset_code_;
+    uint64_t offset_norm_;
+    uint64_t offset_sum_;
 };
 
 template <MetricType metric>
@@ -78,16 +76,16 @@ SQ4UniformQuantizer<metric>::SQ4UniformQuantizer(int dim)
 
     this->code_size_ = 0;
 
-    offsets_[OFFSET_KEY_CODE] = this->code_size_;
+    offset_code_ = this->code_size_;
     this->code_size_ += (dim + 1) >> 1 << 1;
 
     if (metric == MetricType::METRIC_TYPE_L2SQR or metric == MetricType::METRIC_TYPE_COSINE) {
-        offsets_[OFFSET_KEY_NORM] = this->code_size_;
+        offset_norm_ = this->code_size_;
         this->code_size_ += sizeof(norm_type);  // norm of vector
     }
 
     if (metric == MetricType::METRIC_TYPE_IP or metric == MetricType::METRIC_TYPE_COSINE) {
-        offsets_[OFFSET_KEY_SUM] = this->code_size_;
+        offset_sum_ = this->code_size_;
         this->code_size_ += sizeof(sum_type);  // sum of vector
     }
 }
@@ -135,21 +133,21 @@ SQ4UniformQuantizer<metric>::EncodeOneImpl(const DataType* data, uint8_t* codes)
         scaled = 15 * delta;
 
         if (d & 1) {
-            codes[offsets_.at(OFFSET_KEY_CODE) + (d >> 1)] |= scaled << 4;
+            codes[offset_code_ + (d >> 1)] |= scaled << 4;
         } else {
-            codes[offsets_.at(OFFSET_KEY_CODE) + (d >> 1)] = 0;
-            codes[offsets_.at(OFFSET_KEY_CODE) + (d >> 1)] |= scaled;
+            codes[offset_code_ + (d >> 1)] = 0;
+            codes[offset_code_ + (d >> 1)] |= scaled;
         }
         norm += scaled * scaled;
         sum += data[d];
     }
 
     if (metric == MetricType::METRIC_TYPE_L2SQR or metric == MetricType::METRIC_TYPE_COSINE) {
-        *(norm_type*)(codes + offsets_.at(OFFSET_KEY_NORM)) = norm;
+        *(norm_type*)(codes + offset_norm_) = norm;
     }
 
     if (metric == MetricType::METRIC_TYPE_IP) {
-        *(sum_type*)(codes + offsets_.at(OFFSET_KEY_SUM)) = sum;
+        *(sum_type*)(codes + offset_sum_) = sum;
     }
 
     return true;
@@ -194,15 +192,15 @@ SQ4UniformQuantizer<metric>::ComputeImpl(const uint8_t* codes1, const uint8_t* c
     if (metric == MetricType::METRIC_TYPE_L2SQR) {
         result = SQ4UniformComputeCodesIP(codes1, codes2, this->dim_);
 
-        norm_type norm1 = *((norm_type*)(codes1 + offsets_.at(OFFSET_KEY_NORM)));
-        norm_type norm2 = *((norm_type*)(codes2 + offsets_.at(OFFSET_KEY_NORM)));
+        norm_type norm1 = *((norm_type*)(codes1 + offset_norm_));
+        norm_type norm2 = *((norm_type*)(codes2 + offset_norm_));
 
         result = norm1 + norm2 - 2 * result;
     } else if (metric == MetricType::METRIC_TYPE_IP) {
         result = SQ4UniformComputeCodesIP(codes1, codes2, this->dim_);
 
-        sum_type sum1 = *((sum_type*)(codes1 + offsets_.at(OFFSET_KEY_SUM)));
-        sum_type sum2 = *((sum_type*)(codes2 + offsets_.at(OFFSET_KEY_SUM)));
+        sum_type sum1 = *((sum_type*)(codes1 + offset_sum_));
+        sum_type sum2 = *((sum_type*)(codes2 + offset_sum_));
 
         result = lower_bound_ * (sum1 + sum2) + (diff_ / 15.0) * (diff_ / 15.0) * result -
                  lower_bound_ * lower_bound_;
@@ -210,8 +208,8 @@ SQ4UniformQuantizer<metric>::ComputeImpl(const uint8_t* codes1, const uint8_t* c
     } else if (metric == MetricType::METRIC_TYPE_COSINE) {
         result = SQ4UniformComputeCodesIP(codes1, codes2, this->dim_);
 
-        sum_type sum1 = *((sum_type*)(codes1 + offsets_.at(OFFSET_KEY_SUM)));
-        sum_type sum2 = *((sum_type*)(codes2 + offsets_.at(OFFSET_KEY_SUM)));
+        sum_type sum1 = *((sum_type*)(codes1 + offset_sum_));
+        sum_type sum2 = *((sum_type*)(codes2 + offset_sum_));
 
         result = lower_bound_ * (sum1 + sum2) + (diff_ / 15.0) * (diff_ / 15.0) * result -
                  lower_bound_ * lower_bound_;

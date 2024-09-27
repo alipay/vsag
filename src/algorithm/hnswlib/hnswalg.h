@@ -41,8 +41,7 @@
 namespace hnswlib {
 using tableint = unsigned int;
 using linklistsizeint = unsigned int;
-using reverselinklist = std::
-    unordered_set<tableint, std::hash<tableint>, std::equal_to<>, vsag::AllocatorWrapper<tableint>>;
+using reverselinklist = vsag::unordered_set<uint32_t>;
 struct CompareByFirst {
     constexpr bool
     operator()(std::pair<float, tableint> const& a,
@@ -114,7 +113,6 @@ private:
     std::default_random_engine update_probability_generator_;
 
     vsag::Allocator* allocator_{nullptr};
-    std::shared_ptr<vsag::AllocatorWrapper<tableint>> reverse_link_list_allocator_{nullptr};
 
     mutable std::atomic<uint64_t> metric_distance_computations_{0};
     mutable std::atomic<uint64_t> metric_hops_{0};
@@ -185,14 +183,13 @@ public:
             }
             auto& edge_map = *edge_map_ptr;
             if (edge_map.find(level) == edge_map.end()) {
-                edge_map.insert(
-                    std::make_pair(level, reverselinklist(*reverse_link_list_allocator_)));
+                edge_map.insert(std::make_pair(level, reverselinklist(allocator_)));
             }
             return edge_map.at(level);
         } else {
             auto& edge_ptr = reversed_level0_link_list_[internal_id];
             if (edge_ptr == nullptr) {
-                edge_ptr = new reverselinklist(*reverse_link_list_allocator_);
+                edge_ptr = new reverselinklist(allocator_);
             }
             return *edge_ptr;
         }

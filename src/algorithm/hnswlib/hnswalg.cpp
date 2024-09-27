@@ -55,8 +55,6 @@ HierarchicalNSW::HierarchicalNSW(SpaceInterface* s,
     label_offset_ = size_links_level0_ + data_size_;
     offsetLevel0_ = 0;
 
-    reverse_link_list_allocator_ = std::make_shared<vsag::AllocatorWrapper<tableint>>(allocator_);
-
     if (use_reversed_edges_) {
         reversed_level0_link_list_ =
             (reverselinklist**)allocator->Allocate(max_elements_ * sizeof(reverselinklist*));

@@ -33,8 +33,8 @@ const char* const OFFSET_KEY_CODE = "code";
 const char* const OFFSET_KEY_NORM = "norm";
 const char* const OFFSET_KEY_SUM = "sum";
 
-template <MetricType Metric = MetricType::METRIC_TYPE_L2SQR>
-class SQ4UniformQuantizer : public Quantizer<SQ4UniformQuantizer<Metric>> {
+template <MetricType metric = MetricType::METRIC_TYPE_L2SQR>
+class SQ4UniformQuantizer : public Quantizer<SQ4UniformQuantizer<metric>> {
 public:
     explicit SQ4UniformQuantizer(int dim);
 
@@ -70,9 +70,9 @@ private:
     std::unordered_map<std::string, uint64_t> offsets_;
 };
 
-template <MetricType Metric>
-SQ4UniformQuantizer<Metric>::SQ4UniformQuantizer(int dim)
-    : Quantizer<SQ4UniformQuantizer<Metric>>(dim) {
+template <MetricType metric>
+SQ4UniformQuantizer<metric>::SQ4UniformQuantizer(int dim)
+    : Quantizer<SQ4UniformQuantizer<metric>>(dim) {
     lower_bound_ = std::numeric_limits<DataType>::max();
     diff_ = std::numeric_limits<DataType>::min();
 
@@ -81,20 +81,20 @@ SQ4UniformQuantizer<Metric>::SQ4UniformQuantizer(int dim)
     offsets_[OFFSET_KEY_CODE] = this->code_size_;
     this->code_size_ += (dim + 1) >> 1 << 1;
 
-    if (Metric == MetricType::METRIC_TYPE_L2SQR or Metric == MetricType::METRIC_TYPE_COSINE) {
+    if (metric == MetricType::METRIC_TYPE_L2SQR or metric == MetricType::METRIC_TYPE_COSINE) {
         offsets_[OFFSET_KEY_NORM] = this->code_size_;
         this->code_size_ += sizeof(norm_type);  // norm of vector
     }
 
-    if (Metric == MetricType::METRIC_TYPE_IP or Metric == MetricType::METRIC_TYPE_COSINE) {
+    if (metric == MetricType::METRIC_TYPE_IP or metric == MetricType::METRIC_TYPE_COSINE) {
         offsets_[OFFSET_KEY_SUM] = this->code_size_;
         this->code_size_ += sizeof(sum_type);  // sum of vector
     }
 }
 
-template <MetricType Metric>
+template <MetricType metric>
 bool
-SQ4UniformQuantizer<Metric>::TrainImpl(const DataType* data, uint64_t count) {
+SQ4UniformQuantizer<metric>::TrainImpl(const DataType* data, uint64_t count) {
     if (data == nullptr) {
         return false;
     }
@@ -111,17 +111,15 @@ SQ4UniformQuantizer<Metric>::TrainImpl(const DataType* data, uint64_t count) {
         }
     }
 
-    for (uint32_t d = 0; d < this->dim_; d++) {
-        diff_ -= lower_bound_;
-    }
+    diff_ -= lower_bound_;
 
     this->is_trained_ = true;
     return true;
 }
 
-template <MetricType Metric>
+template <MetricType metric>
 bool
-SQ4UniformQuantizer<Metric>::EncodeOneImpl(const DataType* data, uint8_t* codes) const {
+SQ4UniformQuantizer<metric>::EncodeOneImpl(const DataType* data, uint8_t* codes) const {
     float delta;
     uint8_t scaled;
     norm_type norm = 0;
@@ -131,79 +129,76 @@ SQ4UniformQuantizer<Metric>::EncodeOneImpl(const DataType* data, uint8_t* codes)
         delta = ((data[d] - lower_bound_) / diff_);
         if (delta < 0.0) {
             delta = 0;
-        }
-        if (delta > 0.999) {
+        } else if (delta > 0.999) {
             delta = 1;
         }
         scaled = 15 * delta;
 
         if (d & 1) {
-            codes[offsets_.at(OFFSET_KEY_CODE) + d / 2] |= scaled << 4;
+            codes[offsets_.at(OFFSET_KEY_CODE) + (d >> 1)] |= scaled << 4;
         } else {
-            codes[offsets_.at(OFFSET_KEY_CODE) + d / 2] = 0;
-            codes[offsets_.at(OFFSET_KEY_CODE) + d / 2] |= scaled;
+            codes[offsets_.at(OFFSET_KEY_CODE) + (d >> 1)] = 0;
+            codes[offsets_.at(OFFSET_KEY_CODE) + (d >> 1)] |= scaled;
         }
         norm += scaled * scaled;
         sum += data[d];
     }
 
-    if (Metric == MetricType::METRIC_TYPE_L2SQR or Metric == MetricType::METRIC_TYPE_COSINE) {
+    if (metric == MetricType::METRIC_TYPE_L2SQR or metric == MetricType::METRIC_TYPE_COSINE) {
         *(norm_type*)(codes + offsets_.at(OFFSET_KEY_NORM)) = norm;
     }
 
-    if (Metric == MetricType::METRIC_TYPE_IP) {
+    if (metric == MetricType::METRIC_TYPE_IP) {
         *(sum_type*)(codes + offsets_.at(OFFSET_KEY_SUM)) = sum;
     }
 
     return true;
 }
 
-template <MetricType Metric>
+template <MetricType metric>
 bool
-SQ4UniformQuantizer<Metric>::EncodeBatchImpl(const DataType* data, uint8_t* codes, uint64_t count) {
+SQ4UniformQuantizer<metric>::EncodeBatchImpl(const DataType* data, uint8_t* codes, uint64_t count) {
     for (uint64_t i = 0; i < count; ++i) {
         this->EncodeOneImpl(data + i * this->dim_, codes + i * this->code_size_);
     }
     return true;
 }
 
-template <MetricType Metric>
+template <MetricType metric>
 bool
-SQ4UniformQuantizer<Metric>::DecodeOneImpl(const uint8_t* codes, DataType* data) {
+SQ4UniformQuantizer<metric>::DecodeOneImpl(const uint8_t* codes, DataType* data) {
     for (uint32_t d = 0; d < this->dim_; d++) {
         if (d & 1) {
-            data[d] = ((codes[d / 2] & 0xf0) >> 4) / 15.0 * diff_ + lower_bound_;
-            data[d] = data[d];
+            data[d] = ((codes[d >> 1] & 0xf0) >> 4) / 15.0 * diff_ + lower_bound_;
         } else {
-            data[d] = (codes[d / 2] & 0x0f) / 15.0 * diff_ + lower_bound_;
-            data[d] = data[d];
+            data[d] = (codes[d >> 1] & 0x0f) / 15.0 * diff_ + lower_bound_;
         }
     }
 
     return true;
 }
 
-template <MetricType Metric>
+template <MetricType metric>
 bool
-SQ4UniformQuantizer<Metric>::DecodeBatchImpl(const uint8_t* codes, DataType* data, uint64_t count) {
+SQ4UniformQuantizer<metric>::DecodeBatchImpl(const uint8_t* codes, DataType* data, uint64_t count) {
     for (uint64_t i = 0; i < count; ++i) {
         this->DecodeOneImpl(codes + i * this->code_size_, data + i * this->dim_);
     }
     return true;
 }
 
-template <MetricType Metric>
+template <MetricType metric>
 inline float
-SQ4UniformQuantizer<Metric>::ComputeImpl(const uint8_t* codes1, const uint8_t* codes2) const {
+SQ4UniformQuantizer<metric>::ComputeImpl(const uint8_t* codes1, const uint8_t* codes2) const {
     float result = 0;
-    if (Metric == MetricType::METRIC_TYPE_L2SQR) {
+    if (metric == MetricType::METRIC_TYPE_L2SQR) {
         result = SQ4UniformComputeCodesIP(codes1, codes2, this->dim_);
 
         norm_type norm1 = *((norm_type*)(codes1 + offsets_.at(OFFSET_KEY_NORM)));
         norm_type norm2 = *((norm_type*)(codes2 + offsets_.at(OFFSET_KEY_NORM)));
 
         result = norm1 + norm2 - 2 * result;
-    } else if (Metric == MetricType::METRIC_TYPE_IP) {
+    } else if (metric == MetricType::METRIC_TYPE_IP) {
         result = SQ4UniformComputeCodesIP(codes1, codes2, this->dim_);
 
         sum_type sum1 = *((sum_type*)(codes1 + offsets_.at(OFFSET_KEY_SUM)));
@@ -212,7 +207,7 @@ SQ4UniformQuantizer<Metric>::ComputeImpl(const uint8_t* codes1, const uint8_t* c
         result = lower_bound_ * (sum1 + sum2) + (diff_ / 15.0) * (diff_ / 15.0) * result -
                  lower_bound_ * lower_bound_;
 
-    } else if (Metric == MetricType::METRIC_TYPE_COSINE) {
+    } else if (metric == MetricType::METRIC_TYPE_COSINE) {
         result = SQ4UniformComputeCodesIP(codes1, codes2, this->dim_);
 
         sum_type sum1 = *((sum_type*)(codes1 + offsets_.at(OFFSET_KEY_SUM)));
@@ -221,22 +216,23 @@ SQ4UniformQuantizer<Metric>::ComputeImpl(const uint8_t* codes1, const uint8_t* c
         result = lower_bound_ * (sum1 + sum2) + (diff_ / 15.0) * (diff_ / 15.0) * result -
                  lower_bound_ * lower_bound_;
     } else {
+        logger::error("unsupported metric type");
         result = 0;
     }
     return result;
 }
 
-template <MetricType Metric>
+template <MetricType metric>
 void
-SQ4UniformQuantizer<Metric>::ProcessQueryImpl(const DataType* query,
+SQ4UniformQuantizer<metric>::ProcessQueryImpl(const DataType* query,
                                               Computer<SQ4UniformQuantizer>& computer) const {
     computer.buf_ = new uint8_t[this->code_size_];
     this->EncodeOneImpl(query, computer.buf_);
 }
 
-template <MetricType Metric>
+template <MetricType metric>
 void
-SQ4UniformQuantizer<Metric>::ComputeDistImpl(Computer<SQ4UniformQuantizer>& computer,
+SQ4UniformQuantizer<metric>::ComputeDistImpl(Computer<SQ4UniformQuantizer>& computer,
                                              const uint8_t* codes,
                                              float* dists) const {
     dists[0] = this->ComputeImpl(computer.buf_, codes);

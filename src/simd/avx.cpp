@@ -390,37 +390,37 @@ SQ8ComputeCodesL2Sqr(const uint8_t* codes1,
 float
 SQ4ComputeIP(const float* query,
              const uint8_t* codes,
-             const float* lowerBound,
+             const float* lower_bound,
              const float* diff,
              uint64_t dim) {
-    return generic::SQ4ComputeIP(query, codes, lowerBound, diff, dim);
+    return generic::SQ4ComputeIP(query, codes, lower_bound, diff, dim);
 }
 
 float
 SQ4ComputeL2Sqr(const float* query,
                 const uint8_t* codes,
-                const float* lowerBound,
+                const float* lower_bound,
                 const float* diff,
                 uint64_t dim) {
-    return generic::SQ4ComputeL2Sqr(query, codes, lowerBound, diff, dim);
+    return generic::SQ4ComputeL2Sqr(query, codes, lower_bound, diff, dim);
 }
 
 float
 SQ4ComputeCodesIP(const uint8_t* codes1,
                   const uint8_t* codes2,
-                  const float* lowerBound,
+                  const float* lower_bound,
                   const float* diff,
                   uint64_t dim) {
-    return generic::SQ4ComputeCodesIP(codes1, codes2, lowerBound, diff, dim);
+    return generic::SQ4ComputeCodesIP(codes1, codes2, lower_bound, diff, dim);
 }
 
 float
 SQ4ComputeCodesL2Sqr(const uint8_t* codes1,
                      const uint8_t* codes2,
-                     const float* lowerBound,
+                     const float* lower_bound,
                      const float* diff,
                      uint64_t dim) {
-    return generic::SQ4ComputeCodesL2Sqr(codes1, codes2, lowerBound, diff, dim);
+    return generic::SQ4ComputeCodesL2Sqr(codes1, codes2, lower_bound, diff, dim);
 }
 
 float
@@ -435,8 +435,8 @@ SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t 
     __m256i sum = _mm256_setzero_si256();
     __m256i mask = _mm256_set1_epi8(0xf);
     for (; d + 63 < dim; d += 64) {
-        auto xx = _mm256_loadu_si256((__m256i*)(codes1 + d / 2));
-        auto yy = _mm256_loadu_si256((__m256i*)(codes2 + d / 2));
+        auto xx = _mm256_loadu_si256((__m256i*)(codes1 + (d >> 1)));
+        auto yy = _mm256_loadu_si256((__m256i*)(codes2 + (d >> 1)));
         auto xx1 = _mm256_and_si256(xx, mask);                        // 32 * 8bits
         auto xx2 = _mm256_and_si256(_mm256_srli_epi16(xx, 4), mask);  // 32 * 8bits
         auto yy1 = _mm256_and_si256(yy, mask);
@@ -449,7 +449,7 @@ SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t 
     for (int i = 0; i < 16; ++i) {
         result += temp[i];
     }
-    result += sse::SQ4UniformComputeCodesIP(codes1 + d / 2, codes2 + d / 2, dim - d);
+    result += sse::SQ4UniformComputeCodesIP(codes1 + (d >> 1), codes2 + (d >> 1), dim - d);
     return result;
 #else
     return sse::SQ4UniformComputeCodesIP(codes1, codes2, dim);

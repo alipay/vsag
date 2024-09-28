@@ -41,7 +41,7 @@
 namespace hnswlib {
 using tableint = unsigned int;
 using linklistsizeint = unsigned int;
-using reverselinklist = vsag::unordered_set<uint32_t>;
+using reverselinklist = vsag::UnorderedSet<uint32_t>;
 struct CompareByFirst {
     constexpr bool
     operator()(std::pair<float, tableint> const& a,
@@ -76,10 +76,10 @@ private:
     VisitedListPool* visited_list_pool_{nullptr};
 
     // Locks operations with element by label value
-    mutable vsag::vector<std::mutex> label_op_locks_;
+    mutable vsag::Vector<std::mutex> label_op_locks_;
 
     std::mutex global_{};
-    vsag::vector<std::recursive_mutex> link_list_locks_;
+    vsag::Vector<std::recursive_mutex> link_list_locks_;
 
     tableint enterpoint_node_{0};
 
@@ -97,7 +97,7 @@ private:
 
     bool use_reversed_edges_{false};
     reverselinklist** reversed_level0_link_list_{nullptr};
-    vsag::unordered_map<int, reverselinklist>** reversed_link_lists_{nullptr};
+    vsag::UnorderedMap<int, reverselinklist>** reversed_link_lists_{nullptr};
 
     size_t data_size_{0};
 
@@ -107,7 +107,7 @@ private:
     void* dist_func_param_{nullptr};
 
     mutable std::mutex label_lookup_lock_{};  // lock for label_lookup_
-    vsag::unordered_map<labeltype, tableint> label_lookup_;
+    vsag::UnorderedMap<labeltype, tableint> label_lookup_;
 
     std::default_random_engine level_generator_;
     std::default_random_engine update_probability_generator_;
@@ -123,7 +123,7 @@ private:
     bool allow_replace_deleted_{false};
 
     std::mutex deleted_elements_lock_{};              // lock for deleted_elements_
-    vsag::unordered_set<tableint> deleted_elements_;  // contains internal ids of deleted elements
+    vsag::UnorderedSet<tableint> deleted_elements_;  // contains internal ids of deleted elements
 
 public:
     HierarchicalNSW(SpaceInterface* s,
@@ -179,7 +179,7 @@ public:
         if (level != 0) {
             auto& edge_map_ptr = reversed_link_lists_[internal_id];
             if (edge_map_ptr == nullptr) {
-                edge_map_ptr = new vsag::unordered_map<int, reverselinklist>(allocator_);
+                edge_map_ptr = new vsag::UnorderedMap<int, reverselinklist>(allocator_);
             }
             auto& edge_map = *edge_map_ptr;
             if (edge_map.find(level) == edge_map.end()) {
@@ -197,7 +197,7 @@ public:
 
     void
     updateConnections(tableint internal_id,
-                      const vsag::vector<tableint>& cand_neighbors,
+                      const vsag::Vector<tableint>& cand_neighbors,
                       int level,
                       bool is_update);
 

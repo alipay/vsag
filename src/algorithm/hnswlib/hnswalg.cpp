@@ -59,11 +59,11 @@ HierarchicalNSW::HierarchicalNSW(SpaceInterface* s,
         reversed_level0_link_list_ =
             (reverselinklist**)allocator->Allocate(max_elements_ * sizeof(reverselinklist*));
         memset(reversed_level0_link_list_, 0, max_elements_ * sizeof(reverselinklist*));
-        reversed_link_lists_ = (vsag::unordered_map<int, reverselinklist>**)allocator->Allocate(
-            max_elements_ * sizeof(vsag::unordered_map<int, reverselinklist>*));
+        reversed_link_lists_ = (vsag::UnorderedMap<int, reverselinklist>**)allocator->Allocate(
+            max_elements_ * sizeof(vsag::UnorderedMap<int, reverselinklist>*));
         memset(reversed_link_lists_,
                0,
-               max_elements_ * sizeof(vsag::unordered_map<int, reverselinklist>*));
+               max_elements_ * sizeof(vsag::UnorderedMap<int, reverselinklist>*));
     }
 
     if (normalize) {
@@ -156,7 +156,7 @@ HierarchicalNSW::isValidLabel(labeltype label) {
 
 void
 HierarchicalNSW::updateConnections(tableint internal_id,
-                                   const vsag::vector<tableint>& cand_neighbors,
+                                   const vsag::Vector<tableint>& cand_neighbors,
                                    int level,
                                    bool is_update) {
     linklistsizeint* ll_cur;
@@ -530,7 +530,7 @@ HierarchicalNSW::getNeighborsByHeuristic2(MaxHeap& top_candidates, size_t M) {
     }
 
     std::priority_queue<std::pair<float, tableint>> queue_closest;
-    vsag::vector<std::pair<float, tableint>> return_list(allocator_);
+    vsag::Vector<std::pair<float, tableint>> return_list(allocator_);
     while (not top_candidates.empty()) {
         queue_closest.emplace(-top_candidates.top().first, top_candidates.top().second);
         top_candidates.pop();
@@ -574,7 +574,7 @@ HierarchicalNSW::mutuallyConnectNewElement(tableint cur_c,
         throw std::runtime_error(
             "Should be not be more than M_ candidates returned by the heuristic");
 
-    vsag::vector<tableint> selectedNeighbors(allocator_);
+    vsag::Vector<tableint> selectedNeighbors(allocator_);
     selectedNeighbors.reserve(M_);
     while (not top_candidates.empty()) {
         selectedNeighbors.push_back(top_candidates.top().second);
@@ -650,7 +650,7 @@ HierarchicalNSW::mutuallyConnectNewElement(tableint cur_c,
 
                 getNeighborsByHeuristic2(candidates, m_curmax);
 
-                vsag::vector<tableint> cand_neighbors(allocator_);
+                vsag::Vector<tableint> cand_neighbors(allocator_);
                 while (not candidates.empty()) {
                     cand_neighbors.push_back(candidates.top().second);
                     candidates.pop();
@@ -692,7 +692,7 @@ HierarchicalNSW::resizeIndex(size_t new_max_elements) {
             "Not enough memory: resizeIndex failed to allocate element_levels_");
     }
     element_levels_ = element_levels_new;
-    vsag::vector<std::recursive_mutex>(new_max_elements, allocator_).swap(link_list_locks_);
+    vsag::Vector<std::recursive_mutex>(new_max_elements, allocator_).swap(link_list_locks_);
 
     if (normalize_) {
         auto new_molds = (float*)allocator_->Reallocate(molds_, new_max_elements * sizeof(float));
@@ -720,9 +720,9 @@ HierarchicalNSW::resizeIndex(size_t new_max_elements) {
                (new_max_elements - max_elements_) * sizeof(reverselinklist*));
 
         auto reversed_link_lists_new =
-            (vsag::unordered_map<int, reverselinklist>**)allocator_->Reallocate(
+            (vsag::UnorderedMap<int, reverselinklist>**)allocator_->Reallocate(
                 reversed_link_lists_,
-                new_max_elements * sizeof(vsag::unordered_map<int, reverselinklist>*));
+                new_max_elements * sizeof(vsag::UnorderedMap<int, reverselinklist>*));
         if (reversed_link_lists_new == nullptr) {
             throw std::runtime_error(
                 "Not enough memory: resizeIndex failed to allocate reversed_link_lists_");
@@ -731,7 +731,7 @@ HierarchicalNSW::resizeIndex(size_t new_max_elements) {
         memset(reversed_link_lists_ + max_elements_,
                0,
                (new_max_elements - max_elements_) *
-                   sizeof(vsag::unordered_map<int, reverselinklist>*));
+                   sizeof(vsag::UnorderedMap<int, reverselinklist>*));
     }
 
     // Reallocate all other layers
@@ -875,8 +875,8 @@ HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t
     size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
 
     size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
-    vsag::vector<std::recursive_mutex>(max_elements, allocator_).swap(link_list_locks_);
-    vsag::vector<std::mutex>(MAX_LABEL_OPERATION_LOCKS, allocator_).swap(label_op_locks_);
+    vsag::Vector<std::recursive_mutex>(max_elements, allocator_).swap(link_list_locks_);
+    vsag::Vector<std::mutex>(MAX_LABEL_OPERATION_LOCKS, allocator_).swap(label_op_locks_);
 
     revSize_ = 1.0 / mult_;
     for (size_t i = 0; i < cur_element_count_; i++) {
@@ -1198,7 +1198,7 @@ HierarchicalNSW::removePoint(labeltype label) {
 
         for (const auto in_edge : in_edges_cur) {
             MaxHeap candidates;
-            vsag::unordered_set<tableint> unique_ids(allocator_);
+            vsag::UnorderedSet<tableint> unique_ids(allocator_);
 
             // Add the original neighbors of the indegree node to the candidate queue.
             for (int i = 0; i < size_cur; ++i) {
@@ -1478,13 +1478,13 @@ HierarchicalNSW::searchRange(const void* query_data,
 void
 HierarchicalNSW::checkIntegrity() {
     int connections_checked = 0;
-    vsag::vector<int> inbound_connections_num(cur_element_count_, 0, allocator_);
+    vsag::Vector<int> inbound_connections_num(cur_element_count_, 0, allocator_);
     for (int i = 0; i < cur_element_count_; i++) {
         for (int l = 0; l <= element_levels_[i]; l++) {
             linklistsizeint* ll_cur = getLinklistAtLevel(i, l);
             int size = getListCount(ll_cur);
             auto* data = (tableint*)(ll_cur + 1);
-            vsag::unordered_set<tableint> s(allocator_);
+            vsag::UnorderedSet<tableint> s(allocator_);
             for (int j = 0; j < size; j++) {
                 assert(data[j] > 0);
                 assert(data[j] < cur_element_count_);

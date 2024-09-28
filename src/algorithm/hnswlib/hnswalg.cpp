@@ -728,10 +728,10 @@ HierarchicalNSW::resizeIndex(size_t new_max_elements) {
                 "Not enough memory: resizeIndex failed to allocate reversed_link_lists_");
         }
         reversed_link_lists_ = reversed_link_lists_new;
-        memset(reversed_link_lists_ + max_elements_,
-               0,
-               (new_max_elements - max_elements_) *
-                   sizeof(vsag::UnorderedMap<int, reverselinklist>*));
+        memset(
+            reversed_link_lists_ + max_elements_,
+            0,
+            (new_max_elements - max_elements_) * sizeof(vsag::UnorderedMap<int, reverselinklist>*));
     }
 
     // Reallocate all other layers

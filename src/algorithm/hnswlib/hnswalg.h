@@ -122,7 +122,7 @@ private:
     // flag to replace deleted elements (marked as deleted) during insertion
     bool allow_replace_deleted_{false};
 
-    std::mutex deleted_elements_lock_{};              // lock for deleted_elements_
+    std::mutex deleted_elements_lock_{};             // lock for deleted_elements_
     vsag::UnorderedSet<tableint> deleted_elements_;  // contains internal ids of deleted elements
 
 public:

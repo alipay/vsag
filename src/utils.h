@@ -36,10 +36,10 @@ using Vector = std::vector<T, vsag::AllocatorWrapper<T>>;
 
 template <typename KeyType, typename ValType>
 using UnorderedMap = std::unordered_map<KeyType,
-                                         ValType,
-                                         std::hash<KeyType>,
-                                         std::equal_to<KeyType>,
-                                         vsag::AllocatorWrapper<std::pair<const KeyType, ValType>>>;
+                                        ValType,
+                                        std::hash<KeyType>,
+                                        std::equal_to<KeyType>,
+                                        vsag::AllocatorWrapper<std::pair<const KeyType, ValType>>>;
 
 struct SlowTaskTimer {
     SlowTaskTimer(const std::string& name, int64_t log_threshold_ms = 0);

@@ -704,8 +704,7 @@ HierarchicalNSW::resizeIndex(size_t new_max_elements) {
             "Not enough memory: resizeIndex failed to allocate element_levels_");
     }
     element_levels_ = element_levels_new;
-    vsag::Vector<std::recursive_mutex> new_link_list_locks(new_max_elements, allocator_);
-    new_link_list_locks.swap(link_list_locks_);
+    vsag::Vector<std::recursive_mutex>(new_max_elements, allocator_).swap(link_list_locks_);
 
     if (normalize_) {
         auto new_molds = (float*)allocator_->Reallocate(molds_, new_max_elements * sizeof(float));
@@ -888,10 +887,8 @@ HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t
     size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
 
     size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
-    vsag::Vector<std::recursive_mutex> new_link_list_locks(max_elements, allocator_);
-    new_link_list_locks.swap(link_list_locks_);
-    vsag::Vector<std::mutex> new_label_op_locks(MAX_LABEL_OPERATION_LOCKS, allocator_);
-    new_label_op_locks.swap(label_op_locks_);
+    vsag::Vector<std::recursive_mutex>(max_elements, allocator_).swap(link_list_locks_);
+    vsag::Vector<std::mutex>(MAX_LABEL_OPERATION_LOCKS, allocator_).swap(label_op_locks_);
 
     revSize_ = 1.0 / mult_;
     for (size_t i = 0; i < cur_element_count_; i++) {

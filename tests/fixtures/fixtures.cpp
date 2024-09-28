@@ -96,10 +96,10 @@ generate_int4_codes(uint64_t count, uint32_t dim, int seed) {
             uint8_t scaled = 15.0 * delta;
 
             if (d & 1) {
-                codes[pos + d / 2] |= scaled << 4;
+                codes[pos + (d >> 1)] |= scaled << 4;
             } else {
-                codes[pos + d / 2] = 0;
-                codes[pos + d / 2] |= scaled;
+                codes[pos + (d >> 1)] = 0;
+                codes[pos + (d >> 1)] |= scaled;
             }
         }
     }

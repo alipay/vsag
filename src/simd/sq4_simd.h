@@ -24,25 +24,25 @@ namespace generic {
 float
 SQ4ComputeIP(const float* query,
              const uint8_t* codes,
-             const float* lowerBound,
+             const float* lower_bound,
              const float* diff,
              const uint64_t dim);
 float
 SQ4ComputeL2Sqr(const float* query,
                 const uint8_t* codes,
-                const float* lowerBound,
+                const float* lower_bound,
                 const float* diff,
                 const uint64_t dim);
 float
 SQ4ComputeCodesIP(const uint8_t* codes1,
                   const uint8_t* codes2,
-                  const float* lowerBound,
+                  const float* lower_bound,
                   const float* diff,
                   const uint64_t dim);
 float
 SQ4ComputeCodesL2Sqr(const uint8_t* codes1,
                      const uint8_t* codes2,
-                     const float* lowerBound,
+                     const float* lower_bound,
                      const float* diff,
                      const uint64_t dim);
 }  // namespace generic
@@ -52,25 +52,25 @@ namespace sse {
 float
 SQ4ComputeIP(const float* query,
              const uint8_t* codes,
-             const float* lowerBound,
+             const float* lower_bound,
              const float* diff,
              const uint64_t dim);
 float
 SQ4ComputeL2Sqr(const float* query,
                 const uint8_t* codes,
-                const float* lowerBound,
+                const float* lower_bound,
                 const float* diff,
                 const uint64_t dim);
 float
 SQ4ComputeCodesIP(const uint8_t* codes1,
                   const uint8_t* codes2,
-                  const float* lowerBound,
+                  const float* lower_bound,
                   const float* diff,
                   const uint64_t dim);
 float
 SQ4ComputeCodesL2Sqr(const uint8_t* codes1,
                      const uint8_t* codes2,
-                     const float* lowerBound,
+                     const float* lower_bound,
                      const float* diff,
                      const uint64_t dim);
 }  // namespace sse
@@ -81,25 +81,25 @@ namespace avx2 {
 float
 SQ4ComputeIP(const float* query,
              const uint8_t* codes,
-             const float* lowerBound,
+             const float* lower_bound,
              const float* diff,
              const uint64_t dim);
 float
 SQ4ComputeL2Sqr(const float* query,
                 const uint8_t* codes,
-                const float* lowerBound,
+                const float* lower_bound,
                 const float* diff,
                 const uint64_t dim);
 float
 SQ4ComputeCodesIP(const uint8_t* codes1,
                   const uint8_t* codes2,
-                  const float* lowerBound,
+                  const float* lower_bound,
                   const float* diff,
                   const uint64_t dim);
 float
 SQ4ComputeCodesL2Sqr(const uint8_t* codes1,
                      const uint8_t* codes2,
-                     const float* lowerBound,
+                     const float* lower_bound,
                      const float* diff,
                      const uint64_t dim);
 }  // namespace avx2
@@ -110,25 +110,25 @@ namespace avx512 {
 float
 SQ4ComputeIP(const float* query,
              const uint8_t* codes,
-             const float* lowerBound,
+             const float* lower_bound,
              const float* diff,
              const uint64_t dim);
 float
 SQ4ComputeL2Sqr(const float* query,
                 const uint8_t* codes,
-                const float* lowerBound,
+                const float* lower_bound,
                 const float* diff,
                 const uint64_t dim);
 float
 SQ4ComputeCodesIP(const uint8_t* codes1,
                   const uint8_t* codes2,
-                  const float* lowerBound,
+                  const float* lower_bound,
                   const float* diff,
                   const uint64_t dim);
 float
 SQ4ComputeCodesL2Sqr(const uint8_t* codes1,
                      const uint8_t* codes2,
-                     const float* lowerBound,
+                     const float* lower_bound,
                      const float* diff,
                      const uint64_t dim);
 }  // namespace avx512
@@ -137,73 +137,73 @@ SQ4ComputeCodesL2Sqr(const uint8_t* codes1,
 inline float
 SQ4ComputeIP(const float* query,
              const uint8_t* codes,
-             const float* lowerBound,
+             const float* lower_bound,
              const float* diff,
              uint64_t dim) {
 #if defined(ENABLE_AVX512)
-    return avx512::SQ4ComputeIP(query, codes, lowerBound, diff, dim);
+    return avx512::SQ4ComputeIP(query, codes, lower_bound, diff, dim);
 #endif
 #if defined(ENABLE_AVX22)
-    return avx2::SQ4ComputeIP(query, codes, lowerBound, diff, dim);
+    return avx2::SQ4ComputeIP(query, codes, lower_bound, diff, dim);
 #endif
 #if defined(ENABLE_SSE)
-    return sse::SQ4ComputeIP(query, codes, lowerBound, diff, dim);
+    return sse::SQ4ComputeIP(query, codes, lower_bound, diff, dim);
 #endif
-    return generic::SQ4ComputeIP(query, codes, lowerBound, diff, dim);
+    return generic::SQ4ComputeIP(query, codes, lower_bound, diff, dim);
 }
 
 inline float
 SQ4ComputeL2Sqr(const float* query,
                 const uint8_t* codes,
-                const float* lowerBound,
+                const float* lower_bound,
                 const float* diff,
                 uint64_t dim) {
 #if defined(ENABLE_AVX512)
-    return avx512::SQ4ComputeL2Sqr(query, codes, lowerBound, diff, dim);
+    return avx512::SQ4ComputeL2Sqr(query, codes, lower_bound, diff, dim);
 #endif
 #if defined(ENABLE_AVX22)
-    return avx2::SQ4ComputeL2SqrSqr(query, codes, lowerBound, diff, dim);
+    return avx2::SQ4ComputeL2SqrSqr(query, codes, lower_bound, diff, dim);
 #endif
 #if defined(ENABLE_SSE)
-    return sse::SQ4ComputeL2Sqr(query, codes, lowerBound, diff, dim);
+    return sse::SQ4ComputeL2Sqr(query, codes, lower_bound, diff, dim);
 #endif
-    return generic::SQ4ComputeL2Sqr(query, codes, lowerBound, diff, dim);
+    return generic::SQ4ComputeL2Sqr(query, codes, lower_bound, diff, dim);
 }
 
 inline float
 SQ4ComputeCodesIP(const uint8_t* codes1,
                   const uint8_t* codes2,
-                  const float* lowerBound,
+                  const float* lower_bound,
                   const float* diff,
                   uint64_t dim) {
 #if defined(ENABLE_AVX512)
-    return avx512::SQ4ComputeCodesIP(codes1, codes2, lowerBound, diff, dim);
+    return avx512::SQ4ComputeCodesIP(codes1, codes2, lower_bound, diff, dim);
 #endif
 #if defined(ENABLE_AVX22)
-    return avx2::SQ4ComputeCodesIP(codes1, codes2, lowerBound, diff, dim);
+    return avx2::SQ4ComputeCodesIP(codes1, codes2, lower_bound, diff, dim);
 #endif
 #if defined(ENABLE_SSE)
-    return sse::SQ4ComputeCodesIP(codes1, codes2, lowerBound, diff, dim);
+    return sse::SQ4ComputeCodesIP(codes1, codes2, lower_bound, diff, dim);
 #endif
-    return generic::SQ4ComputeCodesIP(codes1, codes2, lowerBound, diff, dim);
+    return generic::SQ4ComputeCodesIP(codes1, codes2, lower_bound, diff, dim);
 }
 
 inline float
 SQ4ComputeCodesL2Sqr(const uint8_t* codes1,
                      const uint8_t* codes2,
-                     const float* lowerBound,
+                     const float* lower_bound,
                      const float* diff,
                      uint64_t dim) {
 #if defined(ENABLE_AVX512)
-    return avx512::SQ4ComputeCodesL2Sqr(codes1, codes2, lowerBound, diff, dim);
+    return avx512::SQ4ComputeCodesL2Sqr(codes1, codes2, lower_bound, diff, dim);
 #endif
 #if defined(ENABLE_AVX22)
-    return avx2::SQ4ComputeCodesL2SqrSqr(codes1, codes2, lowerBound, diff, dim);
+    return avx2::SQ4ComputeCodesL2SqrSqr(codes1, codes2, lower_bound, diff, dim);
 #endif
 #if defined(ENABLE_SSE)
-    return sse::SQ4ComputeCodesL2Sqr(codes1, codes2, lowerBound, diff, dim);
+    return sse::SQ4ComputeCodesL2Sqr(codes1, codes2, lower_bound, diff, dim);
 #endif
-    return generic::SQ4ComputeCodesL2Sqr(codes1, codes2, lowerBound, diff, dim);
+    return generic::SQ4ComputeCodesL2Sqr(codes1, codes2, lower_bound, diff, dim);
 }
 
 }  // namespace vsag

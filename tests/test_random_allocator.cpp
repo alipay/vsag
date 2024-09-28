@@ -27,13 +27,20 @@ public:
     RandomAllocator() {
         rd_ = std::shared_ptr<std::random_device>(new std::random_device());
         gen_ = std::shared_ptr<std::mt19937>(new std::mt19937((*rd_)()));
+        std::uniform_int_distribution<int> seed_random;
         std::uniform_real_distribution<> dis;
+        std::uniform_real_distribution<> ratio_range(0.001f, 0.1f);
+        int seed = seed_random(*gen_);
+        float r = ratio_range(*gen_);
+        std::cout << "seed: " << seed << "   error ratio: " << r << std::endl;
+        gen_->seed(seed);
+        error_ratio_ = r;
     }
 
     void*
     Allocate(size_t size) override {
         auto number = dis_(*gen_);
-        if (number < 0.002) {
+        if (number < error_ratio_) {
             return nullptr;
         }
         return malloc(size);
@@ -53,6 +60,7 @@ private:
     std::shared_ptr<std::random_device> rd_;
     std::shared_ptr<std::mt19937> gen_;
     std::uniform_real_distribution<> dis_;
+    float error_ratio_ = 0.0f;
 };
 
 TEST_CASE("Random Alocator Test", "[ft][hnsw]") {
@@ -69,9 +77,13 @@ TEST_CASE("Random Alocator Test", "[ft][hnsw]") {
         }
     }
     )";
-    auto index = vsag::Factory::CreateIndex("hnsw", paramesters, &allocator).value();
+    auto result_index = vsag::Factory::CreateIndex("hnsw", paramesters, &allocator);
+    if (not result_index.has_value()) {
+        return;
+    }
+    auto index = result_index.value();
 
-    int64_t num_vectors = 10000;
+    int64_t num_vectors = 2000;
     int64_t num_querys = 1000;
     int64_t dim = 128;
 

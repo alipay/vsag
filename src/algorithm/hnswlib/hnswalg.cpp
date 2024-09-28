@@ -14,6 +14,8 @@
 // limitations under the License.
 
 #include "hnswalg.h"
+
+#include <memory>
 namespace hnswlib {
 HierarchicalNSW::HierarchicalNSW(SpaceInterface* s,
                                  size_t max_elements,
@@ -44,8 +46,6 @@ HierarchicalNSW::HierarchicalNSW(SpaceInterface* s,
     maxM0_ = M_ * 2;
     ef_construction_ = std::max(ef_construction, M_);
 
-    element_levels_ = (int*)allocator->Allocate(max_elements * sizeof(int));
-
     level_generator_.seed(random_seed);
     update_probability_generator_.seed(random_seed + 1);
 
@@ -55,48 +55,64 @@ HierarchicalNSW::HierarchicalNSW(SpaceInterface* s,
     label_offset_ = size_links_level0_ + data_size_;
     offsetLevel0_ = 0;
 
-    if (use_reversed_edges_) {
-        reversed_level0_link_list_ =
-            (reverselinklist**)allocator->Allocate(max_elements_ * sizeof(reverselinklist*));
-        memset(reversed_level0_link_list_, 0, max_elements_ * sizeof(reverselinklist*));
-        reversed_link_lists_ = (vsag::UnorderedMap<int, reverselinklist>**)allocator->Allocate(
-            max_elements_ * sizeof(vsag::UnorderedMap<int, reverselinklist>*));
-        memset(reversed_link_lists_,
-               0,
-               max_elements_ * sizeof(vsag::UnorderedMap<int, reverselinklist>*));
-    }
-
-    if (normalize) {
-        ip_func_ = vsag::InnerProduct;
-        molds_ = (float*)allocator->Allocate(max_elements_ * sizeof(float));
-    }
-
     data_level0_memory_ =
-        new BlockManager(max_elements_, size_data_per_element_, block_size_limit, allocator_);
+        std::make_shared<BlockManager>(size_data_per_element_, block_size_limit, allocator_);
     data_element_per_block_ = block_size_limit / size_data_per_element_;
 
     cur_element_count_ = 0;
 
-    visited_list_pool_ = new VisitedListPool(1, max_elements, allocator_);
+    visited_list_pool_ = std::make_shared<VisitedListPool>(1, max_elements, allocator_);
 
     // initializations for special treatment of the first node
     enterpoint_node_ = -1;
     maxlevel_ = -1;
-
-    link_lists_ = (char**)allocator->Allocate(sizeof(void*) * max_elements_);
-    if (link_lists_ == nullptr)
-        throw std::runtime_error("Not enough memory: HierarchicalNSW failed to allocate linklists");
-    memset(link_lists_, 0, sizeof(void*) * max_elements_);
     size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
     mult_ = 1 / log(1.0 * static_cast<double>(M_));
     revSize_ = 1.0 / mult_;
 }
 
+bool
+HierarchicalNSW::init_memory_space() {
+    element_levels_ = (int*)allocator_->Allocate(max_elements_ * sizeof(int));
+    if (not data_level0_memory_->Resize(max_elements_)) {
+        throw std::runtime_error("allocate data_level0_memory_ error");
+    }
+    if (use_reversed_edges_) {
+        reversed_level0_link_list_ =
+            (reverselinklist**)allocator_->Allocate(max_elements_ * sizeof(reverselinklist*));
+        if (reversed_level0_link_list_ == nullptr) {
+            throw std::runtime_error("allocate reversed_level0_link_list_ fail");
+        }
+        memset(reversed_level0_link_list_, 0, max_elements_ * sizeof(reverselinklist*));
+        reversed_link_lists_ = (vsag::UnorderedMap<int, reverselinklist>**)allocator_->Allocate(
+            max_elements_ * sizeof(vsag::UnorderedMap<int, reverselinklist>*));
+        if (reversed_link_lists_ == nullptr) {
+            throw std::runtime_error("allocate reversed_link_lists_ fail");
+        }
+        memset(reversed_link_lists_,
+               0,
+               max_elements_ * sizeof(vsag::UnorderedMap<int, reverselinklist>*));
+    }
+
+    if (normalize_) {
+        ip_func_ = vsag::InnerProduct;
+        molds_ = (float*)allocator_->Allocate(max_elements_ * sizeof(float));
+    }
+
+    link_lists_ = (char**)allocator_->Allocate(sizeof(void*) * max_elements_);
+    if (link_lists_ == nullptr)
+        throw std::runtime_error("Not enough memory: HierarchicalNSW failed to allocate linklists");
+    memset(link_lists_, 0, sizeof(void*) * max_elements_);
+    return true;
+}
+
 HierarchicalNSW::~HierarchicalNSW() {
-    delete data_level0_memory_;
-    for (tableint i = 0; i < max_elements_; i++) {
-        if (element_levels_[i] > 0 || link_lists_[i] != nullptr)
-            allocator_->Deallocate(link_lists_[i]);
+    if (link_lists_ != nullptr) {
+        for (tableint i = 0; i < max_elements_; i++) {
+            if (element_levels_[i] > 0 || link_lists_[i] != nullptr)
+                allocator_->Deallocate(link_lists_[i]);
+        }
+        allocator_->Deallocate(link_lists_);
     }
 
     if (use_reversed_edges_) {
@@ -113,8 +129,6 @@ HierarchicalNSW::~HierarchicalNSW() {
         allocator_->Deallocate(molds_);
     }
     allocator_->Deallocate(element_levels_);
-    allocator_->Deallocate(link_lists_);
-    delete visited_list_pool_;
 }
 
 void
@@ -681,9 +695,7 @@ HierarchicalNSW::resizeIndex(size_t new_max_elements) {
         throw std::runtime_error(
             "Cannot Resize, max element is less than the current number of elements");
 
-    delete visited_list_pool_;
-
-    visited_list_pool_ = new VisitedListPool(1, new_max_elements, allocator_);
+    visited_list_pool_.reset(new VisitedListPool(1, new_max_elements, allocator_));
 
     auto element_levels_new =
         (int*)allocator_->Reallocate(element_levels_, new_max_elements * sizeof(int));

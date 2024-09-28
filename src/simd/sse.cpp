@@ -518,37 +518,37 @@ SQ8ComputeCodesL2Sqr(const uint8_t* codes1,
 float
 SQ4ComputeIP(const float* query,
              const uint8_t* codes,
-             const float* lowerBound,
+             const float* lower_bound,
              const float* diff,
              uint64_t dim) {
-    return generic::SQ4ComputeIP(query, codes, lowerBound, diff, dim);
+    return generic::SQ4ComputeIP(query, codes, lower_bound, diff, dim);
 }
 
 float
 SQ4ComputeL2Sqr(const float* query,
                 const uint8_t* codes,
-                const float* lowerBound,
+                const float* lower_bound,
                 const float* diff,
                 uint64_t dim) {
-    return generic::SQ4ComputeL2Sqr(query, codes, lowerBound, diff, dim);
+    return generic::SQ4ComputeL2Sqr(query, codes, lower_bound, diff, dim);
 }
 
 float
 SQ4ComputeCodesIP(const uint8_t* codes1,
                   const uint8_t* codes2,
-                  const float* lowerBound,
+                  const float* lower_bound,
                   const float* diff,
                   uint64_t dim) {
-    return generic::SQ4ComputeCodesIP(codes1, codes2, lowerBound, diff, dim);
+    return generic::SQ4ComputeCodesIP(codes1, codes2, lower_bound, diff, dim);
 }
 
 float
 SQ4ComputeCodesL2Sqr(const uint8_t* codes1,
                      const uint8_t* codes2,
-                     const float* lowerBound,
+                     const float* lower_bound,
                      const float* diff,
                      uint64_t dim) {
-    return generic::SQ4ComputeCodesL2Sqr(codes1, codes2, lowerBound, diff, dim);
+    return generic::SQ4ComputeCodesL2Sqr(codes1, codes2, lower_bound, diff, dim);
 }
 
 float

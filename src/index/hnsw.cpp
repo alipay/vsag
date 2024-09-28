@@ -71,13 +71,13 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
     if (not allocator) {
         allocator = DefaultAllocator::Instance();
     }
-    allocator_ = new SafeAllocator(allocator);
+    allocator_ = std::shared_ptr<SafeAllocator>(new SafeAllocator(allocator));
 
     if (!use_static_) {
         alg_hnsw_ =
             std::make_shared<hnswlib::HierarchicalNSW>(space_.get(),
                                                        DEFAULT_MAX_ELEMENT,
-                                                       allocator_,
+                                                       allocator_.get(),
                                                        M,
                                                        ef_construction,
                                                        use_reversed_edges_,
@@ -86,13 +86,12 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
     } else {
         if (dim_ % 4 != 0) {
             // FIXME(wxyu): remove throw stmt from construct function
-            delete allocator_;
             throw std::runtime_error("cannot build static hnsw while dim % 4 != 0");
         }
         alg_hnsw_ = std::make_shared<hnswlib::StaticHierarchicalNSW>(
             space_.get(),
             DEFAULT_MAX_ELEMENT,
-            allocator_,
+            allocator_.get(),
             M,
             ef_construction,
             Options::Instance().block_size_limit());
@@ -101,6 +100,10 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
 
 tl::expected<std::vector<int64_t>, Error>
 HNSW::build(const DatasetPtr& base) {
+    if (auto result = init_memory_space(); not result.has_value()) {
+        auto error = result.error();
+        LOG_ERROR_AND_RETURNS(error.type, error.message);
+    }
     try {
         if (base->GetNumElements() == 0) {
             empty_index_ = true;
@@ -147,7 +150,10 @@ HNSW::build(const DatasetPtr& base) {
 tl::expected<std::vector<int64_t>, Error>
 HNSW::add(const DatasetPtr& base) {
     SlowTaskTimer t("hnsw add", 20);
-
+    if (auto result = init_memory_space(); not result.has_value()) {
+        auto error = result.error();
+        LOG_ERROR_AND_RETURNS(error.type, error.message);
+    }
     if (use_static_) {
         LOG_ERROR_AND_RETURNS(ErrorType::UNSUPPORTED_INDEX_OPERATION,
                               "static index does not support add");
@@ -263,13 +269,14 @@ HNSW::knn_search(const DatasetPtr& query,
         }
 
         // return result
+
+        result->Dim(results.size())->NumElements(1)->Owner(true, allocator_.get());
+
         int64_t* ids = (int64_t*)allocator_->Allocate(sizeof(int64_t) * results.size());
+        result->Ids(ids);
         float* dists = (float*)allocator_->Allocate(sizeof(float) * results.size());
-        result->Dim(results.size())
-            ->NumElements(1)
-            ->Ids(ids)
-            ->Distances(dists)
-            ->Owner(true, allocator_);
+        result->Distances(dists);
+
         for (int64_t j = results.size() - 1; j >= 0; --j) {
             dists[j] = results.top().first;
             ids[j] = results.top().second;
@@ -378,7 +385,7 @@ HNSW::range_search(const DatasetPtr& query,
             ->NumElements(1)
             ->Ids(ids)
             ->Distances(dists)
-            ->Owner(true, allocator_);
+            ->Owner(true, allocator_.get());
         for (int64_t j = results.size() - 1; j >= 0; --j) {
             if (j < target_size) {
                 dists[j] = results.top().first;
@@ -479,6 +486,10 @@ HNSW::serialize(std::ostream& out_stream) {
 tl::expected<void, Error>
 HNSW::deserialize(const BinarySet& binary_set) {
     SlowTaskTimer t("hnsw deserialize");
+    if (auto result = init_memory_space(); not result.has_value()) {
+        auto error = result.error();
+        LOG_ERROR_AND_RETURNS(error.type, error.message);
+    }
     if (this->alg_hnsw_->getCurrentElementCount() > 0) {
         LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
                               "failed to deserialize: index is not empty");
@@ -516,6 +527,10 @@ HNSW::deserialize(const BinarySet& binary_set) {
 tl::expected<void, Error>
 HNSW::deserialize(const ReaderSet& reader_set) {
     SlowTaskTimer t("hnsw deserialize");
+    if (auto result = init_memory_space(); not result.has_value()) {
+        auto error = result.error();
+        LOG_ERROR_AND_RETURNS(error.type, error.message);
+    }
     if (this->alg_hnsw_->getCurrentElementCount() > 0) {
         LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
                               "failed to deserialize: index is not empty");
@@ -544,6 +559,10 @@ HNSW::deserialize(const ReaderSet& reader_set) {
 tl::expected<void, Error>
 HNSW::deserialize(std::istream& in_stream) {
     SlowTaskTimer t("hnsw deserialize");
+    if (auto result = init_memory_space(); not result.has_value()) {
+        auto error = result.error();
+        LOG_ERROR_AND_RETURNS(error.type, error.message);
+    }
     if (this->alg_hnsw_->getCurrentElementCount() > 0) {
         LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
                               "failed to deserialize: index is not empty");
@@ -674,7 +693,7 @@ HNSW::brute_force(const DatasetPtr& query, int64_t k) {
         auto result = Dataset::Make();
         int64_t* ids = (int64_t*)allocator_->Allocate(sizeof(int64_t) * k);
         float* dists = (float*)allocator_->Allocate(sizeof(float) * k);
-        result->Ids(ids)->Distances(dists)->NumElements(k)->Owner(true, allocator_);
+        result->Ids(ids)->Distances(dists)->NumElements(k)->Owner(true, allocator_.get());
 
         auto vector = query->GetFloat32Vectors();
         std::shared_lock lock(rw_mutex_);
@@ -770,6 +789,20 @@ HNSW::pretrain(const std::vector<int64_t>& base_tag_ids,
     }
 
     return add_edges;
+}
+
+tl::expected<bool, Error>
+HNSW::init_memory_space() {
+    if (is_init_memory_) {
+        return true;
+    }
+    try {
+        alg_hnsw_->init_memory_space();
+    } catch (std::runtime_error r) {
+        LOG_ERROR_AND_RETURNS(ErrorType::NO_ENOUGH_MEMORY, "allocate memory failed:", r.what());
+    }
+    is_init_memory_ = true;
+    return true;
 }
 
 }  // namespace vsag

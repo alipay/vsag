@@ -73,7 +73,7 @@ private:
     double mult_{0.0}, revSize_{0.0};
     int maxlevel_{0};
 
-    VisitedListPool* visited_list_pool_{nullptr};
+    std::shared_ptr<VisitedListPool> visited_list_pool_{nullptr};
 
     // Locks operations with element by label value
     mutable std::vector<std::mutex> label_op_locks_{};
@@ -91,7 +91,7 @@ private:
     bool normalize_{false};
     float* molds_{nullptr};
 
-    BlockManager* data_level0_memory_{nullptr};
+    std::shared_ptr<BlockManager> data_level0_memory_{nullptr};
     char** link_lists_{nullptr};
     int* element_levels_{nullptr};  // keeps level of each element
 
@@ -404,5 +404,8 @@ public:
 
     void
     checkIntegrity();
+
+    bool
+    init_memory_space() override;
 };
 }  // namespace hnswlib

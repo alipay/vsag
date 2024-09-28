@@ -100,10 +100,6 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
 
 tl::expected<std::vector<int64_t>, Error>
 HNSW::build(const DatasetPtr& base) {
-    if (auto result = init_memory_space(); not result.has_value()) {
-        auto error = result.error();
-        LOG_ERROR_AND_RETURNS(error.type, error.message);
-    }
     try {
         if (base->GetNumElements() == 0) {
             empty_index_ = true;
@@ -119,6 +115,9 @@ HNSW::build(const DatasetPtr& base) {
         int64_t num_elements = base->GetNumElements();
 
         std::unique_lock lock(rw_mutex_);
+        if (auto result = init_memory_space(); not result.has_value()) {
+            return tl::unexpected(result.error());
+        }
 
         auto ids = base->GetIds();
         auto vectors = base->GetFloat32Vectors();
@@ -150,10 +149,6 @@ HNSW::build(const DatasetPtr& base) {
 tl::expected<std::vector<int64_t>, Error>
 HNSW::add(const DatasetPtr& base) {
     SlowTaskTimer t("hnsw add", 20);
-    if (auto result = init_memory_space(); not result.has_value()) {
-        auto error = result.error();
-        LOG_ERROR_AND_RETURNS(error.type, error.message);
-    }
     if (use_static_) {
         LOG_ERROR_AND_RETURNS(ErrorType::UNSUPPORTED_INDEX_OPERATION,
                               "static index does not support add");
@@ -169,6 +164,9 @@ HNSW::add(const DatasetPtr& base) {
         std::vector<int64_t> failed_ids;
 
         std::unique_lock lock(rw_mutex_);
+        if (auto result = init_memory_space(); not result.has_value()) {
+            return tl::unexpected(result.error());
+        }
         for (int64_t i = 0; i < num_elements; ++i) {
             // noexcept runtime
             if (!alg_hnsw_->addPoint((const void*)(vectors + i * dim_), ids[i])) {
@@ -486,10 +484,6 @@ HNSW::serialize(std::ostream& out_stream) {
 tl::expected<void, Error>
 HNSW::deserialize(const BinarySet& binary_set) {
     SlowTaskTimer t("hnsw deserialize");
-    if (auto result = init_memory_space(); not result.has_value()) {
-        auto error = result.error();
-        LOG_ERROR_AND_RETURNS(error.type, error.message);
-    }
     if (this->alg_hnsw_->getCurrentElementCount() > 0) {
         LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
                               "failed to deserialize: index is not empty");
@@ -508,6 +502,9 @@ HNSW::deserialize(const BinarySet& binary_set) {
 
     try {
         std::unique_lock lock(rw_mutex_);
+        if (auto result = init_memory_space(); not result.has_value()) {
+            return tl::unexpected(result.error());
+        }
         alg_hnsw_->loadIndex(func, this->space_.get());
         if (use_conjugate_graph_) {
             Binary b_cg = binary_set.Get(CONJUGATE_GRAPH_DATA);
@@ -527,10 +524,6 @@ HNSW::deserialize(const BinarySet& binary_set) {
 tl::expected<void, Error>
 HNSW::deserialize(const ReaderSet& reader_set) {
     SlowTaskTimer t("hnsw deserialize");
-    if (auto result = init_memory_space(); not result.has_value()) {
-        auto error = result.error();
-        LOG_ERROR_AND_RETURNS(error.type, error.message);
-    }
     if (this->alg_hnsw_->getCurrentElementCount() > 0) {
         LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
                               "failed to deserialize: index is not empty");
@@ -548,6 +541,9 @@ HNSW::deserialize(const ReaderSet& reader_set) {
 
     try {
         std::unique_lock lock(rw_mutex_);
+        if (auto result = init_memory_space(); not result.has_value()) {
+            return tl::unexpected(result.error());
+        }
         alg_hnsw_->loadIndex(func, this->space_.get());
     } catch (const std::runtime_error& e) {
         LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to deserialize: ", e.what());
@@ -559,10 +555,6 @@ HNSW::deserialize(const ReaderSet& reader_set) {
 tl::expected<void, Error>
 HNSW::deserialize(std::istream& in_stream) {
     SlowTaskTimer t("hnsw deserialize");
-    if (auto result = init_memory_space(); not result.has_value()) {
-        auto error = result.error();
-        LOG_ERROR_AND_RETURNS(error.type, error.message);
-    }
     if (this->alg_hnsw_->getCurrentElementCount() > 0) {
         LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
                               "failed to deserialize: index is not empty");
@@ -570,6 +562,9 @@ HNSW::deserialize(std::istream& in_stream) {
 
     try {
         std::unique_lock lock(rw_mutex_);
+        if (auto result = init_memory_space(); not result.has_value()) {
+            return tl::unexpected(result.error());
+        }
         alg_hnsw_->loadIndex(in_stream, this->space_.get());
         if (use_conjugate_graph_ and not conjugate_graph_->Deserialize(in_stream).has_value()) {
             throw std::runtime_error("error in deserialize conjugate graph");
@@ -798,7 +793,7 @@ HNSW::init_memory_space() {
     }
     try {
         alg_hnsw_->init_memory_space();
-    } catch (std::runtime_error r) {
+    } catch (std::runtime_error& r) {
         LOG_ERROR_AND_RETURNS(ErrorType::NO_ENOUGH_MEMORY, "allocate memory failed:", r.what());
     }
     is_init_memory_ = true;

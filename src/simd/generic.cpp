@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <math.h>
-
+#include <cmath>
 #include <iostream>
 
 #include "fp32_simd.h"
@@ -153,9 +152,9 @@ SQ4ComputeIP(const float* query,
              const float* diff,
              uint64_t dim) {
     float result = 0;
-    float x_lo, x_hi, y_lo, y_hi;
+    float x_lo = 0, x_hi = 0, y_lo = 0, y_hi = 0;
 
-    for (uint32_t d = 0; d < dim; d += 2) {
+    for (uint64_t d = 0; d < dim; d += 2) {
         x_lo = query[d];
         y_lo = (codes[d >> 1] & 0x0f) * 15.0 / diff[d] + lower_bound[d];
         if (d + 1 < dim) {
@@ -179,9 +178,9 @@ SQ4ComputeL2Sqr(const float* query,
                 const float* diff,
                 uint64_t dim) {
     float result = 0;
-    float x_lo, x_hi, y_lo, y_hi;
+    float x_lo = 0, x_hi = 0, y_lo = 0, y_hi = 0;
 
-    for (uint32_t d = 0; d < dim; d += 2) {
+    for (uint64_t d = 0; d < dim; d += 2) {
         x_lo = query[d];
         y_lo = (codes[d >> 1] & 0x0f) * 15.0 / diff[d] + lower_bound[d];
         if (d + 1 < dim) {
@@ -205,9 +204,9 @@ SQ4ComputeCodesIP(const uint8_t* codes1,
                   const float* diff,
                   uint64_t dim) {
     float result = 0, delta = 0;
-    float x_lo, x_hi, y_lo, y_hi;
+    float x_lo = 0, x_hi = 0, y_lo = 0, y_hi = 0;
 
-    for (uint32_t d = 0; d < dim; d += 2) {
+    for (uint64_t d = 0; d < dim; d += 2) {
         delta = 15.0 / diff[d] + lower_bound[d];
         x_lo = (codes1[d >> 1] & 0x0f) * delta;
         y_lo = (codes2[d >> 1] & 0x0f) * delta;
@@ -233,9 +232,9 @@ SQ4ComputeCodesL2Sqr(const uint8_t* codes1,
                      const float* diff,
                      uint64_t dim) {
     float result = 0, delta = 0;
-    float x_lo, x_hi, y_lo, y_hi;
+    float x_lo = 0, x_hi = 0, y_lo = 0, y_hi = 0;
 
-    for (uint32_t d = 0; d < dim; d += 2) {
+    for (uint64_t d = 0; d < dim; d += 2) {
         delta = 15.0 / diff[d] + lower_bound[d];
         x_lo = (codes1[d >> 1] & 0x0f) * delta;
         y_lo = (codes2[d >> 1] & 0x0f) * delta;
@@ -258,7 +257,7 @@ float
 SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim) {
     int32_t result = 0;
 
-    for (uint32_t d = 0; d < dim; d += 2) {
+    for (uint64_t d = 0; d < dim; d += 2) {
         float x_lo = codes1[d >> 1] & 0x0f;
         float x_hi = (codes1[d >> 1] & 0xf0) >> 4;
         float y_lo = codes2[d >> 1] & 0x0f;

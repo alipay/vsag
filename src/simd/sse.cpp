@@ -559,7 +559,7 @@ SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t 
     }
     alignas(128) int16_t temp[8];
     int32_t result = 0;
-    uint32_t d = 0;
+    uint64_t d = 0;
     __m128i sum = _mm_setzero_si128();
     __m128i mask = _mm_set1_epi8(0xf);
     for (; d + 31 < dim; d += 32) {

@@ -26,8 +26,8 @@
 
 namespace vsag {
 
-typedef uint64_t norm_type;
-typedef float sum_type;
+using norm_type = uint64_t;
+using sum_type = float;
 
 template <MetricType metric = MetricType::METRIC_TYPE_L2SQR>
 class SQ4UniformQuantizer : public Quantizer<SQ4UniformQuantizer<metric>> {
@@ -61,11 +61,11 @@ public:
                     float* dists) const;
 
 private:
-    DataType lower_bound_;
-    DataType diff_;
-    uint64_t offset_code_;
-    uint64_t offset_norm_;
-    uint64_t offset_sum_;
+    DataType lower_bound_{0};
+    DataType diff_{0};
+    uint64_t offset_code_{0};
+    uint64_t offset_norm_{0};
+    uint64_t offset_sum_{0};
 };
 
 template <MetricType metric>
@@ -97,8 +97,8 @@ SQ4UniformQuantizer<metric>::TrainImpl(const DataType* data, uint64_t count) {
         return false;
     }
 
-    for (uint32_t i = 0; i < count; i++) {
-        for (uint32_t d = 0; d < this->dim_; d++) {
+    for (uint64_t i = 0; i < count; i++) {
+        for (uint64_t d = 0; d < this->dim_; d++) {
             auto val = data[i * this->dim_ + d];
             if (val > diff_) {
                 diff_ = val;
@@ -110,6 +110,9 @@ SQ4UniformQuantizer<metric>::TrainImpl(const DataType* data, uint64_t count) {
     }
 
     diff_ -= lower_bound_;
+    if (diff_ < 1e-4) {
+        diff_ = 1;
+    }
 
     this->is_trained_ = true;
     return true;
@@ -118,13 +121,13 @@ SQ4UniformQuantizer<metric>::TrainImpl(const DataType* data, uint64_t count) {
 template <MetricType metric>
 bool
 SQ4UniformQuantizer<metric>::EncodeOneImpl(const DataType* data, uint8_t* codes) const {
-    float delta;
-    uint8_t scaled;
+    float delta = 0;
+    uint8_t scaled = 0;
     norm_type norm = 0;
     sum_type sum = 0;
 
-    for (uint32_t d = 0; d < this->dim_; d++) {
-        delta = ((data[d] - lower_bound_) / diff_);
+    for (uint64_t d = 0; d < this->dim_; d++) {
+        delta = 1.0f * (data[d] - lower_bound_) / diff_;
         if (delta < 0.0) {
             delta = 0;
         } else if (delta > 0.999) {
@@ -165,7 +168,7 @@ SQ4UniformQuantizer<metric>::EncodeBatchImpl(const DataType* data, uint8_t* code
 template <MetricType metric>
 bool
 SQ4UniformQuantizer<metric>::DecodeOneImpl(const uint8_t* codes, DataType* data) {
-    for (uint32_t d = 0; d < this->dim_; d++) {
+    for (uint64_t d = 0; d < this->dim_; d++) {
         if (d & 1) {
             data[d] = ((codes[d >> 1] & 0xf0) >> 4) / 15.0 * diff_ + lower_bound_;
         } else {
@@ -224,8 +227,13 @@ template <MetricType metric>
 void
 SQ4UniformQuantizer<metric>::ProcessQueryImpl(const DataType* query,
                                               Computer<SQ4UniformQuantizer>& computer) const {
-    computer.buf_ = new uint8_t[this->code_size_];
-    this->EncodeOneImpl(query, computer.buf_);
+    try {
+        computer.buf_ = new uint8_t[this->code_size_];
+        this->EncodeOneImpl(query, computer.buf_);
+    } catch (const std::bad_alloc& e) {
+        computer.buf_ = nullptr;
+        logger::error("bad alloc when init computer buf");
+    }
 }
 
 template <MetricType metric>

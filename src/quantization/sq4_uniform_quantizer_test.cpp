@@ -20,6 +20,7 @@
 
 #include "../../tests/fixtures/fixtures.h"
 #include "quantizer_test.h"
+
 using namespace vsag;
 
 TEST_CASE("SQ4 Uniform Encode and Decode", "[ut][SQ4UniformQuantizer]") {

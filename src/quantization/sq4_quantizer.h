@@ -53,8 +53,8 @@ public:
     ComputeDistImpl(Computer<SQ4Quantizer>& computer, const uint8_t* codes, float* dists) const;
 
 private:
-    std::vector<DataType> lower_bound_;
-    std::vector<DataType> diff_;
+    std::vector<DataType> lower_bound_{};
+    std::vector<DataType> diff_{};
 };
 
 template <MetricType metric>
@@ -71,8 +71,8 @@ SQ4Quantizer<metric>::TrainImpl(const DataType* data, uint64_t count) {
         return false;
     }
 
-    for (uint32_t i = 0; i < count; i++) {
-        for (uint32_t d = 0; d < this->dim_; d++) {
+    for (uint64_t i = 0; i < count; i++) {
+        for (uint64_t d = 0; d < this->dim_; d++) {
             auto val = data[i * this->dim_ + d];
             if (val > diff_[d]) {
                 diff_[d] = val;
@@ -83,8 +83,11 @@ SQ4Quantizer<metric>::TrainImpl(const DataType* data, uint64_t count) {
         }
     }
 
-    for (uint32_t d = 0; d < this->dim_; d++) {
+    for (uint64_t d = 0; d < this->dim_; d++) {
         diff_[d] -= lower_bound_[d];
+        if (diff_[d] < 1e-4) {
+            diff_[d] = 1;
+        }
     }
 
     this->is_trained_ = true;
@@ -94,11 +97,11 @@ SQ4Quantizer<metric>::TrainImpl(const DataType* data, uint64_t count) {
 template <MetricType metric>
 bool
 SQ4Quantizer<metric>::EncodeOneImpl(const DataType* data, uint8_t* codes) const {
-    float delta;
-    uint8_t scaled;
+    float delta = 0;
+    uint8_t scaled = 0;
 
-    for (uint32_t d = 0; d < this->dim_; d++) {
-        delta = ((data[d] - lower_bound_[d]) / diff_[d]);
+    for (uint64_t d = 0; d < this->dim_; d++) {
+        delta = 1.0f * (data[d] - lower_bound_[d]) / diff_[d];
         if (delta < 0.0) {
             delta = 0;
         } else if (delta > 0.999) {
@@ -129,7 +132,7 @@ SQ4Quantizer<metric>::EncodeBatchImpl(const DataType* data, uint8_t* codes, uint
 template <MetricType metric>
 bool
 SQ4Quantizer<metric>::DecodeOneImpl(const uint8_t* codes, DataType* data) {
-    for (uint32_t d = 0; d < this->dim_; d++) {
+    for (uint64_t d = 0; d < this->dim_; d++) {
         if (d & 1) {
             data[d] = ((codes[d >> 1] & 0xf0) >> 4) / 15.0 * diff_[d] + lower_bound_[d];
         } else {
@@ -167,8 +170,13 @@ template <MetricType metric>
 void
 SQ4Quantizer<metric>::ProcessQueryImpl(const DataType* query,
                                        Computer<SQ4Quantizer>& computer) const {
-    computer.buf_ = new uint8_t[this->code_size_];
-    this->EncodeOneImpl(query, computer.buf_);
+    try {
+        computer.buf_ = new uint8_t[this->code_size_];
+        this->EncodeOneImpl(query, computer.buf_);
+    } catch (const std::bad_alloc& e) {
+        computer.buf_ = nullptr;
+        logger::error("bad alloc when init computer buf");
+    }
 }
 
 template <MetricType metric>

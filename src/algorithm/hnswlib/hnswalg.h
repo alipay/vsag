@@ -34,6 +34,7 @@
 
 #include "../../default_allocator.h"
 #include "../../simd/simd.h"
+#include "../../utils.h"
 #include "block_manager.h"
 #include "hnswlib.h"
 #include "visited_list_pool.h"
@@ -41,9 +42,17 @@
 namespace hnswlib {
 using tableint = unsigned int;
 using linklistsizeint = unsigned int;
-using reverselinklist = std::
-    unordered_set<tableint, std::hash<tableint>, std::equal_to<>, vsag::AllocatorWrapper<tableint>>;
-
+using reverselinklist = vsag::UnorderedSet<uint32_t>;
+struct CompareByFirst {
+    constexpr bool
+    operator()(std::pair<float, tableint> const& a,
+               std::pair<float, tableint> const& b) const noexcept {
+        return a.first < b.first;
+    }
+};
+using MaxHeap = std::priority_queue<std::pair<float, tableint>,
+                                    std::vector<std::pair<float, tableint>>,
+                                    CompareByFirst>;
 const static float THRESHOLD_ERROR = 1e-6;
 
 class HierarchicalNSW : public AlgorithmInterface<float> {
@@ -68,10 +77,10 @@ private:
     VisitedListPool* visited_list_pool_{nullptr};
 
     // Locks operations with element by label value
-    mutable std::vector<std::mutex> label_op_locks_;
+    mutable vsag::Vector<std::mutex> label_op_locks_;
 
-    std::mutex global;
-    std::vector<std::recursive_mutex> link_list_locks_;
+    std::mutex global_{};
+    vsag::Vector<std::recursive_mutex> link_list_locks_;
 
     tableint enterpoint_node_{0};
 
@@ -87,7 +96,7 @@ private:
 
     bool use_reversed_edges_ = false;
     reverselinklist** reversed_level0_link_list_{nullptr};
-    std::map<int, reverselinklist>** reversed_link_lists_{nullptr};
+    vsag::UnorderedMap<int, reverselinklist>** reversed_link_lists_{nullptr};
 
     size_t data_size_{0};
 
@@ -96,14 +105,13 @@ private:
     DISTFUNC fstdistfunc_;
     void* dist_func_param_{nullptr};
 
-    mutable std::mutex label_lookup_lock;  // lock for label_lookup_
-    std::unordered_map<labeltype, tableint> label_lookup_;
+    mutable std::mutex label_lookup_lock_{};  // lock for label_lookup_
+    vsag::UnorderedMap<labeltype, tableint> label_lookup_;
 
     std::default_random_engine level_generator_;
     std::default_random_engine update_probability_generator_;
 
-    vsag::Allocator* allocator_;
-    std::shared_ptr<vsag::AllocatorWrapper<tableint>> reverse_link_list_allocator_;
+    vsag::Allocator* allocator_{nullptr};
 
     mutable std::atomic<long> metric_distance_computations_{0};
     mutable std::atomic<long> metric_hops_{0};
@@ -113,22 +121,10 @@ private:
     bool allow_replace_deleted_ =
         false;  // flag to replace deleted elements (marked as deleted) during insertions
 
-    std::mutex deleted_elements_lock;               // lock for deleted_elements
-    std::unordered_set<tableint> deleted_elements;  // contains internal ids of deleted elements
+    std::mutex deleted_elements_lock_{};             // lock for deleted_elements_
+    vsag::UnorderedSet<tableint> deleted_elements_;  // contains internal ids of deleted elements
 
 public:
-    HierarchicalNSW(SpaceInterface* s) {
-    }
-
-    HierarchicalNSW(SpaceInterface* s,
-                    const std::string& location,
-                    bool nmslib = false,
-                    size_t max_elements = 0,
-                    bool allow_replace_deleted = false)
-        : allow_replace_deleted_(allow_replace_deleted) {
-        loadIndex(location, s, max_elements);
-    }
-
     HierarchicalNSW(SpaceInterface* s,
                     size_t max_elements,
                     vsag::Allocator* allocator,
@@ -140,11 +136,13 @@ public:
                     size_t random_seed = 100,
                     bool allow_replace_deleted = false)
         : allocator_(allocator),
-          link_list_locks_(max_elements),
-          label_op_locks_(MAX_LABEL_OPERATION_LOCKS),
+          link_list_locks_(max_elements, allocator),
+          label_op_locks_(MAX_LABEL_OPERATION_LOCKS, allocator),
           allow_replace_deleted_(allow_replace_deleted),
           use_reversed_edges_(use_reversed_edges),
-          normalize_(normalize) {
+          normalize_(normalize),
+          label_lookup_(allocator),
+          deleted_elements_(allocator) {
         max_elements_ = max_elements;
         num_deleted_ = 0;
         data_size_ = s->get_data_size();
@@ -167,16 +165,15 @@ public:
         label_offset_ = size_links_level0_ + data_size_;
         offsetLevel0_ = 0;
 
-        reverse_link_list_allocator_.reset(new vsag::AllocatorWrapper<tableint>(allocator_));
-
         if (use_reversed_edges_) {
             reversed_level0_link_list_ =
                 (reverselinklist**)allocator->Allocate(max_elements_ * sizeof(reverselinklist*));
             memset(reversed_level0_link_list_, 0, max_elements_ * sizeof(reverselinklist*));
-            reversed_link_lists_ = (std::map<int, reverselinklist>**)allocator->Allocate(
-                max_elements_ * sizeof(std::map<int, reverselinklist>*));
-            memset(
-                reversed_link_lists_, 0, max_elements_ * sizeof(std::map<int, reverselinklist>*));
+            reversed_link_lists_ = (vsag::UnorderedMap<int, reverselinklist>**)allocator->Allocate(
+                max_elements_ * sizeof(vsag::UnorderedMap<int, reverselinklist>*));
+            memset(reversed_link_lists_,
+                   0,
+                   max_elements_ * sizeof(vsag::UnorderedMap<int, reverselinklist>*));
         }
 
         if (normalize) {
@@ -252,7 +249,7 @@ public:
 
     float
     getDistanceByLabel(labeltype label, const void* data_point) override {
-        std::unique_lock<std::mutex> lock_table(label_lookup_lock);
+        std::unique_lock<std::mutex> lock_table(label_lookup_lock_);
 
         auto search = label_lookup_.find(label);
         if (search == label_lookup_.end()) {
@@ -268,7 +265,7 @@ public:
 
     bool
     isValidLabel(labeltype label) override {
-        std::unique_lock<std::mutex> lock_table(label_lookup_lock);
+        std::unique_lock<std::mutex> lock_table(label_lookup_lock_);
         bool is_valid = (label_lookup_.find(label) != label_lookup_.end());
         lock_table.unlock();
         return is_valid;
@@ -313,18 +310,17 @@ public:
         if (level != 0) {
             auto& edge_map_ptr = reversed_link_lists_[internal_id];
             if (edge_map_ptr == nullptr) {
-                edge_map_ptr = new std::map<int, reverselinklist>();
+                edge_map_ptr = new vsag::UnorderedMap<int, reverselinklist>(allocator_);
             }
             auto& edge_map = *edge_map_ptr;
             if (edge_map.find(level) == edge_map.end()) {
-                edge_map.insert(
-                    std::make_pair(level, reverselinklist(*reverse_link_list_allocator_.get())));
+                edge_map.insert(std::make_pair(level, reverselinklist(allocator_)));
             }
             return edge_map.at(level);
         } else {
             auto& edge_ptr = reversed_level0_link_list_[internal_id];
             if (edge_ptr == nullptr) {
-                edge_ptr = new reverselinklist(*reverse_link_list_allocator_.get());
+                edge_ptr = new reverselinklist(allocator_);
             }
             return *edge_ptr;
         }
@@ -332,7 +328,7 @@ public:
 
     void
     updateConnections(tableint internal_id,
-                      const std::vector<tableint>& cand_neighbors,
+                      const vsag::Vector<tableint>& cand_neighbors,
                       int level,
                       bool is_update) {
         linklistsizeint* ll_cur;
@@ -755,7 +751,7 @@ public:
         }
 
         std::priority_queue<std::pair<float, tableint>> queue_closest;
-        std::vector<std::pair<float, tableint>> return_list;
+        vsag::Vector<std::pair<float, tableint>> return_list(allocator_);
         while (top_candidates.size() > 0) {
             queue_closest.emplace(-top_candidates.top().first, top_candidates.top().second);
             top_candidates.pop();
@@ -817,7 +813,7 @@ public:
             throw std::runtime_error(
                 "Should be not be more than M_ candidates returned by the heuristic");
 
-        std::vector<tableint> selectedNeighbors;
+        vsag::Vector<tableint> selectedNeighbors(allocator_);
         selectedNeighbors.reserve(M_);
         while (top_candidates.size() > 0) {
             selectedNeighbors.push_back(top_candidates.top().second);
@@ -896,7 +892,7 @@ public:
 
                     getNeighborsByHeuristic2(candidates, m_curmax);
 
-                    std::vector<tableint> cand_neighbors;
+                    vsag::Vector<tableint> cand_neighbors(allocator_);
                     while (candidates.size() > 0) {
                         cand_neighbors.push_back(candidates.top().second);
                         candidates.pop();
@@ -939,7 +935,7 @@ public:
                 "Not enough memory: resizeIndex failed to allocate element_levels_");
         }
         element_levels_ = element_levels_new;
-        std::vector<std::recursive_mutex>(new_max_elements).swap(link_list_locks_);
+        vsag::Vector<std::recursive_mutex>(new_max_elements, allocator_).swap(link_list_locks_);
 
         if (normalize_) {
             auto new_molds =
@@ -969,8 +965,10 @@ public:
                    0,
                    (new_max_elements - max_elements_) * sizeof(reverselinklist*));
 
-            auto reversed_link_lists_new = (std::map<int, reverselinklist>**)allocator_->Reallocate(
-                reversed_link_lists_, new_max_elements * sizeof(std::map<int, reverselinklist>*));
+            auto reversed_link_lists_new =
+                (vsag::UnorderedMap<int, reverselinklist>**)allocator_->Reallocate(
+                    reversed_link_lists_,
+                    new_max_elements * sizeof(vsag::UnorderedMap<int, reverselinklist>*));
             if (reversed_link_lists_new == nullptr) {
                 throw std::runtime_error(
                     "Not enough memory: resizeIndex failed to allocate reversed_link_lists_");
@@ -1171,8 +1169,8 @@ public:
         size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
 
         size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
-        std::vector<std::recursive_mutex>(max_elements).swap(link_list_locks_);
-        std::vector<std::mutex>(MAX_LABEL_OPERATION_LOCKS).swap(label_op_locks_);
+        vsag::Vector<std::recursive_mutex>(max_elements, allocator_).swap(link_list_locks_);
+        vsag::Vector<std::mutex>(MAX_LABEL_OPERATION_LOCKS, allocator_).swap(label_op_locks_);
 
         revSize_ = 1.0 / mult_;
         for (size_t i = 0; i < cur_element_count_; i++) {
@@ -1214,7 +1212,7 @@ public:
             if (isMarkedDeleted(i)) {
                 num_deleted_ += 1;
                 if (allow_replace_deleted_)
-                    deleted_elements.insert(i);
+                    deleted_elements_.insert(i);
             }
         }
     }
@@ -1223,7 +1221,7 @@ public:
     getDataByLabel(labeltype label) const override {
         std::lock_guard<std::mutex> lock_label(getLabelOpMutex(label));
 
-        std::unique_lock<std::mutex> lock_table(label_lookup_lock);
+        std::unique_lock<std::mutex> lock_table(label_lookup_lock_);
         auto search = label_lookup_.find(label);
         if (search == label_lookup_.end() || isMarkedDeleted(search->second)) {
             throw std::runtime_error("Label not found");
@@ -1245,7 +1243,7 @@ public:
         // lock all operations with element by label
         std::unique_lock<std::mutex> lock_label(getLabelOpMutex(label));
 
-        std::unique_lock<std::mutex> lock_table(label_lookup_lock);
+        std::unique_lock<std::mutex> lock_table(label_lookup_lock_);
         auto search = label_lookup_.find(label);
         if (search == label_lookup_.end()) {
             throw std::runtime_error("Label not found");
@@ -1268,8 +1266,8 @@ public:
             *ll_cur |= DELETE_MARK;
             num_deleted_ += 1;
             if (allow_replace_deleted_) {
-                std::unique_lock<std::mutex> lock_deleted_elements(deleted_elements_lock);
-                deleted_elements.insert(internalId);
+                std::unique_lock<std::mutex> lock_deleted_elements(deleted_elements_lock_);
+                deleted_elements_.insert(internalId);
             }
         } else {
             throw std::runtime_error("The requested to delete element is already deleted");
@@ -1287,7 +1285,7 @@ public:
         // lock all operations with element by label
         std::unique_lock<std::mutex> lock_label(getLabelOpMutex(label));
 
-        std::unique_lock<std::mutex> lock_table(label_lookup_lock);
+        std::unique_lock<std::mutex> lock_table(label_lookup_lock_);
         auto search = label_lookup_.find(label);
         if (search == label_lookup_.end()) {
             throw std::runtime_error("Label not found");
@@ -1309,8 +1307,8 @@ public:
             *ll_cur &= ~DELETE_MARK;
             num_deleted_ -= 1;
             if (allow_replace_deleted_) {
-                std::unique_lock<std::mutex> lock_deleted_elements(deleted_elements_lock);
-                deleted_elements.erase(internalId);
+                std::unique_lock<std::mutex> lock_deleted_elements(deleted_elements_lock_);
+                deleted_elements_.erase(internalId);
             }
         } else {
             throw std::runtime_error("The requested to undelete element is not deleted");
@@ -1459,12 +1457,12 @@ public:
     removePoint(labeltype label) {
         tableint cur_c = 0;
         tableint internal_id = 0;
-        std::lock_guard<std::mutex> lock(global);
+        std::lock_guard<std::mutex> lock(global_);
         {
             // Swap the connection relationship corresponding to the label to be deleted with the
             // last element, and modify the information in label_lookup_. By swapping the two points,
             // fill the void left by the deletion.
-            std::unique_lock<std::mutex> lock_table(label_lookup_lock);
+            std::unique_lock<std::mutex> lock_table(label_lookup_lock_);
             auto iter = label_lookup_.find(label);
             if (iter == label_lookup_.end()) {
                 throw std::runtime_error("no label in FreshHnsw");
@@ -1516,7 +1514,7 @@ public:
                                     std::vector<std::pair<float, tableint>>,
                                     CompareByFirst>
                     candidates;
-                std::unordered_set<tableint> unique_ids;
+                vsag::UnorderedSet<tableint> unique_ids(allocator_);
 
                 // Add the original neighbors of the indegree node to the candidate queue.
                 for (int i = 0; i < size_cur; ++i) {
@@ -1576,7 +1574,7 @@ public:
         {
             // Checking if the element with the same label already exists
             // if so, updating it *instead* of creating a new element.
-            std::unique_lock<std::mutex> lock_table(label_lookup_lock);
+            std::unique_lock<std::mutex> lock_table(label_lookup_lock_);
             auto search = label_lookup_.find(label);
             if (search != label_lookup_.end()) {
                 return -1;
@@ -1600,7 +1598,7 @@ public:
             curlevel = level;
 
         element_levels_[cur_c] = curlevel;
-        std::unique_lock<std::mutex> lock(global);
+        std::unique_lock<std::mutex> lock(global_);
         int maxlevelcopy = maxlevel_;
         if (curlevel <= maxlevelcopy)
             lock.unlock();
@@ -1817,13 +1815,13 @@ public:
     void
     checkIntegrity() {
         int connections_checked = 0;
-        std::vector<int> inbound_connections_num(cur_element_count_, 0);
+        vsag::Vector<int> inbound_connections_num(cur_element_count_, 0, allocator_);
         for (int i = 0; i < cur_element_count_; i++) {
             for (int l = 0; l <= element_levels_[i]; l++) {
                 linklistsizeint* ll_cur = get_linklist_at_level(i, l);
                 int size = getListCount(ll_cur);
                 tableint* data = (tableint*)(ll_cur + 1);
-                std::unordered_set<tableint> s;
+                vsag::UnorderedSet<tableint> s(allocator_);
                 for (int j = 0; j < size; j++) {
                     assert(data[j] > 0);
                     assert(data[j] < cur_element_count_);

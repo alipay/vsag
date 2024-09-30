@@ -65,10 +65,10 @@ HierarchicalNSW::HierarchicalNSW(SpaceInterface* s,
 
     // initializations for special treatment of the first node
     enterpoint_node_ = -1;
-    maxlevel_ = -1;
+    max_level_ = -1;
     size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
     mult_ = 1 / log(1.0 * static_cast<double>(M_));
-    revSize_ = 1.0 / mult_;
+    rev_size_ = 1.0 / mult_;
 }
 
 bool
@@ -799,7 +799,7 @@ HierarchicalNSW::SerializeImpl(StreamWriter& writer) {
     WriteOne(writer, size_data_per_element_);
     WriteOne(writer, label_offset_);
     WriteOne(writer, offsetData_);
-    WriteOne(writer, maxlevel_);
+    WriteOne(writer, max_level_);
     WriteOne(writer, enterpoint_node_);
     WriteOne(writer, maxM_);
 
@@ -868,7 +868,7 @@ HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t
     ReadOne(reader, size_data_per_element_);
     ReadOne(reader, label_offset_);
     ReadOne(reader, offsetData_);
-    ReadOne(reader, maxlevel_);
+    ReadOne(reader, max_level_);
     ReadOne(reader, enterpoint_node_);
 
     ReadOne(reader, maxM_);
@@ -890,7 +890,7 @@ HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t
     vsag::Vector<std::recursive_mutex>(max_elements, allocator_).swap(link_list_locks_);
     vsag::Vector<std::mutex>(MAX_LABEL_OPERATION_LOCKS, allocator_).swap(label_op_locks_);
 
-    revSize_ = 1.0 / mult_;
+    rev_size_ = 1.0 / mult_;
     for (size_t i = 0; i < cur_element_count_; i++) {
         label_lookup_[getExternalLabel(i)] = i;
         unsigned int link_list_size;
@@ -1178,7 +1178,7 @@ HierarchicalNSW::removePoint(labeltype label) {
                 getEdges(cur_c, level).clear();
             }
             enterpoint_node_ = -1;
-            maxlevel_ = -1;
+            max_level_ = -1;
             return;
         } else if (cur_c != internal_id) {
             label_lookup_[getExternalLabel(cur_c)] = internal_id;
@@ -1188,11 +1188,11 @@ HierarchicalNSW::removePoint(labeltype label) {
 
     // If the node to be deleted is an entry node, find another top-level node.
     if (cur_c == enterpoint_node_) {
-        for (int level = maxlevel_; level >= 0; level--) {
+        for (int level = max_level_; level >= 0; level--) {
             auto data = (unsigned int*)getLinklistAtLevel(enterpoint_node_, level);
             int size = getListCount(data);
             if (size != 0) {
-                maxlevel_ = level;
+                max_level_ = level;
                 enterpoint_node_ = *(data + 1);
                 break;
             }
@@ -1294,7 +1294,7 @@ HierarchicalNSW::addPoint(const void* data_point, labeltype label, int level) {
 
     element_levels_[cur_c] = curlevel;
     std::unique_lock<std::mutex> lock(global_);
-    int maxlevelcopy = maxlevel_;
+    int maxlevelcopy = max_level_;
     if (curlevel <= maxlevelcopy)
         lock.unlock();
     tableint currObj = enterpoint_node_;
@@ -1363,13 +1363,13 @@ HierarchicalNSW::addPoint(const void* data_point, labeltype label, int level) {
     } else {
         // Do nothing for the first element
         enterpoint_node_ = 0;
-        maxlevel_ = curlevel;
+        max_level_ = curlevel;
     }
 
     // Releasing lock for the maximum level
     if (curlevel > maxlevelcopy) {
         enterpoint_node_ = cur_c;
-        maxlevel_ = curlevel;
+        max_level_ = curlevel;
     }
     return cur_c;
 }
@@ -1388,7 +1388,7 @@ HierarchicalNSW::searchKnn(const void* query_data,
     tableint currObj = enterpoint_node_;
     float curdist =
         fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
-    for (int level = maxlevel_; level > 0; level--) {
+    for (int level = max_level_; level > 0; level--) {
         bool changed = true;
         while (changed) {
             changed = false;
@@ -1446,7 +1446,7 @@ HierarchicalNSW::searchRange(const void* query_data,
     float curdist =
         fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
 
-    for (int level = maxlevel_; level > 0; level--) {
+    for (int level = max_level_; level > 0; level--) {
         bool changed = true;
         while (changed) {
             changed = false;

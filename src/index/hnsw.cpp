@@ -268,7 +268,7 @@ HNSW::knn_search(const DatasetPtr& query,
 
         // return result
 
-        result->Dim(results.size())->NumElements(1)->Owner(true, allocator_.get());
+        result->Dim(results.size())->NumElements(1)->Owner(true, allocator_->GetRowAllocator());
 
         int64_t* ids = (int64_t*)allocator_->Allocate(sizeof(int64_t) * results.size());
         result->Ids(ids);
@@ -377,13 +377,11 @@ HNSW::range_search(const DatasetPtr& query,
         if (limited_size >= 1) {
             target_size = std::min((size_t)limited_size, target_size);
         }
+        result->Dim(target_size)->NumElements(1)->Owner(true, allocator_->GetRowAllocator());
         int64_t* ids = (int64_t*)allocator_->Allocate(sizeof(int64_t) * target_size);
+        result->Ids(ids);
         float* dists = (float*)allocator_->Allocate(sizeof(float) * target_size);
-        result->Dim(target_size)
-            ->NumElements(1)
-            ->Ids(ids)
-            ->Distances(dists)
-            ->Owner(true, allocator_.get());
+        result->Distances(dists);
         for (int64_t j = results.size() - 1; j >= 0; --j) {
             if (j < target_size) {
                 dists[j] = results.top().first;
@@ -686,9 +684,11 @@ HNSW::brute_force(const DatasetPtr& query, int64_t k) {
             fmt::format("query.dim({}) must be equal to index.dim({})", query->GetDim(), dim_));
 
         auto result = Dataset::Make();
+        result->NumElements(k)->Owner(true, allocator_->GetRowAllocator());
         int64_t* ids = (int64_t*)allocator_->Allocate(sizeof(int64_t) * k);
+        result->Ids(ids);
         float* dists = (float*)allocator_->Allocate(sizeof(float) * k);
-        result->Ids(ids)->Distances(dists)->NumElements(k)->Owner(true, allocator_.get());
+        result->Distances(dists);
 
         auto vector = query->GetFloat32Vectors();
         std::shared_lock lock(rw_mutex_);

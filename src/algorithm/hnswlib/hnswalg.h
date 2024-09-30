@@ -70,8 +70,8 @@ private:
     size_t ef_construction_{0};
     size_t dim_{0};
 
-    double mult_{0.0}, revSize_{0.0};
-    int maxlevel_{0};
+    double mult_{0.0}, rev_size_{0.0};
+    int max_level_{0};
 
     std::shared_ptr<VisitedListPool> visited_list_pool_{nullptr};
 

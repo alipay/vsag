@@ -62,7 +62,7 @@ get_common_used_dims() {
 std::vector<float>
 generate_vectors(int64_t num_vectors, int64_t dim, bool need_normalize, int seed) {
     std::mt19937 rng(seed);
-    std::uniform_real_distribution<> distrib_real;
+    std::uniform_real_distribution<> distrib_real(0, 1);
     std::vector<float> vectors(dim * num_vectors);
     for (int64_t i = 0; i < dim * num_vectors; ++i) {
         vectors[i] = distrib_real(rng);
@@ -89,8 +89,7 @@ generate_int4_codes(uint64_t count, uint32_t dim, int seed) {
             float delta = vec[d + i * dim];
             if (delta < 0) {
                 delta = 0;
-            }
-            if (delta > 0.999) {
+            } else if (delta > 0.999) {
                 delta = 1;
             }
             uint8_t scaled = 15.0 * delta;

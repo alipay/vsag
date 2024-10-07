@@ -61,7 +61,7 @@ template <MetricType metric>
 SQ4Quantizer<metric>::SQ4Quantizer(int dim) : Quantizer<SQ4Quantizer<metric>>(dim) {
     this->code_size_ = (dim + 1) >> 1 << 1;
     lower_bound_.resize(dim, std::numeric_limits<DataType>::max());
-    diff_.resize(dim, std::numeric_limits<DataType>::min());
+    diff_.resize(dim, std::numeric_limits<DataType>::lowest());
 }
 
 template <MetricType metric>
@@ -70,6 +70,9 @@ SQ4Quantizer<metric>::TrainImpl(const DataType* data, uint64_t count) {
     if (data == nullptr) {
         return false;
     }
+
+    std::fill(lower_bound_.begin(), lower_bound_.end(), std::numeric_limits<DataType>::max());
+    std::fill(diff_.begin(), diff_.end(), std::numeric_limits<DataType>::lowest());
 
     for (uint64_t i = 0; i < count; i++) {
         for (uint64_t d = 0; d < this->dim_; d++) {
@@ -155,11 +158,11 @@ SQ4Quantizer<metric>::DecodeBatchImpl(const uint8_t* codes, DataType* data, uint
 template <MetricType metric>
 inline float
 SQ4Quantizer<metric>::ComputeImpl(const uint8_t* codes1, const uint8_t* codes2) {
-    if (metric == MetricType::METRIC_TYPE_L2SQR) {
+    if constexpr (metric == MetricType::METRIC_TYPE_L2SQR) {
         return SQ4ComputeCodesL2Sqr(codes1, codes2, lower_bound_.data(), diff_.data(), this->dim_);
-    } else if (metric == MetricType::METRIC_TYPE_IP) {
+    } else if constexpr (metric == MetricType::METRIC_TYPE_IP) {
         return SQ4ComputeCodesIP(codes1, codes2, lower_bound_.data(), diff_.data(), this->dim_);
-    } else if (metric == MetricType::METRIC_TYPE_COSINE) {
+    } else if constexpr (metric == MetricType::METRIC_TYPE_COSINE) {
         return SQ4ComputeCodesIP(codes1, codes2, lower_bound_.data(), diff_.data(), this->dim_);
     } else {
         return 0;
@@ -171,7 +174,7 @@ void
 SQ4Quantizer<metric>::ProcessQueryImpl(const DataType* query,
                                        Computer<SQ4Quantizer>& computer) const {
     try {
-        computer.buf_ = new uint8_t[this->code_size_];
+        computer.buf_ = new uint8_t[this->code_size_];  // todo: replace with allocator
         this->EncodeOneImpl(query, computer.buf_);
     } catch (const std::bad_alloc& e) {
         computer.buf_ = nullptr;
@@ -184,13 +187,13 @@ void
 SQ4Quantizer<metric>::ComputeDistImpl(Computer<SQ4Quantizer>& computer,
                                       const uint8_t* codes,
                                       float* dists) const {
-    if (metric == MetricType::METRIC_TYPE_L2SQR) {
+    if constexpr (metric == MetricType::METRIC_TYPE_L2SQR) {
         dists[0] = SQ4ComputeCodesL2Sqr(
             computer.buf_, codes, lower_bound_.data(), diff_.data(), this->dim_);
-    } else if (metric == MetricType::METRIC_TYPE_IP) {
+    } else if constexpr (metric == MetricType::METRIC_TYPE_IP) {
         dists[0] =
             SQ4ComputeCodesIP(computer.buf_, codes, lower_bound_.data(), diff_.data(), this->dim_);
-    } else if (metric == MetricType::METRIC_TYPE_COSINE) {
+    } else if constexpr (metric == MetricType::METRIC_TYPE_COSINE) {
         dists[0] =
             SQ4ComputeCodesIP(computer.buf_, codes, lower_bound_.data(), diff_.data(), this->dim_);
     } else {

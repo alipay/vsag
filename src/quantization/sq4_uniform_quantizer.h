@@ -63,6 +63,12 @@ public:
 private:
     DataType lower_bound_{0};
     DataType diff_{0};
+
+    /***
+     * code layout: sq-code(fixed) + norm(opt) + sum(opt)
+     * for L2 and COSINE, norm is needed for fast computation
+     * for IP and COSINE, sum is needed for restoring original distance
+     */
     uint64_t offset_code_{0};
     uint64_t offset_norm_{0};
     uint64_t offset_sum_{0};
@@ -72,19 +78,21 @@ template <MetricType metric>
 SQ4UniformQuantizer<metric>::SQ4UniformQuantizer(int dim)
     : Quantizer<SQ4UniformQuantizer<metric>>(dim) {
     lower_bound_ = std::numeric_limits<DataType>::max();
-    diff_ = std::numeric_limits<DataType>::min();
+    diff_ = std::numeric_limits<DataType>::lowest();
 
     this->code_size_ = 0;
 
     offset_code_ = this->code_size_;
     this->code_size_ += (dim + 1) >> 1 << 1;
 
-    if (metric == MetricType::METRIC_TYPE_L2SQR or metric == MetricType::METRIC_TYPE_COSINE) {
+    if constexpr (metric == MetricType::METRIC_TYPE_L2SQR or
+                  metric == MetricType::METRIC_TYPE_COSINE) {
         offset_norm_ = this->code_size_;
         this->code_size_ += sizeof(norm_type);  // norm of vector
     }
 
-    if (metric == MetricType::METRIC_TYPE_IP or metric == MetricType::METRIC_TYPE_COSINE) {
+    if constexpr (metric == MetricType::METRIC_TYPE_IP or
+                  metric == MetricType::METRIC_TYPE_COSINE) {
         offset_sum_ = this->code_size_;
         this->code_size_ += sizeof(sum_type);  // sum of vector
     }
@@ -96,6 +104,9 @@ SQ4UniformQuantizer<metric>::TrainImpl(const DataType* data, uint64_t count) {
     if (data == nullptr) {
         return false;
     }
+
+    lower_bound_ = std::numeric_limits<DataType>::max();
+    diff_ = std::numeric_limits<DataType>::lowest();
 
     for (uint64_t i = 0; i < count; i++) {
         for (uint64_t d = 0; d < this->dim_; d++) {
@@ -145,11 +156,12 @@ SQ4UniformQuantizer<metric>::EncodeOneImpl(const DataType* data, uint8_t* codes)
         sum += data[d];
     }
 
-    if (metric == MetricType::METRIC_TYPE_L2SQR or metric == MetricType::METRIC_TYPE_COSINE) {
+    if constexpr (metric == MetricType::METRIC_TYPE_L2SQR or
+                  metric == MetricType::METRIC_TYPE_COSINE) {
         *(norm_type*)(codes + offset_norm_) = norm;
     }
 
-    if (metric == MetricType::METRIC_TYPE_IP) {
+    if constexpr (metric == MetricType::METRIC_TYPE_IP) {
         *(sum_type*)(codes + offset_sum_) = sum;
     }
 
@@ -192,14 +204,14 @@ template <MetricType metric>
 inline float
 SQ4UniformQuantizer<metric>::ComputeImpl(const uint8_t* codes1, const uint8_t* codes2) const {
     float result = 0;
-    if (metric == MetricType::METRIC_TYPE_L2SQR) {
+    if constexpr (metric == MetricType::METRIC_TYPE_L2SQR) {
         result = SQ4UniformComputeCodesIP(codes1, codes2, this->dim_);
 
         norm_type norm1 = *((norm_type*)(codes1 + offset_norm_));
         norm_type norm2 = *((norm_type*)(codes2 + offset_norm_));
 
         result = norm1 + norm2 - 2 * result;
-    } else if (metric == MetricType::METRIC_TYPE_IP) {
+    } else if constexpr (metric == MetricType::METRIC_TYPE_IP) {
         result = SQ4UniformComputeCodesIP(codes1, codes2, this->dim_);
 
         sum_type sum1 = *((sum_type*)(codes1 + offset_sum_));
@@ -208,7 +220,7 @@ SQ4UniformQuantizer<metric>::ComputeImpl(const uint8_t* codes1, const uint8_t* c
         result = lower_bound_ * (sum1 + sum2) + (diff_ / 15.0) * (diff_ / 15.0) * result -
                  lower_bound_ * lower_bound_;
 
-    } else if (metric == MetricType::METRIC_TYPE_COSINE) {
+    } else if constexpr (metric == MetricType::METRIC_TYPE_COSINE) {
         result = SQ4UniformComputeCodesIP(codes1, codes2, this->dim_);
 
         sum_type sum1 = *((sum_type*)(codes1 + offset_sum_));
@@ -228,7 +240,7 @@ void
 SQ4UniformQuantizer<metric>::ProcessQueryImpl(const DataType* query,
                                               Computer<SQ4UniformQuantizer>& computer) const {
     try {
-        computer.buf_ = new uint8_t[this->code_size_];
+        computer.buf_ = new uint8_t[this->code_size_];  // todo: replace with allocator
         this->EncodeOneImpl(query, computer.buf_);
     } catch (const std::bad_alloc& e) {
         computer.buf_ = nullptr;

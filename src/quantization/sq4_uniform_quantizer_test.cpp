@@ -26,7 +26,7 @@ using namespace vsag;
 TEST_CASE("SQ4 Uniform Encode and Decode", "[ut][SQ4UniformQuantizer]") {
     auto dims = fixtures::get_common_used_dims();
     uint32_t size = 1000;
-    float error = 0.1;
+    float error = 1.0f / 15.0f;
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
 

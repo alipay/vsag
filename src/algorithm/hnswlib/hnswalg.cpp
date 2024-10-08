@@ -51,7 +51,7 @@ HierarchicalNSW::HierarchicalNSW(SpaceInterface* s,
 
     size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
     size_data_per_element_ = size_links_level0_ + data_size_ + sizeof(labeltype);
-    offsetData_ = size_links_level0_;
+    offset_data_ = size_links_level0_;
     label_offset_ = size_links_level0_ + data_size_;
     offsetLevel0_ = 0;
 
@@ -395,7 +395,7 @@ HierarchicalNSW::searchBaseLayerST(tableint ep_id,
             metric_distance_computations_ += size;
         }
 
-        auto vector_data_ptr = data_level0_memory_->GetElementPtr((*(data + 1)), offsetData_);
+        auto vector_data_ptr = data_level0_memory_->GetElementPtr((*(data + 1)), offset_data_);
 #ifdef USE_SSE
         _mm_prefetch((char*)(visited_array + *(data + 1)), _MM_HINT_T0);
         _mm_prefetch((char*)(visited_array + *(data + 1) + 64), _MM_HINT_T0);
@@ -407,7 +407,7 @@ HierarchicalNSW::searchBaseLayerST(tableint ep_id,
             int candidate_id = *(data + j);
             size_t pre_l = std::min(j, size - 2);
             vector_data_ptr =
-                data_level0_memory_->GetElementPtr((*(data + pre_l + 1)), offsetData_);
+                data_level0_memory_->GetElementPtr((*(data + pre_l + 1)), offset_data_);
 #ifdef USE_SSE
             _mm_prefetch((char*)(visited_array + *(data + pre_l + 1)), _MM_HINT_T0);
             _mm_prefetch(vector_data_ptr, _MM_HINT_T0);  ////////////
@@ -487,7 +487,7 @@ HierarchicalNSW::searchBaseLayerST(tableint ep_id,
             metric_distance_computations_ += size;
         }
 
-        auto vector_data_ptr = data_level0_memory_->GetElementPtr((*(data + 1)), offsetData_);
+        auto vector_data_ptr = data_level0_memory_->GetElementPtr((*(data + 1)), offset_data_);
 #ifdef USE_SSE
         _mm_prefetch((char*)(visited_array + *(data + 1)), _MM_HINT_T0);
         _mm_prefetch((char*)(visited_array + *(data + 1) + 64), _MM_HINT_T0);
@@ -499,7 +499,7 @@ HierarchicalNSW::searchBaseLayerST(tableint ep_id,
             int candidate_id = *(data + j);
             size_t pre_l = std::min(j, size - 2);
             vector_data_ptr =
-                data_level0_memory_->GetElementPtr((*(data + pre_l + 1)), offsetData_);
+                data_level0_memory_->GetElementPtr((*(data + pre_l + 1)), offset_data_);
 #ifdef USE_SSE
             _mm_prefetch((char*)(visited_array + *(data + pre_l + 1)), _MM_HINT_T0);
             _mm_prefetch(vector_data_ptr, _MM_HINT_T0);  ////////////
@@ -798,7 +798,7 @@ HierarchicalNSW::SerializeImpl(StreamWriter& writer) {
     WriteOne(writer, cur_element_count_);
     WriteOne(writer, size_data_per_element_);
     WriteOne(writer, label_offset_);
-    WriteOne(writer, offsetData_);
+    WriteOne(writer, offset_data_);
     WriteOne(writer, max_level_);
     WriteOne(writer, enterpoint_node_);
     WriteOne(writer, maxM_);
@@ -867,7 +867,7 @@ HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t
     ReadOne(reader, cur_element_count_);
     ReadOne(reader, size_data_per_element_);
     ReadOne(reader, label_offset_);
-    ReadOne(reader, offsetData_);
+    ReadOne(reader, offset_data_);
     ReadOne(reader, max_level_);
     ReadOne(reader, enterpoint_node_);
 

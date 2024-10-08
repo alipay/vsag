@@ -84,7 +84,7 @@ private:
     tableint enterpoint_node_{0};
 
     size_t size_links_level0_{0};
-    size_t offsetData_{0};
+    size_t offset_data_{0};
     size_t offsetLevel0_{0};
     size_t label_offset_{0};
 
@@ -206,7 +206,7 @@ public:
 
     inline char*
     getDataByInternalId(tableint internal_id) const {
-        return (data_level0_memory_->GetElementPtr(internal_id, offsetData_));
+        return (data_level0_memory_->GetElementPtr(internal_id, offset_data_));
     }
 
     std::priority_queue<std::pair<float, labeltype>>

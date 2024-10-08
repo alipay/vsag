@@ -60,6 +60,7 @@ if (CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64" AND ENABLE_INTEL_MKL)
     message ("enable intel-mkl as blas backend")
 else ()
     set (BLAS_LIBRARIES
+        gomp
         libopenblas.a
     )
     message ("enable openblas as blas backend")

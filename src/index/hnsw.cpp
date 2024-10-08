@@ -72,13 +72,13 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
     if (not allocator) {
         allocator = DefaultAllocator::Instance();
     }
-    allocator_ = new SafeAllocator(allocator);
+    allocator_ = std::shared_ptr<SafeAllocator>(new SafeAllocator(allocator));
 
     if (!use_static_) {
         alg_hnsw =
             std::make_shared<hnswlib::HierarchicalNSW>(space.get(),
                                                        DEFAULT_MAX_ELEMENT,
-                                                       allocator_,
+                                                       allocator_.get(),
                                                        M,
                                                        ef_construction,
                                                        use_reversed_edges_,
@@ -87,13 +87,12 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
     } else {
         if (dim_ % 4 != 0) {
             // FIXME(wxyu): remove throw stmt from construct function
-            delete allocator_;
             throw std::runtime_error("cannot build static hnsw while dim % 4 != 0");
         }
         alg_hnsw = std::make_shared<hnswlib::StaticHierarchicalNSW>(
             space.get(),
             DEFAULT_MAX_ELEMENT,
-            allocator_,
+            allocator_.get(),
             M,
             ef_construction,
             Options::Instance().block_size_limit());
@@ -117,6 +116,9 @@ HNSW::build(const DatasetPtr& base) {
         int64_t num_elements = base->GetNumElements();
 
         std::unique_lock lock(rw_mutex_);
+        if (auto result = init_memory_space(); not result.has_value()) {
+            return tl::unexpected(result.error());
+        }
 
         auto ids = base->GetIds();
         auto vectors = base->GetFloat32Vectors();
@@ -164,6 +166,9 @@ HNSW::add(const DatasetPtr& base) {
         std::vector<int64_t> failed_ids;
 
         std::unique_lock lock(rw_mutex_);
+        if (auto result = init_memory_space(); not result.has_value()) {
+            return tl::unexpected(result.error());
+        }
         for (int64_t i = 0; i < num_elements; ++i) {
             // noexcept runtime
             if (!alg_hnsw->addPoint((const void*)(vectors + i * dim_), ids[i])) {
@@ -264,13 +269,14 @@ HNSW::knn_search(const DatasetPtr& query,
         }
 
         // return result
+
+        result->Dim(results.size())->NumElements(1)->Owner(true, allocator_->GetRawAllocator());
+
         int64_t* ids = (int64_t*)allocator_->Allocate(sizeof(int64_t) * results.size());
+        result->Ids(ids);
         float* dists = (float*)allocator_->Allocate(sizeof(float) * results.size());
-        result->Dim(results.size())
-            ->NumElements(1)
-            ->Ids(ids)
-            ->Distances(dists)
-            ->Owner(true, allocator_);
+        result->Distances(dists);
+
         for (int64_t j = results.size() - 1; j >= 0; --j) {
             dists[j] = results.top().first;
             ids[j] = results.top().second;
@@ -373,13 +379,11 @@ HNSW::range_search(const DatasetPtr& query,
         if (limited_size >= 1) {
             target_size = std::min((size_t)limited_size, target_size);
         }
+        result->Dim(target_size)->NumElements(1)->Owner(true, allocator_->GetRawAllocator());
         int64_t* ids = (int64_t*)allocator_->Allocate(sizeof(int64_t) * target_size);
+        result->Ids(ids);
         float* dists = (float*)allocator_->Allocate(sizeof(float) * target_size);
-        result->Dim(target_size)
-            ->NumElements(1)
-            ->Ids(ids)
-            ->Distances(dists)
-            ->Owner(true, allocator_);
+        result->Distances(dists);
         for (int64_t j = results.size() - 1; j >= 0; --j) {
             if (j < target_size) {
                 dists[j] = results.top().first;
@@ -498,6 +502,9 @@ HNSW::deserialize(const BinarySet& binary_set) {
 
     try {
         std::unique_lock lock(rw_mutex_);
+        if (auto result = init_memory_space(); not result.has_value()) {
+            return tl::unexpected(result.error());
+        }
         alg_hnsw->loadIndex(func, this->space.get());
         if (use_conjugate_graph_) {
             Binary b_cg = binary_set.Get(CONJUGATE_GRAPH_DATA);
@@ -534,6 +541,9 @@ HNSW::deserialize(const ReaderSet& reader_set) {
 
     try {
         std::unique_lock lock(rw_mutex_);
+        if (auto result = init_memory_space(); not result.has_value()) {
+            return tl::unexpected(result.error());
+        }
         alg_hnsw->loadIndex(func, this->space.get());
     } catch (const std::runtime_error& e) {
         LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to deserialize: ", e.what());
@@ -552,6 +562,9 @@ HNSW::deserialize(std::istream& in_stream) {
 
     try {
         std::unique_lock lock(rw_mutex_);
+        if (auto result = init_memory_space(); not result.has_value()) {
+            return tl::unexpected(result.error());
+        }
         alg_hnsw->loadIndex(in_stream, this->space.get());
         if (use_conjugate_graph_ and not conjugate_graph_->Deserialize(in_stream).has_value()) {
             throw std::runtime_error("error in deserialize conjugate graph");
@@ -673,9 +686,11 @@ HNSW::brute_force(const DatasetPtr& query, int64_t k) {
             fmt::format("query.dim({}) must be equal to index.dim({})", query->GetDim(), dim_));
 
         auto result = Dataset::Make();
+        result->NumElements(k)->Owner(true, allocator_->GetRawAllocator());
         int64_t* ids = (int64_t*)allocator_->Allocate(sizeof(int64_t) * k);
+        result->Ids(ids);
         float* dists = (float*)allocator_->Allocate(sizeof(float) * k);
-        result->Ids(ids)->Distances(dists)->NumElements(k)->Owner(true, allocator_);
+        result->Distances(dists);
 
         auto vector = query->GetFloat32Vectors();
         std::shared_lock lock(rw_mutex_);
@@ -771,6 +786,20 @@ HNSW::pretrain(const std::vector<int64_t>& base_tag_ids,
     }
 
     return add_edges;
+}
+
+tl::expected<bool, Error>
+HNSW::init_memory_space() {
+    if (is_init_memory_) {
+        return true;
+    }
+    try {
+        alg_hnsw->init_memory_space();
+    } catch (std::runtime_error& r) {
+        LOG_ERROR_AND_RETURNS(ErrorType::NO_ENOUGH_MEMORY, "allocate memory failed:", r.what());
+    }
+    is_init_memory_ = true;
+    return true;
 }
 
 }  // namespace vsag

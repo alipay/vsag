@@ -59,7 +59,7 @@ private:
 
 template <MetricType metric>
 SQ4Quantizer<metric>::SQ4Quantizer(int dim) : Quantizer<SQ4Quantizer<metric>>(dim) {
-    this->code_size_ = (dim + 1) >> 1 << 1;
+    this->code_size_ = (dim + (1 << 6) - 1) >> 6 << 6;
     lower_bound_.resize(dim, std::numeric_limits<DataType>::max());
     diff_.resize(dim, std::numeric_limits<DataType>::lowest());
 }

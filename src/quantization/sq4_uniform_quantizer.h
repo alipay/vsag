@@ -80,22 +80,36 @@ SQ4UniformQuantizer<metric>::SQ4UniformQuantizer(int dim)
     lower_bound_ = std::numeric_limits<DataType>::max();
     diff_ = std::numeric_limits<DataType>::lowest();
 
+    size_t align_size = 1;
+    if constexpr (metric == MetricType::METRIC_TYPE_L2SQR or
+                  metric == MetricType::METRIC_TYPE_COSINE) {
+        align_size = std::max(align_size, sizeof(norm_type));
+    }
+    if constexpr (metric == MetricType::METRIC_TYPE_IP or
+                  metric == MetricType::METRIC_TYPE_COSINE) {
+        align_size = std::max(align_size, sizeof(sum_type));
+    }
     this->code_size_ = 0;
 
     offset_code_ = this->code_size_;
-    this->code_size_ += (dim + 1) >> 1 << 1;
+    this->code_size_ += ((dim + align_size - 1) / align_size) * align_size;
 
     if constexpr (metric == MetricType::METRIC_TYPE_L2SQR or
                   metric == MetricType::METRIC_TYPE_COSINE) {
         offset_norm_ = this->code_size_;
-        this->code_size_ += sizeof(norm_type);  // norm of vector
+        this->code_size_ +=
+            ((sizeof(norm_type) + align_size - 1) / align_size) * align_size;  // norm of vector
     }
 
     if constexpr (metric == MetricType::METRIC_TYPE_IP or
                   metric == MetricType::METRIC_TYPE_COSINE) {
         offset_sum_ = this->code_size_;
-        this->code_size_ += sizeof(sum_type);  // sum of vector
+        this->code_size_ +=
+            ((sizeof(sum_type) + align_size - 1) / align_size) * align_size;  // sum of vector
     }
+
+    // align 64 bytes (512 bits) to avoid illegal memory access in SIMD
+    this->code_size_ = (this->code_size_ + (1 << 6) - 1) >> 6 << 6;
 }
 
 template <MetricType metric>

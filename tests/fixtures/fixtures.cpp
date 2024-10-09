@@ -62,7 +62,7 @@ get_common_used_dims() {
 std::vector<float>
 generate_vectors(int64_t num_vectors, int64_t dim, bool need_normalize, int seed) {
     std::mt19937 rng(seed);
-    std::uniform_real_distribution<> distrib_real(0, 1);
+    std::uniform_real_distribution<> distrib_real(-0.5, 0.5);
     std::vector<float> vectors(dim * num_vectors);
     for (int64_t i = 0; i < dim * num_vectors; ++i) {
         vectors[i] = distrib_real(rng);

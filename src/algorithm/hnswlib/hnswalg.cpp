@@ -74,10 +74,15 @@ HierarchicalNSW::HierarchicalNSW(SpaceInterface* s,
 void
 HierarchicalNSW::reset() {
     allocator_->Deallocate(element_levels_);
+    element_levels_ = nullptr;
     allocator_->Deallocate(reversed_level0_link_list_);
+    reversed_level0_link_list_ = nullptr;
     allocator_->Deallocate(reversed_link_lists_);
+    reversed_link_lists_ = nullptr;
     allocator_->Deallocate(molds_);
+    molds_ = nullptr;
     allocator_->Deallocate(link_lists_);
+    link_lists_ = nullptr;
 }
 
 bool

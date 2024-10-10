@@ -1,0 +1,38 @@
+{
+    "index_type": "HGraph",
+    "metric_type": "l2",
+    "dim": 128,
+    "index_param": {
+        "use_reorder": true,
+        "graph": {
+            "io_type": "block_memory",
+            "type": "NSW",
+        },
+        "base_codes": {
+            "io_type": "block_memory",
+            "io_params": {
+                "block_size": "128MB"
+            },
+            "codes_type": "flatten_codes",
+            "codes_param": {
+            },
+            "quantization_type": "pq",
+            "quantization_params": {
+                "subspace": 64,
+                "nbits": 8,
+            },
+        },
+        "precise_codes": {
+            "io_type": "aio_ssd",
+            "io_params": {
+                "block_size": "128MB"
+            },
+            "codes_type": "flatten_codes",
+            "codes_param": {
+            },
+            "quantization_type": "sq8",
+            "quantization_params": {
+            },
+        }
+    }
+}

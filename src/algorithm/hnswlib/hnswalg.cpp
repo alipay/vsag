@@ -269,12 +269,12 @@ HierarchicalNSW::getRandomLevel(double reverse_size) {
 
 MaxHeap
 HierarchicalNSW::searchBaseLayer(tableint ep_id, const void* data_point, int layer) {
-    VisitedList* vl = visited_list_pool_->getFreeVisitedList();
+    std::shared_ptr<VisitedList> vl = visited_list_pool_->getFreeVisitedList();
     vl_type* visited_array = vl->mass;
     vl_type visited_array_tag = vl->curV;
 
-    MaxHeap top_candidates;
-    MaxHeap candidateSet;
+    MaxHeap top_candidates(allocator_);
+    MaxHeap candidateSet(allocator_);
 
     float lowerBound;
     if (!isMarkedDeleted(ep_id)) {
@@ -356,12 +356,12 @@ HierarchicalNSW::searchBaseLayerST(tableint ep_id,
                                    const void* data_point,
                                    size_t ef,
                                    BaseFilterFunctor* isIdAllowed) const {
-    VisitedList* vl = visited_list_pool_->getFreeVisitedList();
+    std::shared_ptr<VisitedList> vl = visited_list_pool_->getFreeVisitedList();
     vl_type* visited_array = vl->mass;
     vl_type visited_array_tag = vl->curV;
 
-    MaxHeap top_candidates;
-    MaxHeap candidate_set;
+    MaxHeap top_candidates(allocator_);
+    MaxHeap candidate_set(allocator_);
 
     float lowerBound;
     if ((!has_deletions || !isMarkedDeleted(ep_id)) &&
@@ -450,12 +450,12 @@ HierarchicalNSW::searchBaseLayerST(tableint ep_id,
                                    float radius,
                                    int64_t ef,
                                    BaseFilterFunctor* isIdAllowed) const {
-    VisitedList* vl = visited_list_pool_->getFreeVisitedList();
+    std::shared_ptr<VisitedList> vl = visited_list_pool_->getFreeVisitedList();
     vl_type* visited_array = vl->mass;
     vl_type visited_array_tag = vl->curV;
 
-    MaxHeap top_candidates;
-    MaxHeap candidate_set;
+    MaxHeap top_candidates(allocator_);
+    MaxHeap candidate_set(allocator_);
 
     float lowerBound;
     if ((!has_deletions || !isMarkedDeleted(ep_id)) &&
@@ -652,7 +652,7 @@ HierarchicalNSW::mutuallyConnectNewElement(tableint cur_c,
                                            getDataByInternalId(selectedNeighbor),
                                            dist_func_param_);
                 // Heuristic:
-                MaxHeap candidates;
+                MaxHeap candidates(allocator_);
                 candidates.emplace(d_max, cur_c);
 
                 for (size_t j = 0; j < sz_link_list_other; j++) {
@@ -1209,7 +1209,7 @@ HierarchicalNSW::removePoint(labeltype label) {
         auto data_link_cur = (unsigned int*)(data_cur + 1);
 
         for (const auto in_edge : in_edges_cur) {
-            MaxHeap candidates;
+            MaxHeap candidates(allocator_);
             vsag::UnorderedSet<tableint> unique_ids(allocator_);
 
             // Add the original neighbors of the indegree node to the candidate queue.
@@ -1415,7 +1415,7 @@ HierarchicalNSW::searchKnn(const void* query_data,
         }
     }
 
-    MaxHeap top_candidates;
+    MaxHeap top_candidates(allocator_);
 
     top_candidates =
         searchBaseLayerST<false, true>(currObj, query_data, std::max(ef, k), isIdAllowed);
@@ -1473,7 +1473,7 @@ HierarchicalNSW::searchRange(const void* query_data,
         }
     }
 
-    MaxHeap top_candidates;
+    MaxHeap top_candidates(allocator_);
 
     top_candidates = searchBaseLayerST<false, true>(currObj, query_data, radius, ef, isIdAllowed);
 

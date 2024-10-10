@@ -171,9 +171,7 @@ HNSW::build(const DatasetPtr& base) {
         if (sq_num_bits_ != -1) {
             SlowTaskTimer t(fmt::format("sq transform to () bits", sq_num_bits_), 10);
             logger::info("start transform sq");
-            if (sq_num_bits_ == 8) {
-                alg_hnsw->transform_base();
-            } else if (sq_num_bits_ == 4) {
+            if (sq_num_bits_ == 8 or sq_num_bits_ == 4) {
                 alg_hnsw->transform_base_int4();
             } else {
                 throw std::invalid_argument(fmt::format("invalid sq_num_bits()", sq_num_bits_));
@@ -522,9 +520,7 @@ HNSW::deserialize(const BinarySet& binary_set) {
         }
         if (sq_num_bits_ != -1) {
             SlowTaskTimer t1("sq transform", 1000);
-            if (sq_num_bits_ == 8) {
-                alg_hnsw->transform_base();
-            } else if (sq_num_bits_ == 4) {
+            if (sq_num_bits_ == 8 or sq_num_bits_ == 4) {
                 alg_hnsw->transform_base_int4();
             }
             alg_hnsw->optimize();

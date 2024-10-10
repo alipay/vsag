@@ -51,7 +51,7 @@ int get_data(vsag::DatasetPtr& data, uint32_t expected_dim, std::string data_pat
 }
 
 
-int build() {
+int build(bool is_recompute = false) {
     auto logger = vsag::Options::Instance().logger();
     logger->SetLevel(vsag::Logger::Level::kDEBUG);
 
@@ -120,7 +120,7 @@ int build() {
                                          use_static ? "static" : "pure");
     auto build_parameters = fmt::format(BUILD_PARAM_FMT, metric_type, base_dim, BR, BL, sq_num_bits, use_static, 1.0);
     auto index = vsag::Factory::CreateIndex(algo_name, build_parameters).value();
-    if (std::filesystem::exists(index_path)) {
+    if (std::filesystem::exists(index_path) and not is_recompute) {
         logger->Debug(fmt::format("====Index Path Exists===="));
         logger->Debug(fmt::format("Index path: {}", index_path));
     } else {
@@ -156,7 +156,7 @@ int build() {
 }
 
 
-int calculate_gt() {
+int calculate_gt(bool is_recompute = false) {
     auto logger = vsag::Options::Instance().logger();
     logger->SetLevel(vsag::Logger::Level::kDEBUG);
 
@@ -227,7 +227,7 @@ int calculate_gt() {
         delete[] gt_data;
     }
 
-    if (not validate_gt){
+    if (not validate_gt or is_recompute){
         logger->Debug(fmt::format("====GT calculation start===="));
         std::fstream out_file(gt_path, std::ios::out | std::ios::binary);
 
@@ -411,26 +411,52 @@ int search(std::vector<uint32_t> efs, uint32_t k = 10) {
     return 0;
 }
 
-int main() {
+int main(int argc, char** argv) {
+    auto logger = vsag::Options::Instance().logger();
+
+    if (argc > 1) {
+        dataset = argv[1];
+    } else {
+        dataset = "gist-960-euclidean";
+    }
+
     // metadata
-    dataset = "gist-960-euclidean";
     target_npts = -1;
     use_static = false;
     sq_num_bits = 4;
     gt_dim = 100;
+    redundant_rate = 0;
 
     // prepare index and ground_truth
-    // build();
-//    calculate_gt();
+//    bool is_recompute = false;
+//    build(is_recompute);
+//    calculate_gt(is_recompute);
 
     // search
     std::vector<uint32_t> efs = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
-    efs.assign({80});
-    efs.resize(10, 80);
+
+//    redundant_rate = 0;
+//    std::vector<int> sqs = {-1, 4, 8};
+//    for (auto sq : sqs) {
+//        sq_num_bits = sq;
+//        logger->Info(fmt::format("sq: {}, rr: {}", sq_num_bits, redundant_rate));
+//        search(efs);
+//    }
+
     std::vector<float> redundant_rate_list = {0.5, 0.6, 0.7, 0.8, 0.9, 1.0};
     redundant_rate_list.assign({0, 1.0});
+
+    sq_num_bits = 4;
     for (auto rate : redundant_rate_list) {
         redundant_rate = rate;
+        logger->Info(fmt::format("sq: {}, rr: {}", sq_num_bits, redundant_rate));
+        search(efs);
+    }
+
+    sq_num_bits = 8;
+    for (auto rate : redundant_rate_list) {
+        redundant_rate = rate;
+        logger->Info(fmt::format("sq: {}, rr: {}", sq_num_bits, redundant_rate));
         search(efs);
     }
 }

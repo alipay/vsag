@@ -36,6 +36,7 @@
 #include "../../logger.h"
 #include "hnswlib.h"
 #include "visited_list_pool.h"
+#include "../../simd/simd.h"
 
 namespace hnswlib {
 typedef unsigned int tableint;
@@ -118,7 +119,7 @@ private:
     uint32_t pl_;
     uint32_t centroid_;
     uint64_t code_size_aligned_;
-    uint64_t cut_num_;
+    uint64_t cut_num_{0};
     uint64_t* offset_code_;
     float redundant_rate_;
     mutable uint8_t* to_be_prefetch_;
@@ -308,12 +309,11 @@ public:
     }
 
     double
-    INT8_L2(int64_t* norm1,
+    INT8_L2_precompute(int64_t norm1,
             double norm2,
             const void* pVect1v,
             const void* pVect2v,
-            size_t qty,
-            uint8_t* prefetch = nullptr) const {
+            size_t qty) const {
         //        norm1 =
         //            INT8_IP(static_cast<const int8_t*>(pVect1v), static_cast<const int8_t*>(pVect1v), qty);
         //        norm2 =
@@ -322,9 +322,9 @@ public:
         //        assert(norm1 == norm1_);
         //        assert(norm2 == norm2_);
 
-        double innerProduct = INT8_InnerProduct512_AVX512_impl(pVect1v, pVect2v, qty, prefetch);
+        double innerProduct = INT8_InnerProduct512_AVX512_impl(pVect1v, pVect2v, qty, nullptr);
 
-        double l2Distance = *norm1 + norm2 - 2.0 * innerProduct;
+        double l2Distance = norm1 + norm2 - 2.0 * innerProduct;
         return l2Distance;
     }
 
@@ -339,6 +339,9 @@ public:
                 max_ = std::max(max_, data[d]);
             }
         }
+        if (dim == 960) {
+            max_ = 0.3;
+        }
     }
 
     void
@@ -349,7 +352,7 @@ public:
         int8_t scaled;
         for (int d = 0; d < dim; d++) {
             // TODO: max_ can be adjust to 0.5 to improve recall
-            delta = ((data[d] - min_) / (0.5 - min_));
+            delta = ((data[d] - min_) / (max_ - min_));
             if (delta < 0.0) {
                 delta = 0.0;
             }
@@ -629,7 +632,7 @@ public:
         float delta;
         uint8_t scaled;
         for (int d = 0; d < dim; ++d) {
-            delta = ((from[d] - min_) / (0.3 - min_));
+            delta = ((from[d] - min_) / (max_ - min_));
             if (delta < 0.0) {
                 delta = 0.0;
             }
@@ -650,7 +653,12 @@ public:
     transform_base_int4() override {
         compute_sq_interval();
         size_t dim = *(size_t*)dist_func_param_;
-        size_t code_size = dim / 2;
+        size_t code_size = 0;
+        if (sq_num_bits_ == 4) {
+            code_size = dim / 2;
+        } else if (sq_num_bits_ == 8) {
+            code_size = dim;
+        }
 
         struct AlignedDeleter {
             void
@@ -687,10 +695,17 @@ public:
         madvise(ptr, sz_close, MADV_HUGEPAGE);
         std::memset(ptr, 0, sz_close);
         data_int8 = std::shared_ptr<int8_t[]>(static_cast<int8_t*>(ptr), AlignedDeleter());
+        size_t dim_sz = dim;
         for (uint64_t i = 0; i < cur_element_count_; ++i) {  // note here mixed
+            int64_t norm = 0;
             auto* code = get_encoded_data(i, code_size_aligned_);
-            transform_to_int4((float*)getDataByInternalId(i), code);
-            int64_t norm = INT4_IP(code, code, dim);
+            if (sq_num_bits_ == 4) {
+                transform_to_int4((float*)getDataByInternalId(i), code);
+                norm = INT4_IP(code, code, dim);
+            } else if (sq_num_bits_ == 8){
+                transform_to_int8((float*)getDataByInternalId(i), code);
+                norm = INT8_IP(code, code, dim);
+            }
             memcpy(code + code_size, &norm, 8);
         }
 
@@ -1404,8 +1419,18 @@ public:
         float lowerBound;
         float dist;
         auto* codes_top = get_encoded_data(ep_id, code_size_aligned_);
-        float curdist = INT4_L2_precompute(
-            *((int64_t*)(codes_top + code_size)), norm2, codes_top, transformed_query, dim);
+        float curdist = 0;
+
+        if (sq_num_bits_ == 4) {
+            curdist = INT4_L2_precompute(
+                *((int64_t*)(codes_top + code_size)), norm2, codes_top, transformed_query, dim);
+        } else if (sq_num_bits_ == 8) {
+            curdist = INT8_L2_precompute(
+                *((int64_t*)(codes_top + code_size)), norm2, codes_top, transformed_query, dim);
+        } else {
+            curdist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
+        }
+
         lowerBound = curdist;
         top_candidates.emplace(curdist, ep_id);
         candidate_set.emplace(-curdist, ep_id);
@@ -1422,26 +1447,41 @@ public:
 
                 tableint* datal = (tableint*)(data + 1);
 
-                for (int i = 0; i < po_; i++) {
-                    mem_prefetch((uint8_t*)get_encoded_data(datal[i], code_size_aligned_), 512);
+                if (sq_num_bits_ == 4 or sq_num_bits_ == 8) {
+                    for (int i = 0; i < po_; i++) {
+                        mem_prefetch((uint8_t*)get_encoded_data(datal[i], code_size_aligned_), 512);
+                    }
                 }
 
                 for (int i = 0; i < size; i++) {
-                    if (i + po_ < size) {
-                        mem_prefetch((uint8_t*)get_encoded_data(datal[i + po_], code_size_aligned_),
-                                     512);
+                    if (sq_num_bits_ == 4 or sq_num_bits_ == 8) {
+                        if (i + po_ < size) {
+                            mem_prefetch((uint8_t*)get_encoded_data(datal[i + po_], code_size_aligned_),
+                                         512);
+                        }
                     }
                     tableint cand = datal[i];
                     if (visited_array[cand] == visited_array_tag) {
                         continue;
                     }
-
-                    codes_top = get_encoded_data(cand, code_size_aligned_);
-                    float d = INT4_L2_precompute(*((int64_t*)(codes_top + code_size)),
-                                                 norm2,
-                                                 codes_top,
-                                                 transformed_query,
-                                                 dim);
+                    float d = 0;
+                    if (sq_num_bits_ == 4) {
+                        codes_top = get_encoded_data(cand, code_size_aligned_);
+                        d = INT4_L2_precompute(*((int64_t*)(codes_top + code_size)),
+                                                     norm2,
+                                                     codes_top,
+                                                     transformed_query,
+                                                     dim);
+                    } else if (sq_num_bits_ == 8) {
+                        codes_top = get_encoded_data(cand, code_size_aligned_);
+                        d = INT8_L2_precompute(*((int64_t*)(codes_top + code_size)),
+                                               norm2,
+                                               codes_top,
+                                               transformed_query,
+                                               dim);
+                    } else {
+                        d = fstdistfunc_(data_point, getDataByInternalId(cand), dist_func_param_);
+                    }
 
                     visited_array[cand] = visited_array_tag;
                     if (top_candidates.size() < ef || lowerBound > d) {
@@ -1488,37 +1528,57 @@ public:
                                                         to_be_visited);
                 dist_cmp += count_no_visited;
 
-                for (size_t j = 0; j < this->po_; j++) {
-                    vector_data_ptr =
-                        (uint8_t*)get_encoded_data(to_be_visited[j], code_size_aligned_);
-#ifdef USE_SSE
-                    mem_prefetch_1(vector_data_ptr, this->pl_);
-#endif
+                if (sq_num_bits_ == 4 or sq_num_bits_ == 8) {
+                    for (size_t j = 0; j < this->po_; j++) {
+                        vector_data_ptr =
+                            (uint8_t*)get_encoded_data(to_be_visited[j], code_size_aligned_);
+                        mem_prefetch_1(vector_data_ptr, this->pl_);
+                    }
+                } else {
+                    for (size_t j = 0; j < this->po_; j++) {
+                        mem_prefetch_1((unsigned char*)getDataByInternalId(to_be_visited[j]), this->pl_);
+                    }
                 }
 
                 for (size_t j = 0; j < count_no_visited; j++) {
                     int candidate_id = to_be_visited[j];
-                    if (j + this->po_ < count_no_visited) {
-                        vector_data_ptr =
-                            (uint8_t*)get_encoded_data(to_be_visited[j + this->po_], code_size_aligned_);
-                        to_be_prefetch_ = vector_data_ptr;
-#ifdef USE_SSE
-                        mem_prefetch_1(vector_data_ptr, this->pl_);
-#endif
-                    } else {
-                        to_be_prefetch_ = nullptr;
-                    }
-                    auto* codes = get_encoded_data(candidate_id, code_size_aligned_);
-                    dist = INT4_L2_precompute(
-                        *((int64_t*)(codes + code_size)), norm2, codes, transformed_query, dim);
 
-                    if (j + this->po_ < count_no_visited) {
-                        vector_data_ptr =
-                            (uint8_t*)get_encoded_data(to_be_visited[j + this->po_], code_size_aligned_);
+                    if (sq_num_bits_ == 4 or sq_num_bits_ == 8) {
+                        if (j + this->po_ < count_no_visited) {
+                            vector_data_ptr =
+                                (uint8_t*)get_encoded_data(to_be_visited[j + this->po_], code_size_aligned_);
+                            to_be_prefetch_ = vector_data_ptr;
 #ifdef USE_SSE
-                        mem_prefetch_3(vector_data_ptr, this->pl_);
+                            mem_prefetch_1(vector_data_ptr, this->pl_);
 #endif
+                        } else {
+                            to_be_prefetch_ = nullptr;
+                        }
+
+                        auto* codes = get_encoded_data(candidate_id, code_size_aligned_);
+                        if (sq_num_bits_ == 4) {
+                            dist = INT4_L2_precompute(
+                                *((int64_t*)(codes + code_size)), norm2, codes, transformed_query, dim);
+                        } else {
+                            dist = INT8_L2_precompute(
+                                *((int64_t*)(codes + code_size)), norm2, codes, transformed_query, dim);
+                        }
+
+                        if (j + this->po_ < count_no_visited) {
+                            vector_data_ptr =
+                                (uint8_t*)get_encoded_data(to_be_visited[j + this->po_], code_size_aligned_);
+#ifdef USE_SSE
+                            mem_prefetch_3(vector_data_ptr, this->pl_);
+#endif
+                        }
+                    } else {
+                        if (j + this->po_ < count_no_visited) {
+                            mem_prefetch_1((unsigned char*)getDataByInternalId(to_be_visited[j + this->po_]), this->pl_);
+                        }
+                        dist = fstdistfunc_(data_point, getDataByInternalId(candidate_id), dist_func_param_);
                     }
+
+
                     if (top_candidates.size() < ef || lowerBound > dist) {
                         candidate_set.emplace(-dist, candidate_id);
 
@@ -1556,12 +1616,21 @@ public:
 #endif
                     }
                     to_be_prefetch_ = nullptr;
-                    dist = INT4_L2_precompute(
-                        *((int64_t*)(code + to_be_visited[j] * (code_size_aligned_) + code_size)),
-                        norm2,
-                        code + to_be_visited[j] * (code_size_aligned_),
-                        transformed_query,
-                        dim);
+                    if (sq_num_bits_ == 4) {
+                        dist = INT4_L2_precompute(
+                            *((int64_t*)(code + to_be_visited[j] * (code_size_aligned_) + code_size)),
+                            norm2,
+                            code + to_be_visited[j] * (code_size_aligned_),
+                            transformed_query,
+                            dim);
+                    } else if (sq_num_bits_ == 8) {
+                        dist = INT8_L2_precompute(
+                            *((int64_t*)(code + to_be_visited[j] * (code_size_aligned_) + code_size)),
+                            norm2,
+                            code + to_be_visited[j] * (code_size_aligned_),
+                            transformed_query,
+                            dim);
+                    }
 
                     if (top_candidates.size() < ef || lowerBound > dist) {
                         auto candidate_id = *(
@@ -2924,10 +2993,10 @@ public:
         std::pair<uint32_t, uint32_t> counts;
         if (num_deleted_) {
             std::tie(top_candidates, counts) =
-                searchBaseLayerST<true, true>(centroid_, query_data, std::max(ef_, k), isIdAllowed);
+                searchBaseLayerST<true, true>(enterpoint_node_, query_data, std::max(ef_, k), isIdAllowed);
         } else {
             std::tie(top_candidates, counts) = searchBaseLayerST<false, true>(
-                centroid_, query_data, std::max(ef_, k), isIdAllowed);
+                enterpoint_node_, query_data, std::max(ef_, k), isIdAllowed);
         }
 
         while (ef_ >= 50 and top_candidates.size() > ef_ / 2) {

@@ -73,6 +73,13 @@ HierarchicalNSW::HierarchicalNSW(SpaceInterface* s,
 
 bool
 HierarchicalNSW::init_memory_space() {
+    // release the memory allocated by the init_memory_space function that was called earlier
+    allocator_->Deallocate(element_levels_);
+    allocator_->Deallocate(reversed_level0_link_list_);
+    allocator_->Deallocate(reversed_link_lists_);
+    allocator_->Deallocate(molds_);
+    allocator_->Deallocate(link_lists_);
+
     element_levels_ = (int*)allocator_->Allocate(max_elements_ * sizeof(int));
     if (not data_level0_memory_->Resize(max_elements_)) {
         throw std::runtime_error("allocate data_level0_memory_ error");

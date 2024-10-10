@@ -412,6 +412,13 @@ int search(std::vector<uint32_t> efs, uint32_t k = 10) {
 }
 
 int main(int argc, char** argv) {
+    // metadata
+    target_npts = -1;
+    use_static = false;
+    sq_num_bits = 4;
+    gt_dim = 100;
+    redundant_rate = 0;
+    int ef_search = -1;
     auto logger = vsag::Options::Instance().logger();
 
     if (argc > 1) {
@@ -420,40 +427,30 @@ int main(int argc, char** argv) {
         dataset = "gist-960-euclidean";
     }
 
-    // metadata
-    target_npts = -1;
-    use_static = false;
-    sq_num_bits = 4;
-    gt_dim = 100;
-    redundant_rate = 0;
+    if (argc > 2) {
+        sq_num_bits = std::stoi(argv[2]);
+    } else {
+        sq_num_bits = 4;
+    }
 
+    if (argc > 3) {
+        ef_search = std::stoi(argv[3]);
+    } else {
+        ef_search = -1;
+    }
+
+    bool is_recompute = false;
     // prepare index and ground_truth
-//    bool is_recompute = false;
 //    build(is_recompute);
 //    calculate_gt(is_recompute);
 
     // search
     std::vector<uint32_t> efs = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
-
-//    redundant_rate = 0;
-//    std::vector<int> sqs = {-1, 4, 8};
-//    for (auto sq : sqs) {
-//        sq_num_bits = sq;
-//        logger->Info(fmt::format("sq: {}, rr: {}", sq_num_bits, redundant_rate));
-//        search(efs);
-//    }
-
-    std::vector<float> redundant_rate_list = {0.5, 0.6, 0.7, 0.8, 0.9, 1.0};
-    redundant_rate_list.assign({0, 1.0});
-
-    sq_num_bits = 4;
-    for (auto rate : redundant_rate_list) {
-        redundant_rate = rate;
-        logger->Info(fmt::format("sq: {}, rr: {}", sq_num_bits, redundant_rate));
-        search(efs);
+    if (ef_search != -1) {
+        efs.assign(1000, ef_search);
     }
+    std::vector<float> redundant_rate_list = {1.0, 0};
 
-    sq_num_bits = 8;
     for (auto rate : redundant_rate_list) {
         redundant_rate = rate;
         logger->Info(fmt::format("sq: {}, rr: {}", sq_num_bits, redundant_rate));

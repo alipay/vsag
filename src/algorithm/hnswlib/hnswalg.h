@@ -546,9 +546,6 @@ public:
                 xx = _mm512_and_si512(xx, mask_overflow);
                 yy = _mm512_and_si512(yy, mask_overflow);
             }
-            if (to_be_prefetch_ != nullptr and d == 256) {
-                mem_prefetch_2(to_be_prefetch_, pl_);
-            }
             auto xx1 = _mm512_and_si512(xx, mask);                        // 64 * 8bits
             auto xx2 = _mm512_and_si512(_mm512_srli_epi16(xx, 4), mask);  // 64 * 8bits
             auto yy1 = _mm512_and_si512(yy, mask);
@@ -1065,18 +1062,23 @@ public:
 
     void
     optimize() override {
-        constexpr static size_t sample_points_num = 10000;
+        constexpr static size_t sample_points_num = 1000;
         constexpr static size_t k = 10;
         size_t dim = *(size_t*)dist_func_param_;
-        size_t code_size = dim / (8 / sq_num_bits_);
 
-        std::vector<int> try_pos(10);
-        std::vector<int> try_pls(15);
-        try_pls.assign({9});
+        size_t code_size = 0;
+        if (sq_num_bits_ == 4) {
+            code_size = (dim + 1) / 2;
+        } else {
+            code_size = dim;
+        }
+
+        std::vector<int> try_pos(5);
+        std::vector<int> try_pls(code_size / 64 + 3);
         std::iota(try_pos.begin(), try_pos.end(), 1);
         std::iota(try_pls.begin(), try_pls.end(), 1);
 
-        bool have_optimized = true;
+        bool have_optimized = false;
         if (have_optimized) {
             if (sq_num_bits_ == 4) {
                 try_pos.assign({3});
@@ -1147,39 +1149,12 @@ public:
     }
 
     inline void
-    mem_prefetch_1(unsigned char* ptr, const int num_lines) const {
+    mem_prefetch_head(unsigned char* ptr) const {
         prefetch_L1(ptr);
-    }
-
-    inline void
-    mem_prefetch_2(unsigned char* ptr, const int num_lines) const {
-        prefetch_L1(ptr + 64);
-        prefetch_L1(ptr + 128);
-        prefetch_L1(ptr + 192);
-        prefetch_L1(ptr + 256);
-    }
-
-    inline void
-    mem_prefetch_3(unsigned char* ptr, const int num_lines) const {
-        prefetch_L1(ptr + 320);
-        prefetch_L1(ptr + 384);
-        prefetch_L1(ptr + 448);
-        prefetch_L1(ptr + 512);
     }
 
     inline void
     mem_prefetch(unsigned char* ptr, const int num_lines) const {
-        prefetch_L1(ptr);
-        prefetch_L1(ptr + 64);
-        prefetch_L1(ptr + 128);
-        prefetch_L1(ptr + 192);
-        prefetch_L1(ptr + 256);
-        prefetch_L1(ptr + 320);
-        prefetch_L1(ptr + 384);
-        prefetch_L1(ptr + 448);
-        prefetch_L1(ptr + 512);
-        return;
-
         switch (num_lines) {
             default:
                 [[fallthrough]];
@@ -1349,6 +1324,10 @@ public:
                 _mm_prefetch((char*)(code + (j + 4) * (code_size_aligned_) + code_size + 8),
                              _MM_HINT_T0);
             }
+            if (j + 8 < size) {
+                _mm_prefetch(&visited_array[*(int64_t*)(code + (j + 8) * (code_size_aligned_) + code_size + 8)],
+                             _MM_HINT_T0);
+            }
             uint64_t candidate_id = *(int64_t*)(code + j * (code_size_aligned_) + code_size + 8);
             if (!(visited_array[candidate_id] == visited_array_tag)) {
                 to_be_visited[count_no_visited++] = j;  // note here return j
@@ -1449,15 +1428,14 @@ public:
 
                 if (sq_num_bits_ == 4 or sq_num_bits_ == 8) {
                     for (int i = 0; i < po_; i++) {
-                        mem_prefetch((uint8_t*)get_encoded_data(datal[i], code_size_aligned_), 512);
+                        mem_prefetch((uint8_t*)get_encoded_data(datal[i], code_size_aligned_), this->pl_);
                     }
                 }
 
                 for (int i = 0; i < size; i++) {
                     if (sq_num_bits_ == 4 or sq_num_bits_ == 8) {
                         if (i + po_ < size) {
-                            mem_prefetch((uint8_t*)get_encoded_data(datal[i + po_], code_size_aligned_),
-                                         512);
+                            mem_prefetch((uint8_t*)get_encoded_data(datal[i + po_], code_size_aligned_), this->pl_);
                         }
                     }
                     tableint cand = datal[i];
@@ -1532,11 +1510,11 @@ public:
                     for (size_t j = 0; j < this->po_; j++) {
                         vector_data_ptr =
                             (uint8_t*)get_encoded_data(to_be_visited[j], code_size_aligned_);
-                        mem_prefetch_1(vector_data_ptr, this->pl_);
+                        mem_prefetch_head(vector_data_ptr);
                     }
                 } else {
                     for (size_t j = 0; j < this->po_; j++) {
-                        mem_prefetch_1((unsigned char*)getDataByInternalId(to_be_visited[j]), this->pl_);
+                        mem_prefetch_head((unsigned char*)getDataByInternalId(to_be_visited[j]));
                     }
                 }
 
@@ -1547,12 +1525,7 @@ public:
                         if (j + this->po_ < count_no_visited) {
                             vector_data_ptr =
                                 (uint8_t*)get_encoded_data(to_be_visited[j + this->po_], code_size_aligned_);
-                            to_be_prefetch_ = vector_data_ptr;
-#ifdef USE_SSE
-                            mem_prefetch_1(vector_data_ptr, this->pl_);
-#endif
-                        } else {
-                            to_be_prefetch_ = nullptr;
+                            mem_prefetch_head(vector_data_ptr);
                         }
 
                         auto* codes = get_encoded_data(candidate_id, code_size_aligned_);
@@ -1567,13 +1540,11 @@ public:
                         if (j + this->po_ < count_no_visited) {
                             vector_data_ptr =
                                 (uint8_t*)get_encoded_data(to_be_visited[j + this->po_], code_size_aligned_);
-#ifdef USE_SSE
-                            mem_prefetch_3(vector_data_ptr, this->pl_);
-#endif
+                            mem_prefetch(vector_data_ptr + 64, this->pl_);
                         }
                     } else {
                         if (j + this->po_ < count_no_visited) {
-                            mem_prefetch_1((unsigned char*)getDataByInternalId(to_be_visited[j + this->po_]), this->pl_);
+                            mem_prefetch((unsigned char*)getDataByInternalId(to_be_visited[j + this->po_]), this->pl_);
                         }
                         dist = fstdistfunc_(data_point, getDataByInternalId(candidate_id), dist_func_param_);
                     }
@@ -1602,18 +1573,14 @@ public:
                 auto* code = get_redundant_data(current_node_pair.second, code_size_aligned_);
                 for (size_t j = 0; j < this->po_; j++) {
                     vector_data_ptr = (uint8_t*)(code + to_be_visited[j] * (code_size_aligned_));
-#ifdef USE_SSE
                     mem_prefetch(vector_data_ptr, this->pl_);
-#endif
                 }
 
                 for (size_t j = 0; j < count_no_visited; j++) {
                     if (j + this->po_ <= count_no_visited) {
                         vector_data_ptr =
                             (uint8_t*)(code + to_be_visited[j + this->po_] * (code_size_aligned_));
-#ifdef USE_SSE
                         mem_prefetch(vector_data_ptr, this->pl_);
-#endif
                     }
                     to_be_prefetch_ = nullptr;
                     if (sq_num_bits_ == 4) {

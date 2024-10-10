@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <queue>
 #include <string>
@@ -94,6 +95,9 @@ public:
 
     virtual bool
     isValidLabel(labeltype label) = 0;
+
+    virtual bool
+    init_memory_space() = 0;
 
     virtual ~AlgorithmInterface() {
     }

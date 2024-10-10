@@ -14,6 +14,8 @@
 // limitations under the License.
 
 #include "hnswalg.h"
+
+#include <memory>
 namespace hnswlib {
 HierarchicalNSW::HierarchicalNSW(SpaceInterface* s,
                                  size_t max_elements,
@@ -26,11 +28,13 @@ HierarchicalNSW::HierarchicalNSW(SpaceInterface* s,
                                  size_t random_seed,
                                  bool allow_replace_deleted)
     : allocator_(allocator),
-      link_list_locks_(max_elements),
-      label_op_locks_(MAX_LABEL_OPERATION_LOCKS),
+      link_list_locks_(max_elements, allocator),
+      label_op_locks_(MAX_LABEL_OPERATION_LOCKS, allocator),
       allow_replace_deleted_(allow_replace_deleted),
       use_reversed_edges_(use_reversed_edges),
-      normalize_(normalize) {
+      normalize_(normalize),
+      label_lookup_(allocator),
+      deleted_elements_(allocator) {
     max_elements_ = max_elements;
     num_deleted_ = 0;
     data_size_ = s->get_data_size();
@@ -42,61 +46,73 @@ HierarchicalNSW::HierarchicalNSW(SpaceInterface* s,
     maxM0_ = M_ * 2;
     ef_construction_ = std::max(ef_construction, M_);
 
-    element_levels_ = (int*)allocator->Allocate(max_elements * sizeof(int));
-
     level_generator_.seed(random_seed);
     update_probability_generator_.seed(random_seed + 1);
 
     size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
     size_data_per_element_ = size_links_level0_ + data_size_ + sizeof(labeltype);
-    offsetData_ = size_links_level0_;
+    offset_data_ = size_links_level0_;
     label_offset_ = size_links_level0_ + data_size_;
     offsetLevel0_ = 0;
 
-    reverse_link_list_allocator_ = std::make_shared<vsag::AllocatorWrapper<tableint>>(allocator_);
-
-    if (use_reversed_edges_) {
-        reversed_level0_link_list_ =
-            (reverselinklist**)allocator->Allocate(max_elements_ * sizeof(reverselinklist*));
-        memset(reversed_level0_link_list_, 0, max_elements_ * sizeof(reverselinklist*));
-        reversed_link_lists_ = (std::unordered_map<int, reverselinklist>**)allocator->Allocate(
-            max_elements_ * sizeof(std::unordered_map<int, reverselinklist>*));
-        memset(reversed_link_lists_,
-               0,
-               max_elements_ * sizeof(std::unordered_map<int, reverselinklist>*));
-    }
-
-    if (normalize) {
-        ip_func_ = vsag::InnerProduct;
-        molds_ = (float*)allocator->Allocate(max_elements_ * sizeof(float));
-    }
-
     data_level0_memory_ =
-        new BlockManager(max_elements_, size_data_per_element_, block_size_limit, allocator_);
+        std::make_shared<BlockManager>(size_data_per_element_, block_size_limit, allocator_);
     data_element_per_block_ = block_size_limit / size_data_per_element_;
 
     cur_element_count_ = 0;
 
-    visited_list_pool_ = new VisitedListPool(1, max_elements, allocator_);
+    visited_list_pool_ = std::make_shared<VisitedListPool>(1, max_elements, allocator_);
 
     // initializations for special treatment of the first node
     enterpoint_node_ = -1;
-    maxlevel_ = -1;
+    max_level_ = -1;
+    size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
+    mult_ = 1 / log(1.0 * static_cast<double>(M_));
+    rev_size_ = 1.0 / mult_;
+}
 
-    link_lists_ = (char**)allocator->Allocate(sizeof(void*) * max_elements_);
+bool
+HierarchicalNSW::init_memory_space() {
+    element_levels_ = (int*)allocator_->Allocate(max_elements_ * sizeof(int));
+    if (not data_level0_memory_->Resize(max_elements_)) {
+        throw std::runtime_error("allocate data_level0_memory_ error");
+    }
+    if (use_reversed_edges_) {
+        reversed_level0_link_list_ =
+            (reverselinklist**)allocator_->Allocate(max_elements_ * sizeof(reverselinklist*));
+        if (reversed_level0_link_list_ == nullptr) {
+            throw std::runtime_error("allocate reversed_level0_link_list_ fail");
+        }
+        memset(reversed_level0_link_list_, 0, max_elements_ * sizeof(reverselinklist*));
+        reversed_link_lists_ = (vsag::UnorderedMap<int, reverselinklist>**)allocator_->Allocate(
+            max_elements_ * sizeof(vsag::UnorderedMap<int, reverselinklist>*));
+        if (reversed_link_lists_ == nullptr) {
+            throw std::runtime_error("allocate reversed_link_lists_ fail");
+        }
+        memset(reversed_link_lists_,
+               0,
+               max_elements_ * sizeof(vsag::UnorderedMap<int, reverselinklist>*));
+    }
+
+    if (normalize_) {
+        ip_func_ = vsag::InnerProduct;
+        molds_ = (float*)allocator_->Allocate(max_elements_ * sizeof(float));
+    }
+
+    link_lists_ = (char**)allocator_->Allocate(sizeof(void*) * max_elements_);
     if (link_lists_ == nullptr)
         throw std::runtime_error("Not enough memory: HierarchicalNSW failed to allocate linklists");
     memset(link_lists_, 0, sizeof(void*) * max_elements_);
-    size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
-    mult_ = 1 / log(1.0 * static_cast<double>(M_));
-    revSize_ = 1.0 / mult_;
+    return true;
 }
 
 HierarchicalNSW::~HierarchicalNSW() {
-    delete data_level0_memory_;
-    for (tableint i = 0; i < max_elements_; i++) {
-        if (element_levels_[i] > 0 || link_lists_[i] != nullptr)
-            allocator_->Deallocate(link_lists_[i]);
+    if (link_lists_ != nullptr) {
+        for (tableint i = 0; i < max_elements_; i++) {
+            if (element_levels_[i] > 0 || link_lists_[i] != nullptr)
+                allocator_->Deallocate(link_lists_[i]);
+        }
+        allocator_->Deallocate(link_lists_);
     }
 
     if (use_reversed_edges_) {
@@ -113,8 +129,6 @@ HierarchicalNSW::~HierarchicalNSW() {
         allocator_->Deallocate(molds_);
     }
     allocator_->Deallocate(element_levels_);
-    allocator_->Deallocate(link_lists_);
-    delete visited_list_pool_;
 }
 
 void
@@ -156,7 +170,7 @@ HierarchicalNSW::isValidLabel(labeltype label) {
 
 void
 HierarchicalNSW::updateConnections(tableint internal_id,
-                                   const std::vector<tableint>& cand_neighbors,
+                                   const vsag::Vector<tableint>& cand_neighbors,
                                    int level,
                                    bool is_update) {
     linklistsizeint* ll_cur;
@@ -381,7 +395,7 @@ HierarchicalNSW::searchBaseLayerST(tableint ep_id,
             metric_distance_computations_ += size;
         }
 
-        auto vector_data_ptr = data_level0_memory_->GetElementPtr((*(data + 1)), offsetData_);
+        auto vector_data_ptr = data_level0_memory_->GetElementPtr((*(data + 1)), offset_data_);
 #ifdef USE_SSE
         _mm_prefetch((char*)(visited_array + *(data + 1)), _MM_HINT_T0);
         _mm_prefetch((char*)(visited_array + *(data + 1) + 64), _MM_HINT_T0);
@@ -393,7 +407,7 @@ HierarchicalNSW::searchBaseLayerST(tableint ep_id,
             int candidate_id = *(data + j);
             size_t pre_l = std::min(j, size - 2);
             vector_data_ptr =
-                data_level0_memory_->GetElementPtr((*(data + pre_l + 1)), offsetData_);
+                data_level0_memory_->GetElementPtr((*(data + pre_l + 1)), offset_data_);
 #ifdef USE_SSE
             _mm_prefetch((char*)(visited_array + *(data + pre_l + 1)), _MM_HINT_T0);
             _mm_prefetch(vector_data_ptr, _MM_HINT_T0);  ////////////
@@ -473,7 +487,7 @@ HierarchicalNSW::searchBaseLayerST(tableint ep_id,
             metric_distance_computations_ += size;
         }
 
-        auto vector_data_ptr = data_level0_memory_->GetElementPtr((*(data + 1)), offsetData_);
+        auto vector_data_ptr = data_level0_memory_->GetElementPtr((*(data + 1)), offset_data_);
 #ifdef USE_SSE
         _mm_prefetch((char*)(visited_array + *(data + 1)), _MM_HINT_T0);
         _mm_prefetch((char*)(visited_array + *(data + 1) + 64), _MM_HINT_T0);
@@ -485,7 +499,7 @@ HierarchicalNSW::searchBaseLayerST(tableint ep_id,
             int candidate_id = *(data + j);
             size_t pre_l = std::min(j, size - 2);
             vector_data_ptr =
-                data_level0_memory_->GetElementPtr((*(data + pre_l + 1)), offsetData_);
+                data_level0_memory_->GetElementPtr((*(data + pre_l + 1)), offset_data_);
 #ifdef USE_SSE
             _mm_prefetch((char*)(visited_array + *(data + pre_l + 1)), _MM_HINT_T0);
             _mm_prefetch(vector_data_ptr, _MM_HINT_T0);  ////////////
@@ -530,7 +544,7 @@ HierarchicalNSW::getNeighborsByHeuristic2(MaxHeap& top_candidates, size_t M) {
     }
 
     std::priority_queue<std::pair<float, tableint>> queue_closest;
-    std::vector<std::pair<float, tableint>> return_list;
+    vsag::Vector<std::pair<float, tableint>> return_list(allocator_);
     while (not top_candidates.empty()) {
         queue_closest.emplace(-top_candidates.top().first, top_candidates.top().second);
         top_candidates.pop();
@@ -574,7 +588,7 @@ HierarchicalNSW::mutuallyConnectNewElement(tableint cur_c,
         throw std::runtime_error(
             "Should be not be more than M_ candidates returned by the heuristic");
 
-    std::vector<tableint> selectedNeighbors;
+    vsag::Vector<tableint> selectedNeighbors(allocator_);
     selectedNeighbors.reserve(M_);
     while (not top_candidates.empty()) {
         selectedNeighbors.push_back(top_candidates.top().second);
@@ -650,7 +664,7 @@ HierarchicalNSW::mutuallyConnectNewElement(tableint cur_c,
 
                 getNeighborsByHeuristic2(candidates, m_curmax);
 
-                std::vector<tableint> cand_neighbors;
+                vsag::Vector<tableint> cand_neighbors(allocator_);
                 while (not candidates.empty()) {
                     cand_neighbors.push_back(candidates.top().second);
                     candidates.pop();
@@ -681,9 +695,7 @@ HierarchicalNSW::resizeIndex(size_t new_max_elements) {
         throw std::runtime_error(
             "Cannot Resize, max element is less than the current number of elements");
 
-    delete visited_list_pool_;
-
-    visited_list_pool_ = new VisitedListPool(1, new_max_elements, allocator_);
+    visited_list_pool_.reset(new VisitedListPool(1, new_max_elements, allocator_));
 
     auto element_levels_new =
         (int*)allocator_->Reallocate(element_levels_, new_max_elements * sizeof(int));
@@ -692,7 +704,7 @@ HierarchicalNSW::resizeIndex(size_t new_max_elements) {
             "Not enough memory: resizeIndex failed to allocate element_levels_");
     }
     element_levels_ = element_levels_new;
-    std::vector<std::recursive_mutex>(new_max_elements).swap(link_list_locks_);
+    vsag::Vector<std::recursive_mutex>(new_max_elements, allocator_).swap(link_list_locks_);
 
     if (normalize_) {
         auto new_molds = (float*)allocator_->Reallocate(molds_, new_max_elements * sizeof(float));
@@ -720,9 +732,9 @@ HierarchicalNSW::resizeIndex(size_t new_max_elements) {
                (new_max_elements - max_elements_) * sizeof(reverselinklist*));
 
         auto reversed_link_lists_new =
-            (std::unordered_map<int, reverselinklist>**)allocator_->Reallocate(
+            (vsag::UnorderedMap<int, reverselinklist>**)allocator_->Reallocate(
                 reversed_link_lists_,
-                new_max_elements * sizeof(std::unordered_map<int, reverselinklist>*));
+                new_max_elements * sizeof(vsag::UnorderedMap<int, reverselinklist>*));
         if (reversed_link_lists_new == nullptr) {
             throw std::runtime_error(
                 "Not enough memory: resizeIndex failed to allocate reversed_link_lists_");
@@ -731,7 +743,7 @@ HierarchicalNSW::resizeIndex(size_t new_max_elements) {
         memset(
             reversed_link_lists_ + max_elements_,
             0,
-            (new_max_elements - max_elements_) * sizeof(std::unordered_map<int, reverselinklist>*));
+            (new_max_elements - max_elements_) * sizeof(vsag::UnorderedMap<int, reverselinklist>*));
     }
 
     // Reallocate all other layers
@@ -786,8 +798,8 @@ HierarchicalNSW::SerializeImpl(StreamWriter& writer) {
     WriteOne(writer, cur_element_count_);
     WriteOne(writer, size_data_per_element_);
     WriteOne(writer, label_offset_);
-    WriteOne(writer, offsetData_);
-    WriteOne(writer, maxlevel_);
+    WriteOne(writer, offset_data_);
+    WriteOne(writer, max_level_);
     WriteOne(writer, enterpoint_node_);
     WriteOne(writer, maxM_);
 
@@ -855,8 +867,8 @@ HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t
     ReadOne(reader, cur_element_count_);
     ReadOne(reader, size_data_per_element_);
     ReadOne(reader, label_offset_);
-    ReadOne(reader, offsetData_);
-    ReadOne(reader, maxlevel_);
+    ReadOne(reader, offset_data_);
+    ReadOne(reader, max_level_);
     ReadOne(reader, enterpoint_node_);
 
     ReadOne(reader, maxM_);
@@ -875,10 +887,10 @@ HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t
     size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
 
     size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
-    std::vector<std::recursive_mutex>(max_elements).swap(link_list_locks_);
-    std::vector<std::mutex>(MAX_LABEL_OPERATION_LOCKS).swap(label_op_locks_);
+    vsag::Vector<std::recursive_mutex>(max_elements, allocator_).swap(link_list_locks_);
+    vsag::Vector<std::mutex>(MAX_LABEL_OPERATION_LOCKS, allocator_).swap(label_op_locks_);
 
-    revSize_ = 1.0 / mult_;
+    rev_size_ = 1.0 / mult_;
     for (size_t i = 0; i < cur_element_count_; i++) {
         label_lookup_[getExternalLabel(i)] = i;
         unsigned int link_list_size;
@@ -1166,7 +1178,7 @@ HierarchicalNSW::removePoint(labeltype label) {
                 getEdges(cur_c, level).clear();
             }
             enterpoint_node_ = -1;
-            maxlevel_ = -1;
+            max_level_ = -1;
             return;
         } else if (cur_c != internal_id) {
             label_lookup_[getExternalLabel(cur_c)] = internal_id;
@@ -1176,11 +1188,11 @@ HierarchicalNSW::removePoint(labeltype label) {
 
     // If the node to be deleted is an entry node, find another top-level node.
     if (cur_c == enterpoint_node_) {
-        for (int level = maxlevel_; level >= 0; level--) {
+        for (int level = max_level_; level >= 0; level--) {
             auto data = (unsigned int*)getLinklistAtLevel(enterpoint_node_, level);
             int size = getListCount(data);
             if (size != 0) {
-                maxlevel_ = level;
+                max_level_ = level;
                 enterpoint_node_ = *(data + 1);
                 break;
             }
@@ -1198,7 +1210,7 @@ HierarchicalNSW::removePoint(labeltype label) {
 
         for (const auto in_edge : in_edges_cur) {
             MaxHeap candidates;
-            std::unordered_set<tableint> unique_ids;
+            vsag::UnorderedSet<tableint> unique_ids(allocator_);
 
             // Add the original neighbors of the indegree node to the candidate queue.
             for (int i = 0; i < size_cur; ++i) {
@@ -1282,7 +1294,7 @@ HierarchicalNSW::addPoint(const void* data_point, labeltype label, int level) {
 
     element_levels_[cur_c] = curlevel;
     std::unique_lock<std::mutex> lock(global_);
-    int maxlevelcopy = maxlevel_;
+    int maxlevelcopy = max_level_;
     if (curlevel <= maxlevelcopy)
         lock.unlock();
     tableint currObj = enterpoint_node_;
@@ -1351,13 +1363,13 @@ HierarchicalNSW::addPoint(const void* data_point, labeltype label, int level) {
     } else {
         // Do nothing for the first element
         enterpoint_node_ = 0;
-        maxlevel_ = curlevel;
+        max_level_ = curlevel;
     }
 
     // Releasing lock for the maximum level
     if (curlevel > maxlevelcopy) {
         enterpoint_node_ = cur_c;
-        maxlevel_ = curlevel;
+        max_level_ = curlevel;
     }
     return cur_c;
 }
@@ -1376,7 +1388,7 @@ HierarchicalNSW::searchKnn(const void* query_data,
     tableint currObj = enterpoint_node_;
     float curdist =
         fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
-    for (int level = maxlevel_; level > 0; level--) {
+    for (int level = max_level_; level > 0; level--) {
         bool changed = true;
         while (changed) {
             changed = false;
@@ -1404,13 +1416,9 @@ HierarchicalNSW::searchKnn(const void* query_data,
     }
 
     MaxHeap top_candidates;
-    if (num_deleted_) {
-        top_candidates =
-            searchBaseLayerST<true, true>(currObj, query_data, std::max(ef, k), isIdAllowed);
-    } else {
-        top_candidates =
-            searchBaseLayerST<false, true>(currObj, query_data, std::max(ef, k), isIdAllowed);
-    }
+
+    top_candidates =
+        searchBaseLayerST<false, true>(currObj, query_data, std::max(ef, k), isIdAllowed);
 
     while (top_candidates.size() > k) {
         top_candidates.pop();
@@ -1438,7 +1446,7 @@ HierarchicalNSW::searchRange(const void* query_data,
     float curdist =
         fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
 
-    for (int level = maxlevel_; level > 0; level--) {
+    for (int level = max_level_; level > 0; level--) {
         bool changed = true;
         while (changed) {
             changed = false;
@@ -1466,13 +1474,8 @@ HierarchicalNSW::searchRange(const void* query_data,
     }
 
     MaxHeap top_candidates;
-    if (num_deleted_) {
-        throw std::runtime_error(
-            "not support perform range search on a index that deleted some vectors");
-    } else {
-        top_candidates =
-            searchBaseLayerST<false, true>(currObj, query_data, radius, ef, isIdAllowed);
-    }
+
+    top_candidates = searchBaseLayerST<false, true>(currObj, query_data, radius, ef, isIdAllowed);
 
     while (not top_candidates.empty()) {
         std::pair<float, tableint> rez = top_candidates.top();
@@ -1487,13 +1490,13 @@ HierarchicalNSW::searchRange(const void* query_data,
 void
 HierarchicalNSW::checkIntegrity() {
     int connections_checked = 0;
-    std::vector<int> inbound_connections_num(cur_element_count_, 0);
+    vsag::Vector<int> inbound_connections_num(cur_element_count_, 0, allocator_);
     for (int i = 0; i < cur_element_count_; i++) {
         for (int l = 0; l <= element_levels_[i]; l++) {
             linklistsizeint* ll_cur = getLinklistAtLevel(i, l);
             int size = getListCount(ll_cur);
             auto* data = (tableint*)(ll_cur + 1);
-            std::unordered_set<tableint> s;
+            vsag::UnorderedSet<tableint> s(allocator_);
             for (int j = 0; j < size; j++) {
                 assert(data[j] > 0);
                 assert(data[j] < cur_element_count_);

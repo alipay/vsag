@@ -20,6 +20,7 @@
 
 #include "index/index_common_param.h"
 #include "quantization/computer.h"
+#include "stream_reader.h"
 #include "stream_writer.h"
 
 namespace vsag {
@@ -55,8 +56,6 @@ public:
     virtual void
     Prefetch(uint64_t id) = 0;
 
-
-
 public:
     virtual void
     SetMaxCapacity(uint64_t capacity) {
@@ -78,6 +77,13 @@ public:
         StreamWriter::WriteObj(writer, this->total_count_);
         StreamWriter::WriteObj(writer, this->max_capacity_);
         StreamWriter::WriteObj(writer, this->code_size_);
+    }
+
+    virtual void
+    Deserialize(StreamReader& reader) {
+        StreamReader::ReadObj(reader, this->total_count_);
+        StreamReader::ReadObj(reader, this->max_capacity_);
+        StreamReader::ReadObj(reader, this->code_size_);
     }
 
 public:

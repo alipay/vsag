@@ -64,6 +64,9 @@ public:
     inline void
     SerializeImpl(StreamWriter& writer);
 
+    inline void
+    DeserializeImpl(StreamReader& reader);
+
 public:
     std::vector<DataType> diff_{};
     std::vector<DataType> lower_bound_{};
@@ -72,7 +75,7 @@ public:
 template <MetricType Metric>
 SQ8Quantizer<Metric>::SQ8Quantizer(int dim) : Quantizer<SQ8Quantizer<Metric>>(dim) {
     // align 64 bytes (512 bits) to avoid illegal memory access in SIMD
-    this->code_size_ = (this->dim_ + (1 << 6) - 1) >> 6 << 6;
+    this->code_size_ = this->dim_;
     this->diff_.resize(dim, 0);
     this->lower_bound_.resize(dim, std::numeric_limits<DataType>::max());
 }
@@ -82,13 +85,6 @@ SQ8Quantizer<metric>::SQ8Quantizer(const nlohmann::json& quantization_obj,
                                    const IndexCommonParam& common_param)
     : Quantizer<SQ8Quantizer<metric>>(common_param.dim_) {
     // align 64 bytes (512 bits) to avoid illegal memory access in SIMD
-    this->code_size_ = (this->dim_ + (1 << 6) - 1) >> 6 << 6;
-    this->diff_.resize(this->dim_, 0);
-    this->lower_bound_.resize(this->dim_, std::numeric_limits<DataType>::max());
-}
-
-template <MetricType metric>
-SQ8Quantizer<metric>::SQ8Quantizer(int dim) : Quantizer<SQ8Quantizer<metric>>(dim) {
     this->code_size_ = this->dim_;
     this->diff_.resize(this->dim_, 0);
     this->lower_bound_.resize(this->dim_, std::numeric_limits<DataType>::max());
@@ -214,6 +210,13 @@ void
 SQ8Quantizer<metric>::SerializeImpl(StreamWriter& writer) {
     StreamWriter::WriteVector(writer, this->diff_);
     StreamWriter::WriteVector(writer, this->lower_bound_);
+}
+
+template <MetricType metric>
+void
+SQ8Quantizer<metric>::DeserializeImpl(StreamReader& reader) {
+    StreamReader::ReadVector(reader, this->diff_);
+    StreamReader::ReadVector(reader, this->lower_bound_);
 }
 
 }  // namespace vsag

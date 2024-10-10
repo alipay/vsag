@@ -24,7 +24,6 @@ std::shared_ptr<GraphInterface>
 GraphInterface::MakeInstance(const nlohmann::json& json_obj,
                              const IndexCommonParam& common_param,
                              bool is_sparse) {
-
     CHECK_ARGUMENT(json_obj.contains(GRAPH_PARAMS_KEY),
                    fmt::format("graph interface parameters must contains {}", GRAPH_PARAMS_KEY));
     const auto& graph_param = json_obj[GRAPH_PARAMS_KEY];
@@ -39,7 +38,6 @@ GraphInterface::MakeInstance(const nlohmann::json& json_obj,
     CHECK_ARGUMENT(json_obj.contains(IO_PARAMS_KEY),
                    fmt::format("graph interface parameters must contains {}", IO_PARAMS_KEY));
     const auto& io_param = json_obj[IO_PARAMS_KEY];
-
 
     if (io_string == IO_TYPE_VALUE_BLOCK_MEMORY_IO) {
         return std::make_shared<GraphDataCell<MemoryBlockIO, false>>(

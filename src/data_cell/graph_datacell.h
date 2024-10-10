@@ -75,6 +75,9 @@ public:
     void
     Serialize(StreamWriter& writer) override;
 
+    void
+    Deserialize(StreamReader& reader) override;
+
 private:
     std::shared_ptr<BasicIO<IOTmpl>> io_{nullptr};
 
@@ -140,6 +143,14 @@ GraphDataCell<IOTmpl, false>::Serialize(StreamWriter& writer) {
     GraphInterface::Serialize(writer);
     this->io_->Serialize(writer);
     StreamWriter::WriteObj(writer, this->code_line_size_);
+}
+
+template <typename IOTmpl>
+void
+GraphDataCell<IOTmpl, false>::Deserialize(StreamReader& reader) {
+    GraphInterface::Deserialize(reader);
+    this->io_->Deserialize(reader);
+    StreamReader::ReadObj(reader, this->code_line_size_);
 }
 
 }  // namespace vsag

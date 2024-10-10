@@ -90,7 +90,6 @@ HGraphIndex::hnsw_build(const DatasetPtr& base) {
     auto* datas = base->GetFloat32Vectors();
     vsag::Vector<std::recursive_mutex>(total, allocator_).swap(this->neighbors_mutex_);
 
-    omp_set_num_threads(20);
 #pragma omp parallel for
     for (uint64_t i = 0; i < total; ++i) {
         int level = this->get_random_level() - 1;
@@ -436,6 +435,15 @@ HGraphIndex::serialize_basic_info(StreamWriter& writer) {
     StreamWriter::WriteObj(writer, this->dim_);
     StreamWriter::WriteObj(writer, this->metric_);
     StreamWriter::WriteObj(writer, this->max_level_);
+    StreamWriter::WriteObj(writer, this->enter_point_id_);
+    StreamWriter::WriteObj(writer, this->ef_construct_);
+    uint64_t size = this->label_lookup_.size();
+    StreamWriter::WriteObj(writer, size);
+    for (auto& pair : this->label_lookup_) {
+        auto key = pair.first;
+        StreamWriter::WriteObj(writer, key);
+        StreamWriter::WriteObj(writer, pair.second);
+    }
 }
 
 void
@@ -446,8 +454,46 @@ HGraphIndex::serialize(StreamWriter& writer) {
     if (this->use_reorder_) {
         this->high_precise_codes_->Serialize(writer);
     }
-    for (uint64_t i = 0; i < this->max_level_; ++ i) {
+    for (uint64_t i = 0; i < this->max_level_; ++i) {
         this->route_graphs_[i]->Serialize(writer);
+    }
+}
+
+void
+HGraphIndex::deserialize(StreamReader& reader) {
+    this->deserialize_basic_info(reader);
+    this->basic_flatten_codes_->Deserialize(reader);
+    this->bottom_graph_->Deserialize(reader);
+    if (this->use_reorder_) {
+        this->high_precise_codes_->Deserialize(reader);
+    }
+
+    for (uint64_t i = 0; i < this->max_level_; ++i) {
+        this->route_graphs_.emplace_back(this->generate_one_route_graph());
+    }
+
+    for (uint64_t i = 0; i < this->max_level_; ++i) {
+        this->route_graphs_[i]->Deserialize(reader);
+    }
+}
+
+void
+HGraphIndex::deserialize_basic_info(StreamReader& reader) {
+    StreamReader::ReadObj(reader, this->use_reorder_);
+    StreamReader::ReadObj(reader, this->dim_);
+    StreamReader::ReadObj(reader, this->metric_);
+    StreamReader::ReadObj(reader, this->max_level_);
+    StreamReader::ReadObj(reader, this->enter_point_id_);
+    StreamReader::ReadObj(reader, this->ef_construct_);
+
+    uint64_t size;
+    StreamReader::ReadObj(reader, size);
+    for (uint64_t i = 0; i < size; ++i) {
+        LabelType key;
+        StreamReader::ReadObj(reader, key);
+        uint64_t value;
+        StreamReader::ReadObj(reader, value);
+        this->label_lookup_.emplace(key, value);
     }
 }
 

@@ -52,7 +52,10 @@ public:
     ComputeImpl(const uint8_t* codes1, const uint8_t* codes2);
 
     void
-    SerializeImpl(StreamWriter& writer);
+    SerializeImpl(StreamWriter& writer){};
+
+    void
+    DeserializeImpl(StreamReader& reader){};
 
     inline void
     ProcessQueryImpl(const DataType* query, Computer<FP32Quantizer<Metric>>& computer) const;
@@ -72,8 +75,7 @@ FP32Quantizer<Metric>::FP32Quantizer(const nlohmann::json& quantization_obj,
 
 template <MetricType Metric>
 FP32Quantizer<Metric>::FP32Quantizer(int dim) : Quantizer<FP32Quantizer<Metric>>(dim) {
-    // align 64 bytes (512 bits) to avoid illegal memory access in SIMD
-    this->code_size_ = (dim * sizeof(float) + (1 << 6) - 1) >> 6 << 6;
+    this->code_size_ = dim * sizeof(float);
 }
 
 template <MetricType Metric>
@@ -153,9 +155,4 @@ FP32Quantizer<Metric>::ComputeDistImpl(Computer<FP32Quantizer<Metric>>& computer
     }
 }
 
-template <MetricType Metric>
-void
-FP32Quantizer<Metric>::SerializeImpl(StreamWriter& writer) {
-
-};
 }  // namespace vsag

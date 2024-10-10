@@ -15,6 +15,6 @@
 
 #pragma once
 
-#include "quantizer.h"
 #include "fp32_quantizer.h"
+#include "quantizer.h"
 #include "sq8_quantizer.h"

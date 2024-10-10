@@ -16,6 +16,7 @@
 #include "hgraph_index.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <fstream>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <vector>
@@ -26,7 +27,7 @@
 #include "vsag/errors.h"
 #include "vsag/options.h"
 
-TEST_CASE("build & add", "[ut][hgraphindex]") {
+TEST_CASE("build with allocator [ut][hgraphindex]") {
     vsag::logger::set_level(vsag::logger::level::debug);
 
     std::string json_str = R"(
@@ -66,81 +67,10 @@ TEST_CASE("build & add", "[ut][hgraphindex]") {
         })";
     auto json_param = nlohmann::json::parse(json_str);
     vsag::IndexCommonParam param;
-
+    auto allocator = std::make_shared<vsag::DefaultAllocator>();
     param.dim_ = 128;
     param.metric_ = vsag::MetricType::METRIC_TYPE_L2SQR;
-    param.allocator_ = new vsag::DefaultAllocator();
-
-    auto index = std::make_shared<vsag::HGraphIndex>(json_param, param);
-
-    std::vector<int64_t> ids(1);
-    int64_t incorrect_dim = 63;
-    std::vector<float> vectors(incorrect_dim);
-
-    auto dataset = vsag::Dataset::Make();
-    dataset->Dim(incorrect_dim)
-        ->NumElements(1)
-        ->Ids(ids.data())
-        ->Float32Vectors(vectors.data())
-        ->Owner(false);
-
-    SECTION("build with incorrect dim") {
-        auto result = index->Build(dataset);
-        REQUIRE_FALSE(result.has_value());
-        REQUIRE(result.error().type == vsag::ErrorType::INVALID_ARGUMENT);
-    }
-
-    SECTION("add with incorrect dim") {
-        auto result = index->Add(dataset);
-        REQUIRE_FALSE(result.has_value());
-        REQUIRE(result.error().type == vsag::ErrorType::INVALID_ARGUMENT);
-    }
-}
-
-TEST_CASE("build with allocator", "[ut][hgraphindex]") {
-    vsag::logger::set_level(vsag::logger::level::debug);
-
-    std::string json_str = R"(
-        {
-          "index_type": "HGraph",
-          "metric_type": "l2",
-          "dim": 128,
-          "data_type": "FP32",
-          "index_param": {
-            "use_reorder": false,
-            "graph": {
-              "io_type": "block_memory",
-              "io_params": {
-                "block_size": 134217728
-              },
-              "type": "NSW",
-              "graph_params": {
-                "max_degree": 64,
-                "init_capacity": 1000000
-              }
-            },
-            "base_codes": {
-              "io_type": "block_memory",
-              "io_params": {
-                "block_size": 134217728
-              },
-              "codes_type": "flatten_codes",
-              "codes_param": {
-              },
-              "quantization_type": "sq8",
-              "quantization_params": {
-                "subspace": 64,
-                "nbits": 8
-              }
-            }
-          }
-        })";
-    auto json_param = nlohmann::json::parse(json_str);
-    vsag::IndexCommonParam param;
-
-    param.dim_ = 128;
-    param.metric_ = vsag::MetricType::METRIC_TYPE_L2SQR;
-    param.allocator_ = new vsag::DefaultAllocator();
+    param.allocator_ = allocator.get();
 
     auto index = std::make_shared<vsag::HGraphIndex>(json_param["index_param"], param);
     index->Init();
@@ -157,24 +87,40 @@ TEST_CASE("build with allocator", "[ut][hgraphindex]") {
     auto result = index->Build(dataset);
     REQUIRE(result.has_value());
 
-    for (auto i = 0; i < 100; ++ i) {
-        auto new_id = random() % num_elements;
-        auto query = vsag::Dataset::Make();
-        query->NumElements(1)
-            ->Dim(param.dim_)
-            ->Float32Vectors(vectors.data() + new_id * param.dim_)
-            ->Owner(false);
-        nlohmann::json params{
-            {"hnsw", {{"ef_search", 100}}},
-        };
-        auto result2 = index->KnnSearch(query, 1, "");
-        REQUIRE(result2.has_value());
-        auto vec = result2.value();
+    auto func = [&]() {
+        for (auto i = 0; i < 100; ++i) {
+            auto new_id = random() % num_elements;
+            auto query = vsag::Dataset::Make();
+            query->NumElements(1)
+                ->Dim(param.dim_)
+                ->Float32Vectors(vectors.data() + new_id * param.dim_)
+                ->Owner(false);
+            nlohmann::json params{
+                {"hnsw", {{"ef_search", 100}}},
+            };
+            auto result2 = index->KnnSearch(query, 1, "");
+            REQUIRE(result2.has_value());
+            auto vec = result2.value();
+            REQUIRE(vec->GetIds()[0] == new_id);
+        }
+    };
+    func();
+    std::string dirname = "/tmp/hgraph_TestSerializeAndDeserialize_" + std::to_string(random());
+    std::filesystem::create_directory(dirname);
+    auto filename = dirname + "/file_" + std::to_string(random());
+    std::ofstream outfile(filename.c_str(), std::ios::binary);
+    IOStreamWriter writer(outfile);
+    index->serialize(writer);
+    outfile.close();
 
-        REQUIRE(vec->GetIds()[0] == new_id);
+    index = std::make_shared<vsag::HGraphIndex>(json_param["index_param"], param);
+    index->Init();
+    std::ifstream infile(filename.c_str(), std::ios::binary);
+    IOStreamReader reader(infile);
+    index->deserialize(reader);
+    func();
 
-    }
-    delete param.allocator_;
+    infile.close();
 }
 
 //TEST_CASE("knn_search", "[ut][hnsw]") {

@@ -73,6 +73,9 @@ public:
     inline void
     SerializeImpl(StreamWriter& writer);
 
+    inline void
+    DeserializeImpl(StreamReader& reader);
+
 private:
     [[nodiscard]] inline bool
     checkValidOffset(uint64_t size) const {
@@ -192,8 +195,23 @@ MemoryBlockIO::SerializeImpl(StreamWriter& writer) {
     StreamWriter::WriteObj(writer, this->block_size_);
     uint64_t block_count = this->blocks_.size();
     StreamWriter::WriteObj(writer, block_count);
-    for (uint64_t i = 0; i < block_count; ++ i) {
+    for (uint64_t i = 0; i < block_count; ++i) {
         writer.Write(reinterpret_cast<char*>(this->blocks_[i]), block_size_);
+    }
+}
+
+void
+MemoryBlockIO::DeserializeImpl(StreamReader& reader) {
+    for (auto* block : blocks_) {
+        allocator_->Deallocate(block);
+    }
+    StreamReader::ReadObj(reader, this->block_size_);
+    uint64_t block_count;
+    StreamReader::ReadObj(reader, block_count);
+    this->blocks_.resize(block_count);
+    for (uint64_t i = 0; i < block_count; ++i) {
+        blocks_[i] = static_cast<unsigned char*>(allocator_->Allocate(this->block_size_));
+        reader.Read(reinterpret_cast<char*>(blocks_[i]), block_size_);
     }
 }
 

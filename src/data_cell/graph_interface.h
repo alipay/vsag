@@ -59,6 +59,13 @@ public:
         StreamWriter::WriteObj(writer, this->maximum_degree_);
     }
 
+    virtual void
+    Deserialize(StreamReader& reader) {
+        StreamReader::ReadObj(reader, this->total_count_);
+        StreamReader::ReadObj(reader, this->max_capacity_);
+        StreamReader::ReadObj(reader, this->maximum_degree_);
+    }
+
     virtual uint64_t
     InsertNeighbors(const std::vector<uint64_t>& neighbor_ids) {
         this->max_capacity_ = std::max(this->max_capacity_, total_count_ + 1);

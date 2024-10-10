@@ -16,8 +16,9 @@
 #pragma once
 
 #include <cstdint>
-#include "stream_writer.h"
+
 #include "stream_reader.h"
+#include "stream_writer.h"
 
 namespace vsag {
 
@@ -56,6 +57,11 @@ public:
     inline void
     Serialize(StreamWriter& writer) {
         return cast().SerializeImpl(writer);
+    }
+
+    inline void
+    Deserialize(StreamReader& reader) {
+        return cast().DeserializeImpl(reader);
     }
 
 private:

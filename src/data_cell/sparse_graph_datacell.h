@@ -49,7 +49,11 @@ public:
         // TODO(LHT): implement
     }
 
-    void Serialize(StreamWriter& writer) override;
+    void
+    Serialize(StreamWriter& writer) override;
+
+    void
+    Deserialize(StreamReader& reader) override;
 
 private:
     uint64_t code_line_size_{0};

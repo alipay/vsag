@@ -63,6 +63,9 @@ public:
     inline void
     SerializeImpl(StreamWriter& writer);
 
+    inline void
+    DeserializeImpl(StreamReader& reader);
+
 private:
     [[nodiscard]] inline bool
     checkValidOffset(uint64_t size) const {
@@ -126,6 +129,14 @@ void
 MemoryIO::SerializeImpl(StreamWriter& writer) {
     StreamWriter::WriteObj(writer, this->current_size_);
     writer.Write(reinterpret_cast<char*>(this->start_), current_size_);
+}
+
+void
+MemoryIO::DeserializeImpl(StreamReader& reader) {
+    allocator_->Deallocate(this->start_);
+    StreamReader::ReadObj(reader, this->current_size_);
+    this->start_ = static_cast<uint8_t*>(allocator_->Allocate(this->current_size_));
+    reader.Read(reinterpret_cast<char*>(this->start_), current_size_);
 }
 
 }  // namespace vsag

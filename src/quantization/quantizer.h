@@ -134,6 +134,15 @@ public:
         return cast().SerializeImpl(writer);
     }
 
+    inline void
+    Deserialize(StreamReader& reader) {
+        StreamReader::ReadObj(reader, this->dim_);
+        StreamReader::ReadObj(reader, this->metric_);
+        StreamReader::ReadObj(reader, this->code_size_);
+        StreamReader::ReadObj(reader, this->is_trained_);
+        return cast().DeserializeImpl(reader);
+    }
+
     std::shared_ptr<Computer<T>>
     FactoryComputer() {
         return std::make_shared<Computer<T>>(static_cast<T*>(this));
@@ -152,7 +161,7 @@ public:
     inline float
     ComputeDist(Computer<T>& computer, const uint8_t* codes) const {
         float dist = 0.0f;
-        cast().ComputeDistImpl(computer, codes, dist);
+        cast().ComputeDistImpl(computer, codes, &dist);
         return dist;
     }
 

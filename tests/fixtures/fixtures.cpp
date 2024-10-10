@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 
 #include "fmt/format.h"
 #include "vsag/dataset.h"
@@ -46,7 +47,7 @@ normalize(float* input_vector, int64_t dim) {
 std::vector<float>
 generate_vectors(int64_t num_vectors, int64_t dim, bool need_normalize, int seed) {
     std::mt19937 rng(seed);
-    std::uniform_real_distribution<> distrib_real;
+    std::uniform_real_distribution<> distrib_real(-1, 1);
     std::vector<float> vectors(dim * num_vectors);
     for (int64_t i = 0; i < dim * num_vectors; ++i) {
         vectors[i] = distrib_real(rng);
@@ -200,4 +201,25 @@ brute_force(const vsag::DatasetPtr& query,
 
     return std::move(result);
 }
+
+std::vector<IOItem>
+GenTestItems(uint64_t count, uint64_t max_length, uint64_t max_index) {
+    std::vector<IOItem> result(count);
+    std::unordered_set<uint64_t> maps;
+    for (auto& item : result) {
+        while (true) {
+            item.start_ = (random() % max_index) * max_length;
+            if (not maps.count(item.start_)) {
+                maps.insert(item.start_);
+                break;
+            }
+        };
+        item.length_ = random() % max_length;
+        item.data_ = new uint8_t[item.length_];
+        auto vec = fixtures::generate_vectors(1, max_length, false, random());
+        memcpy(item.data_, vec.data(), item.length_);
+    }
+    return result;
+}
+
 }  // namespace fixtures

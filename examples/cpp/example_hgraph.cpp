@@ -85,7 +85,8 @@ main() {
             ->Float32Vectors(data.get())
             ->Owner(false);
         if (const auto num = index.value()->Build(dataset); num.has_value()) {
-            std::cout << "After Build(), Index constains: " << index.value()->GetNumElements() << std::endl;
+            std::cout << "After Build(), Index constains: " << index.value()->GetNumElements()
+                      << std::endl;
         } else if (num.error().type == vsag::ErrorType::INTERNAL_ERROR) {
             std::cerr << "Failed to build index: internalError" << std::endl;
             exit(-1);

@@ -71,8 +71,21 @@ SparseGraphDataCell::Serialize(StreamWriter& writer) {
     for (auto& pair : this->neighbors_) {
         auto key = pair.first;
         StreamWriter::WriteObj(writer, key);
-        StreamWriter::WriteVector(writer,*(pair.second));
+        StreamWriter::WriteVector(writer, *(pair.second));
     }
 }
 
+void
+SparseGraphDataCell::Deserialize(StreamReader& reader) {
+    GraphInterface::Deserialize(reader);
+    StreamReader::ReadObj(reader, this->code_line_size_);
+    uint64_t size;
+    StreamReader::ReadObj(reader, size);
+    for (auto i = 0; i < size; ++i) {
+        uint64_t key;
+        StreamReader::ReadObj(reader, key);
+        this->neighbors_[key] = std::make_unique<vsag::Vector<uint64_t>>(allocator_);
+        StreamReader::ReadVector(reader, *(this->neighbors_[key]));
+    }
+}
 }  // namespace vsag

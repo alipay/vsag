@@ -74,6 +74,9 @@ public:
     void
     Serialize(StreamWriter& writer) override;
 
+    void
+    Deserialize(StreamReader& reader) override;
+
     inline void
     SetQuantizer(std::shared_ptr<Quantizer<QuantTmpl>> quantizer) {
         this->quantizer_ = quantizer;
@@ -199,6 +202,14 @@ FlattenDataCell<QuantTmpl, IOTmpl>::Serialize(StreamWriter& writer) {
     FlattenInterface::Serialize(writer);
     this->io_->Serialize(writer);
     this->quantizer_->Serialize(writer);
+}
+
+template <typename QuantTmpl, typename IOTmpl>
+void
+FlattenDataCell<QuantTmpl, IOTmpl>::Deserialize(StreamReader& reader) {
+    FlattenInterface::Deserialize(reader);
+    this->io_->Deserialize(reader);
+    this->quantizer_->Deserialize(reader);
 }
 
 }  // namespace vsag

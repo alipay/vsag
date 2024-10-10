@@ -126,6 +126,4 @@ const char* const GRAPH_PARAMS_KEY = "graph_params";
 const char* const GRAPH_PARAM_MAX_DEGREE = "max_degree";
 const char* const GRAPH_PARAM_INIT_MAX_CAPACITY = "init_capacity";
 
-
-
 };  // namespace vsag

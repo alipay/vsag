@@ -128,6 +128,21 @@ public:
         return tl::expected<void, Error>();
     };
 
+    tl::expected<BinarySet, Error>
+    serialize() const;
+
+    void
+    serialize(StreamWriter& writer);
+
+    void
+    deserialize(StreamReader& reader);
+
+    void
+    serialize_basic_info(StreamWriter& writer);
+
+    void
+    deserialize_basic_info(StreamReader& reader);
+
 public:
     std::shared_ptr<FlattenInterface> basic_flatten_codes_{nullptr};
     std::shared_ptr<FlattenInterface> high_precise_codes_{nullptr};
@@ -185,14 +200,6 @@ private:
                int64_t k,
                const std::string& parameters,
                BitsetPtr invalid = nullptr) const;
-
-    tl::expected<BinarySet, Error>
-    serialize() const;
-
-    void serialize(StreamWriter& writer);
-
-    void
-    serialize_basic_info(StreamWriter& writer);
 
 private:
     std::default_random_engine level_generator_{2023};

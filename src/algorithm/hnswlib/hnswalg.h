@@ -391,6 +391,9 @@ public:
     void
     checkIntegrity();
 
+    void
+    reset();
+
     bool
     init_memory_space() override;
 };

@@ -71,15 +71,19 @@ HierarchicalNSW::HierarchicalNSW(SpaceInterface* s,
     rev_size_ = 1.0 / mult_;
 }
 
-bool
-HierarchicalNSW::init_memory_space() {
-    // release the memory allocated by the init_memory_space function that was called earlier
+void
+HierarchicalNSW::reset() {
     allocator_->Deallocate(element_levels_);
     allocator_->Deallocate(reversed_level0_link_list_);
     allocator_->Deallocate(reversed_link_lists_);
     allocator_->Deallocate(molds_);
     allocator_->Deallocate(link_lists_);
+}
 
+bool
+HierarchicalNSW::init_memory_space() {
+    // release the memory allocated by the init_memory_space function that was called earlier
+    reset();
     element_levels_ = (int*)allocator_->Allocate(max_elements_ * sizeof(int));
     if (not data_level0_memory_->Resize(max_elements_)) {
         throw std::runtime_error("allocate data_level0_memory_ error");
@@ -119,7 +123,6 @@ HierarchicalNSW::~HierarchicalNSW() {
             if (element_levels_[i] > 0 || link_lists_[i] != nullptr)
                 allocator_->Deallocate(link_lists_[i]);
         }
-        allocator_->Deallocate(link_lists_);
     }
 
     if (use_reversed_edges_) {
@@ -129,13 +132,8 @@ HierarchicalNSW::~HierarchicalNSW() {
             auto& in_edges = *(reversed_link_lists_ + i);
             delete in_edges;
         }
-        allocator_->Deallocate(reversed_link_lists_);
-        allocator_->Deallocate(reversed_level0_link_list_);
     }
-    if (normalize_) {
-        allocator_->Deallocate(molds_);
-    }
-    allocator_->Deallocate(element_levels_);
+    reset();
 }
 
 void

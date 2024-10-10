@@ -390,6 +390,7 @@ public:
         output["search_time_in_second"] = search_time_in_second;
         output["correct"] = correct;
         output["num_query"] = total;
+        output["top_k"] = top_k;
         // key results
         output["recall"] = recall;
         output["qps"] = total / search_time_in_second;

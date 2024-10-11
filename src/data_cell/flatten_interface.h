@@ -15,10 +15,22 @@
 
 #pragma once
 
+#include <nlohmann/json.hpp>
+#include <string>
+
+#include "index/index_common_param.h"
 #include "quantization/computer.h"
+#include "stream_reader.h"
+#include "stream_writer.h"
 
 namespace vsag {
 class FlattenInterface {
+public:
+    FlattenInterface() = default;
+
+    static std::shared_ptr<FlattenInterface>
+    MakeInstance(const nlohmann::json& json_obj, const IndexCommonParam& common_param);
+
 public:
     virtual void
     Query(float* result_dists,
@@ -41,6 +53,9 @@ public:
     virtual float
     ComputePairVectors(uint64_t id1, uint64_t id2) = 0;
 
+    virtual void
+    Prefetch(uint64_t id) = 0;
+
 public:
     virtual void
     SetMaxCapacity(uint64_t capacity) {
@@ -62,9 +77,24 @@ public:
         return this->total_count_;
     }
 
+    virtual void
+    Serialize(StreamWriter& writer) {
+        StreamWriter::WriteObj(writer, this->total_count_);
+        StreamWriter::WriteObj(writer, this->max_capacity_);
+        StreamWriter::WriteObj(writer, this->code_size_);
+    }
+
+    virtual void
+    Deserialize(StreamReader& reader) {
+        StreamReader::ReadObj(reader, this->total_count_);
+        StreamReader::ReadObj(reader, this->max_capacity_);
+        StreamReader::ReadObj(reader, this->code_size_);
+    }
+
 public:
     uint64_t total_count_{0};
     uint64_t max_capacity_{1000000};
     uint64_t code_size_{0};
 };
+
 }  // namespace vsag

@@ -121,11 +121,11 @@ template <MetricType Metric>
 float
 FP32Quantizer<Metric>::ComputeImpl(const uint8_t* codes1, const uint8_t* codes2) {
     if (Metric == MetricType::METRIC_TYPE_IP) {
-        return InnerProduct(codes1, codes2, &this->dim_);
+        return 1-InnerProduct(codes1, codes2, &this->dim_);
     } else if (Metric == MetricType::METRIC_TYPE_L2SQR) {
         return L2Sqr(codes1, codes2, &this->dim_);
     } else if (Metric == MetricType::METRIC_TYPE_COSINE) {
-        return InnerProduct(codes1, codes2, &this->dim_);  // TODO
+        return 1-InnerProduct(codes1, codes2, &this->dim_);  // TODO
     } else {
         return 0.0f;
     }
@@ -145,11 +145,11 @@ FP32Quantizer<Metric>::ComputeDistImpl(Computer<FP32Quantizer<Metric>>& computer
                                        const uint8_t* codes,
                                        float* dists) const {
     if (Metric == MetricType::METRIC_TYPE_IP) {
-        *dists = InnerProduct(codes, computer.buf_, &this->dim_);
+        *dists = 1-InnerProduct(codes, computer.buf_, &this->dim_);
     } else if (Metric == MetricType::METRIC_TYPE_L2SQR) {
         *dists = L2Sqr(codes, computer.buf_, &this->dim_);
     } else if (Metric == MetricType::METRIC_TYPE_COSINE) {
-        *dists = InnerProduct(codes, computer.buf_, &this->dim_);  // TODO
+        *dists = 1-InnerProduct(codes, computer.buf_, &this->dim_);  // TODO
     } else {
         *dists = 0.0f;
     }

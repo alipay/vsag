@@ -118,5 +118,4 @@ public:
 
     std::mutex global_{};
 };
-
 }  // namespace vsag

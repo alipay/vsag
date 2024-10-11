@@ -51,7 +51,7 @@ struct CompareByFirst {
     }
 };
 using MaxHeap = std::priority_queue<std::pair<float, tableint>,
-                                    std::vector<std::pair<float, tableint>>,
+                                    vsag::Vector<std::pair<float, tableint>>,
                                     CompareByFirst>;
 const static float THRESHOLD_ERROR = 1e-6;
 
@@ -185,7 +185,6 @@ public:
                 if (element_levels_[i] > 0 || link_lists_[i] != nullptr)
                     allocator_->Deallocate(link_lists_[i]);
             }
-            allocator_->Deallocate(link_lists_);
         }
 
         if (use_reversed_edges_) {
@@ -199,13 +198,8 @@ public:
                     delete in_edges;
                 }
             }
-            allocator_->Deallocate(reversed_link_lists_);
-            allocator_->Deallocate(reversed_level0_link_list_);
         }
-        if (normalize_) {
-            allocator_->Deallocate(molds_);
-        }
-        allocator_->Deallocate(element_levels_);
+        reset();
     }
 
     void
@@ -419,21 +413,21 @@ public:
     }
 
     std::priority_queue<std::pair<float, tableint>,
-                        std::vector<std::pair<float, tableint>>,
+                        vsag::Vector<std::pair<float, tableint>>,
                         CompareByFirst>
     searchBaseLayer(tableint ep_id, const void* data_point, int layer) {
-        VisitedList* vl = visited_list_pool_->getFreeVisitedList();
+        auto vl = visited_list_pool_->getFreeVisitedList();
         vl_type* visited_array = vl->mass;
         vl_type visited_array_tag = vl->curV;
 
         std::priority_queue<std::pair<float, tableint>,
-                            std::vector<std::pair<float, tableint>>,
+                            vsag::Vector<std::pair<float, tableint>>,
                             CompareByFirst>
-            top_candidates;
+            top_candidates(allocator_);
         std::priority_queue<std::pair<float, tableint>,
-                            std::vector<std::pair<float, tableint>>,
+                            vsag::Vector<std::pair<float, tableint>>,
                             CompareByFirst>
-            candidateSet;
+            candidateSet(allocator_);
 
         float lowerBound;
         if (!isMarkedDeleted(ep_id)) {
@@ -511,24 +505,24 @@ public:
 
     template <bool has_deletions, bool collect_metrics = false>
     std::priority_queue<std::pair<float, tableint>,
-                        std::vector<std::pair<float, tableint>>,
+                        vsag::Vector<std::pair<float, tableint>>,
                         CompareByFirst>
     searchBaseLayerST(tableint ep_id,
                       const void* data_point,
                       size_t ef,
                       BaseFilterFunctor* isIdAllowed = nullptr) const {
-        VisitedList* vl = visited_list_pool_->getFreeVisitedList();
+        auto vl = visited_list_pool_->getFreeVisitedList();
         vl_type* visited_array = vl->mass;
         vl_type visited_array_tag = vl->curV;
 
         std::priority_queue<std::pair<float, tableint>,
-                            std::vector<std::pair<float, tableint>>,
+                            vsag::Vector<std::pair<float, tableint>>,
                             CompareByFirst>
-            top_candidates;
+            top_candidates(allocator_);
         std::priority_queue<std::pair<float, tableint>,
-                            std::vector<std::pair<float, tableint>>,
+                            vsag::Vector<std::pair<float, tableint>>,
                             CompareByFirst>
-            candidate_set;
+            candidate_set(allocator_);
 
         float lowerBound;
         if ((!has_deletions || !isMarkedDeleted(ep_id)) &&
@@ -612,25 +606,25 @@ public:
 
     template <bool has_deletions, bool collect_metrics = false>
     std::priority_queue<std::pair<float, tableint>,
-                        std::vector<std::pair<float, tableint>>,
+                        vsag::Vector<std::pair<float, tableint>>,
                         CompareByFirst>
     searchBaseLayerST(tableint ep_id,
                       const void* data_point,
                       float radius,
                       int64_t ef,
                       BaseFilterFunctor* isIdAllowed = nullptr) const {
-        VisitedList* vl = visited_list_pool_->getFreeVisitedList();
+        auto vl = visited_list_pool_->getFreeVisitedList();
         vl_type* visited_array = vl->mass;
         vl_type visited_array_tag = vl->curV;
 
         std::priority_queue<std::pair<float, tableint>,
-                            std::vector<std::pair<float, tableint>>,
+                            vsag::Vector<std::pair<float, tableint>>,
                             CompareByFirst>
-            top_candidates;
+            top_candidates(allocator_);
         std::priority_queue<std::pair<float, tableint>,
-                            std::vector<std::pair<float, tableint>>,
+                            vsag::Vector<std::pair<float, tableint>>,
                             CompareByFirst>
-            candidate_set;
+            candidate_set(allocator_);
 
         float lowerBound;
         if ((!has_deletions || !isMarkedDeleted(ep_id)) &&
@@ -716,7 +710,7 @@ public:
 
     void
     getNeighborsByHeuristic2(std::priority_queue<std::pair<float, tableint>,
-                                                 std::vector<std::pair<float, tableint>>,
+                                                 vsag::Vector<std::pair<float, tableint>>,
                                                  CompareByFirst>& top_candidates,
                              const size_t M) {
         if (top_candidates.size() < M) {
@@ -776,7 +770,7 @@ public:
     mutuallyConnectNewElement(const void* data_point,
                               tableint cur_c,
                               std::priority_queue<std::pair<float, tableint>,
-                                                  std::vector<std::pair<float, tableint>>,
+                                                  vsag::Vector<std::pair<float, tableint>>,
                                                   CompareByFirst>& top_candidates,
                               int level,
                               bool isUpdate) {
@@ -851,9 +845,9 @@ public:
                                                dist_func_param_);
                     // Heuristic:
                     std::priority_queue<std::pair<float, tableint>,
-                                        std::vector<std::pair<float, tableint>>,
+                                        vsag::Vector<std::pair<float, tableint>>,
                                         CompareByFirst>
-                        candidates;
+                        candidates(allocator_);
                     candidates.emplace(d_max, cur_c);
 
                     for (size_t j = 0; j < sz_link_list_other; j++) {
@@ -1481,9 +1475,9 @@ public:
 
             for (const auto in_edge : in_edges_cur) {
                 std::priority_queue<std::pair<float, tableint>,
-                                    std::vector<std::pair<float, tableint>>,
+                                    vsag::Vector<std::pair<float, tableint>>,
                                     CompareByFirst>
-                    candidates;
+                    candidates(allocator_);
                 vsag::UnorderedSet<tableint> unique_ids(allocator_);
 
                 // Add the original neighbors of the indegree node to the candidate queue.
@@ -1625,7 +1619,7 @@ public:
                     throw std::runtime_error("Level error");
 
                 std::priority_queue<std::pair<float, tableint>,
-                                    std::vector<std::pair<float, tableint>>,
+                                    vsag::Vector<std::pair<float, tableint>>,
                                     CompareByFirst>
                     top_candidates = searchBaseLayer(currObj, data_point, level);
                 if (epDeleted) {
@@ -1695,9 +1689,9 @@ public:
         }
 
         std::priority_queue<std::pair<float, tableint>,
-                            std::vector<std::pair<float, tableint>>,
+                            vsag::Vector<std::pair<float, tableint>>,
                             CompareByFirst>
-            top_candidates;
+            top_candidates(allocator_);
         if (num_deleted_) {
             top_candidates =
                 searchBaseLayerST<true, true>(currObj, query_data, std::max(ef, k), isIdAllowed);
@@ -1760,9 +1754,9 @@ public:
         }
 
         std::priority_queue<std::pair<float, tableint>,
-                            std::vector<std::pair<float, tableint>>,
+                            vsag::Vector<std::pair<float, tableint>>,
                             CompareByFirst>
-            top_candidates;
+            top_candidates(allocator_);
         if (num_deleted_) {
             throw std::runtime_error(
                 "not support perform range search on a index that deleted some vectors");
@@ -1782,8 +1776,23 @@ public:
         return result;
     }
 
+    void
+    reset() {
+        allocator_->Deallocate(element_levels_);
+        element_levels_ = nullptr;
+        allocator_->Deallocate(reversed_level0_link_list_);
+        reversed_level0_link_list_ = nullptr;
+        allocator_->Deallocate(reversed_link_lists_);
+        reversed_link_lists_ = nullptr;
+        allocator_->Deallocate(molds_);
+        molds_ = nullptr;
+        allocator_->Deallocate(link_lists_);
+        link_lists_ = nullptr;
+    }
+
     bool
     init_memory_space() override {
+        reset();
         element_levels_ = (int*)allocator_->Allocate(max_elements_ * sizeof(int));
         if (not data_level0_memory_->Resize(max_elements_)) {
             throw std::runtime_error("allocate data_level0_memory_ error");

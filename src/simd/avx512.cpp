@@ -15,6 +15,8 @@
 
 #include <immintrin.h>
 
+#include <iostream>
+
 #include "fp32_simd.h"
 #include "sq4_simd.h"
 #include "sq4_uniform_simd.h"

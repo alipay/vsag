@@ -124,6 +124,7 @@ HNSW::build(const DatasetPtr& base) {
         std::vector<int64_t> failed_ids;
         {
             SlowTaskTimer t("hnsw graph");
+            //#pragma omp parallel for
             for (int64_t i = 0; i < num_elements; ++i) {
                 // noexcept runtime
                 if (!alg_hnsw_->addPoint((const void*)(vectors + i * dim_), ids[i])) {

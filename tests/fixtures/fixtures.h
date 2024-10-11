@@ -24,8 +24,14 @@
 
 namespace fixtures {
 
+std::vector<int>
+get_common_used_dims();
+
 std::vector<float>
 generate_vectors(int64_t num_vectors, int64_t dim, bool need_normalize = true, int seed = 47);
+
+std::vector<uint8_t>
+generate_int4_codes(uint64_t count, uint32_t dim, int seed = 47);
 
 std::tuple<std::vector<int64_t>, std::vector<float>>
 generate_ids_and_vectors(int64_t num_elements,
@@ -68,7 +74,7 @@ brute_force(const vsag::DatasetPtr& query,
             const std::string& metric_type);
 
 struct temp_dir {
-    temp_dir(const std::string& name) {
+    explicit temp_dir(const std::string& name) {
         auto epoch_time = std::chrono::system_clock::now().time_since_epoch();
         auto seconds = std::chrono::duration_cast<std::chrono::seconds>(epoch_time).count();
 
@@ -116,5 +122,18 @@ using dist_t = comparable_float_t;
 // we will limit the error to within 2e-6.
 using time_t = comparable_float_t;
 using recall_t = comparable_float_t;
+
+struct IOItem {
+    uint64_t start_;
+    uint64_t length_;
+    uint8_t* data_;
+
+    ~IOItem() {
+        delete[] data_;
+    }
+};
+
+std::vector<IOItem>
+GenTestItems(uint64_t count, uint64_t max_length, uint64_t max_index = 100000);
 
 }  // Namespace fixtures

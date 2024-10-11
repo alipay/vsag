@@ -136,7 +136,7 @@ SQ4UniformQuantizer<metric>::TrainImpl(const DataType* data, uint64_t count) {
 
     diff_ -= lower_bound_;
     if (diff_ < 1e-4) {
-        diff_ = 1;
+        diff_ = 1;  // todo: throw warning here
     }
 
     this->is_trained_ = true;

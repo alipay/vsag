@@ -510,42 +510,92 @@ public:
     }
 
     inline int32_t
-    INT4_IP_avx512_impl(const void* p1_vec, const void* p2_vec, int dim) const {
-        int d = 0;
+    GENERIC_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim) const {
+        int32_t result = 0;
+
+        for (uint64_t d = 0; d < dim; d += 2) {
+            float x_lo = codes1[d >> 1] & 0x0f;
+            float x_hi = (codes1[d >> 1] & 0xf0) >> 4;
+            float y_lo = codes2[d >> 1] & 0x0f;
+            float y_hi = (codes2[d >> 1] & 0xf0) >> 4;
+
+            result += (x_lo * y_lo + x_hi * y_hi);
+        }
+
+        return result;
+    }
+
+    inline int32_t
+    SSE_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim) const {
+        if (dim == 0) {
+            return 0;
+        }
+        alignas(128) int16_t temp[8];
+        int32_t result = 0;
+        uint64_t d = 0;
+        __m128i sum = _mm_setzero_si128();
+        __m128i mask = _mm_set1_epi8(0xf);
+        for (; d + 31 < dim; d += 32) {
+            auto xx = _mm_loadu_si128((__m128i*)(codes1 + (d >> 1)));
+            auto yy = _mm_loadu_si128((__m128i*)(codes2 + (d >> 1)));
+            auto xx1 = _mm_and_si128(xx, mask);                     // 16 * 8bits
+            auto xx2 = _mm_and_si128(_mm_srli_epi16(xx, 4), mask);  // 16 * 8bits
+            auto yy1 = _mm_and_si128(yy, mask);
+            auto yy2 = _mm_and_si128(_mm_srli_epi16(yy, 4), mask);
+
+            sum = _mm_add_epi16(sum, _mm_maddubs_epi16(xx1, yy1));
+            sum = _mm_add_epi16(sum, _mm_maddubs_epi16(xx2, yy2));
+        }
+        _mm_store_si128((__m128i*)temp, sum);
+        for (int i = 0; i < 8; ++i) {
+            result += temp[i];
+        }
+        result += GENERIC_SQ4UniformComputeCodesIP(codes1 + (d >> 1), codes2 + (d >> 1), dim - d);
+        return result;
+    }
+
+    inline int32_t
+    AVX2_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim) const {
+        if (dim == 0) {
+            return 0;
+        }
+        alignas(256) int16_t temp[16];
+        int32_t result = 0;
+        uint64_t d = 0;
+        __m256i sum = _mm256_setzero_si256();
+        __m256i mask = _mm256_set1_epi8(0xf);
+        for (; d + 63 < dim; d += 64) {
+            auto xx = _mm256_loadu_si256((__m256i*)(codes1 + (d >> 1)));
+            auto yy = _mm256_loadu_si256((__m256i*)(codes2 + (d >> 1)));
+            auto xx1 = _mm256_and_si256(xx, mask);                        // 32 * 8bits
+            auto xx2 = _mm256_and_si256(_mm256_srli_epi16(xx, 4), mask);  // 32 * 8bits
+            auto yy1 = _mm256_and_si256(yy, mask);
+            auto yy2 = _mm256_and_si256(_mm256_srli_epi16(yy, 4), mask);
+
+            sum = _mm256_add_epi16(sum, _mm256_maddubs_epi16(xx1, yy1));
+            sum = _mm256_add_epi16(sum, _mm256_maddubs_epi16(xx2, yy2));
+        }
+        _mm256_store_si256((__m256i*)temp, sum);
+        for (int i = 0; i < 16; ++i) {
+            result += temp[i];
+        }
+        result += SSE_SQ4UniformComputeCodesIP(codes1 + (d >> 1), codes2 + (d >> 1), dim - d);
+        return result;
+    }
+
+    inline int32_t
+    AVX512_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim) const {
+        if (dim == 0) {
+            return 0;
+        }
         alignas(512) int16_t temp[32];
-        int result = 0;
-        int8_t* x = (int8_t*)p1_vec;
-        int8_t* y = (int8_t*)p2_vec;
+        int32_t result = 0;
+        uint64_t d = 0;
         __m512i sum = _mm512_setzero_si512();
         __m512i mask = _mm512_set1_epi8(0xf);
-        for (d = 0; d < dim / 2; d += 64) {
-            auto xx = _mm512_loadu_si512((__m512i*)(x + d));
-            auto yy = _mm512_loadu_si512((__m512i*)(y + d));
-
-            //            if (prefetch) {
-            //                _mm_prefetch(prefetch + d, _MM_HINT_T0);
-            //            }
-
-            if (d + 64 >= dim / 2) {
-                __m512i mask_overflow = _mm512_setr_epi32(0xffffffff,
-                                                          0xffffffff,
-                                                          0xffffffff,
-                                                          0xffffffff,
-                                                          0xffffffff,
-                                                          0xffffffff,
-                                                          0xffffffff,
-                                                          0xffffffff,
-                                                          0,
-                                                          0,
-                                                          0,
-                                                          0,
-                                                          0,
-                                                          0,
-                                                          0,
-                                                          0);
-                xx = _mm512_and_si512(xx, mask_overflow);
-                yy = _mm512_and_si512(yy, mask_overflow);
-            }
+        for (; d + 127 < dim; d += 128) {
+            auto xx = _mm512_loadu_si512((__m512i*)(codes1 + (d >> 1)));
+            auto yy = _mm512_loadu_si512((__m512i*)(codes2 + (d >> 1)));
             auto xx1 = _mm512_and_si512(xx, mask);                        // 64 * 8bits
             auto xx2 = _mm512_and_si512(_mm512_srli_epi16(xx, 4), mask);  // 64 * 8bits
             auto yy1 = _mm512_and_si512(yy, mask);
@@ -553,24 +603,30 @@ public:
 
             sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(xx1, yy1));
             sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(xx2, yy2));
-            //
-            //            if (d / 64 == this->p_round_ and NB != -10000) {
-            //                result = 0;
-            //                _mm512_store_si512((__m512i*)temp, sum);
-            //                for (int i = 0; i < 32; ++i) {
-            //                    result += temp[i];
-            //                }
-            //                if (result + (dim / 2 - d) * 225 * this->p_rate_ < NB) {
-            //                    return 0;
-            //                }
-            //            }
         }
-        result = 0;
         _mm512_store_si512((__m512i*)temp, sum);
         for (int i = 0; i < 32; ++i) {
             result += temp[i];
         }
+//        result += (temp[0] + temp[1] + temp[2] + temp[3]);
+//        result += (temp[4] + temp[5] + temp[6] + temp[7]);
+//        result += (temp[8] + temp[9] + temp[10] + temp[11]);
+//        result += (temp[12] + temp[13] + temp[14] + temp[15]);
+//
+//        result += (temp[16] + temp[17] + temp[18] + temp[19]);
+//        result += (temp[20] + temp[21] + temp[22] + temp[23]);
+//        result += (temp[24] + temp[25] + temp[26] + temp[27]);
+//        result += (temp[28] + temp[29] + temp[30] + temp[31]);
+
+        result += AVX2_SQ4UniformComputeCodesIP(codes1 + (d >> 1), codes2 + (d >> 1), dim - d);
         return result;
+    }
+
+    inline int32_t
+    INT4_IP_avx512_impl(const void* p1_vec, const void* p2_vec, int dim) const {
+        const uint8_t* x = (const uint8_t*)p1_vec;
+        const uint8_t* y = (const uint8_t*)p2_vec;
+        return AVX512_SQ4UniformComputeCodesIP(x, y, dim);
     }
 
     int32_t
@@ -1062,7 +1118,7 @@ public:
 
     void
     optimize() override {
-        constexpr static size_t sample_points_num = 1000;
+        constexpr static size_t sample_points_num = 10000;
         constexpr static size_t k = 10;
         size_t dim = *(size_t*)dist_func_param_;
 
@@ -1073,8 +1129,11 @@ public:
             code_size = dim;
         }
 
-        std::vector<int> try_pos(5);
-        std::vector<int> try_pls(code_size / 64 + 3);
+        size_t po_size = (dim > 500) ? 5 : 10;
+        size_t pl_size = code_size / 64 + 3;
+
+        std::vector<int> try_pos(po_size);
+        std::vector<int> try_pls(pl_size);
         std::iota(try_pos.begin(), try_pos.end(), 1);
         std::iota(try_pls.begin(), try_pls.end(), 1);
 

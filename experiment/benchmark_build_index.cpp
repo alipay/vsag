@@ -15,7 +15,20 @@ int sq_num_bits = -1;
 int gt_dim = 100;
 float redundant_rate = 1.0;
 
-int get_data(vsag::DatasetPtr& data, uint32_t expected_dim, std::string data_path_fmt)
+void
+normalize(float* input_vector, int64_t dim) {
+    float magnitude = 0.0f;
+    for (int64_t i = 0; i < dim; ++i) {
+        magnitude += input_vector[i] * input_vector[i];
+    }
+    magnitude = std::sqrt(magnitude);
+
+    for (int64_t i = 0; i < dim; ++i) {
+        input_vector[i] = input_vector[i] / magnitude;
+    }
+}
+
+int get_data(vsag::DatasetPtr& data, uint32_t expected_dim, std::string data_path_fmt, bool need_norm = false)
 {
     auto logger = vsag::Options::Instance().logger();
     logger->SetLevel(vsag::Logger::Level::kDEBUG);
@@ -40,6 +53,12 @@ int get_data(vsag::DatasetPtr& data, uint32_t expected_dim, std::string data_pat
     base_id = new int64_t[base_npts];
     for (int64_t i = 0; i < base_npts; i++) {
         base_id[i] = i;
+    }
+
+    if (need_norm) {
+        for (int i = 0; i < base_npts; i++) {
+            normalize(base_vec + i * base_dim, base_dim);
+        }
     }
 
     data->NumElements(base_npts)
@@ -92,13 +111,11 @@ int build(bool is_recompute = false) {
     }
 
     // metric
-    std::string metric_type;
-    if (metric_name == "euclidean") {
-        metric_type = vsag::METRIC_L2;
-    } else if (metric_name == "angular" or metric_name == "dot"){
-        metric_type = vsag::METRIC_IP;
-    } else {
-        logger->Error(fmt::format("unsupported metric: {}", metric_name));
+    std::string metric_type = vsag::METRIC_L2;
+    if (metric_name == "angular" or metric_name == "dot") {
+        for (int i = 0; i < base_npts; i++) {
+            normalize(base_vec + i * base_dim, base_dim);
+        }
     }
 
     // data
@@ -173,21 +190,18 @@ int calculate_gt(bool is_recompute = false) {
     logger->Debug(fmt::format("dataset: {}, expected_dim: {}, metric: {}", dataset_name, expected_dim, metric_name));
 
     // metric
-    std::string metric_type;
-    if (metric_name == "euclidean") {
-        metric_type = vsag::METRIC_L2;
-    } else if (metric_name == "angular" or metric_name == "dot"){
-        metric_type = vsag::METRIC_IP;
-    } else {
-        logger->Error(fmt::format("unsupported metric: {}", metric_name));
+    std::string metric_type = vsag::METRIC_L2;
+    bool need_norm = false;
+    if (metric_name == "angular" or metric_name == "dot") {
+        need_norm = true;
     }
 
     // data preparation
     logger->Debug(fmt::format("====Start load data===="));
     auto base = vsag::Dataset::Make();
     auto query = vsag::Dataset::Make();
-    int base_npts = get_data(base, expected_dim, BENCHMARK_BASE_PATH_FMT);
-    int query_npts = get_data(query, expected_dim, BENCHMARK_QUERY_PATH_FMT);
+    int base_npts = get_data(base, expected_dim, BENCHMARK_BASE_PATH_FMT, need_norm);
+    int query_npts = get_data(query, expected_dim, BENCHMARK_QUERY_PATH_FMT, need_norm);
     if (target_npts > 0) {
         base_npts = std::min(target_npts, base_npts);
         logger->Debug(fmt::format("target npts: {}", base_npts));
@@ -313,29 +327,25 @@ int search(std::vector<uint32_t> efs, uint32_t k = 10) {
     logger->Debug(fmt::format("dataset: {}, expected_dim: {}, metric: {}", dataset_name, expected_dim, metric_name));
 
     // metric
-    std::string metric_type;
-    if (metric_name == "euclidean") {
-        metric_type = vsag::METRIC_L2;
-    } else if (metric_name == "angular" or metric_name == "dot"){
-        metric_type = vsag::METRIC_IP;
-    } else {
-        logger->Error(fmt::format("unsupported metric: {}", metric_name));
+    std::string metric_type = vsag::METRIC_L2;
+    bool need_norm = false;
+    if (metric_name == "angular" or metric_name == "dot") {
+        need_norm = true;
     }
 
     // index load
-//    logger->Debug(fmt::format("====Start create===="));
-//    auto base = vsag::Dataset::Make();
-//    int base_npts = get_data(base, expected_dim, BENCHMARK_BASE_PATH_FMT);
-//    if (target_npts > 0) {
-//        base_npts = std::min(target_npts, base_npts);
-//        logger->Debug(fmt::format("target npts: {}", base_npts));
-//        base->NumElements(base_npts);
-//    }
+    logger->Debug(fmt::format("====Start create===="));
+    int base_npts = 0;
+    {
+        auto base = vsag::Dataset::Make();
+        base_npts = get_data(base, expected_dim, BENCHMARK_BASE_PATH_FMT);
+        base->NumElements(base_npts);
+    }
     auto build_parameters = fmt::format(BUILD_PARAM_FMT, metric_type, expected_dim, BR, BL, sq_num_bits, use_static, redundant_rate);
     auto index = vsag::Factory::CreateIndex(algo_name, build_parameters).value();
     std::string index_path = fmt::format(INDEX_PATH_FMT,
                                          workspace, algo_name, dataset_name,
-                                         1000000, BL, BR,
+                                         base_npts, BL, BR,
                                          use_static ? "static" : "pure");
 
     logger->Debug(fmt::format("====Start deserialize from {}====", index_path));
@@ -344,9 +354,9 @@ int search(std::vector<uint32_t> efs, uint32_t k = 10) {
     // query and gt
     logger->Debug(fmt::format("====Load query and GT===="));
     auto query = vsag::Dataset::Make();
-    int query_npts = get_data(query, expected_dim, BENCHMARK_QUERY_PATH_FMT);
+    int query_npts = get_data(query, expected_dim, BENCHMARK_QUERY_PATH_FMT, need_norm);
 
-    auto gt_path = fmt::format(BENCHMARK_GT_PATH_FMT, dataset, 1000000, gt_dim);
+    auto gt_path = fmt::format(BENCHMARK_GT_PATH_FMT, dataset, base_npts, gt_dim);
     int32_t* gt_data;
     uint32_t gt_npts, gt_valid_dim;
     vsag::load_aligned_fvecs(gt_path, gt_data, gt_npts, gt_valid_dim);

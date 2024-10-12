@@ -419,6 +419,7 @@ int main(int argc, char** argv) {
     gt_dim = 100;
     redundant_rate = 0;
     int ef_search = -1;
+    float rr = -1;
     auto logger = vsag::Options::Instance().logger();
 
     if (argc > 1) {
@@ -439,6 +440,12 @@ int main(int argc, char** argv) {
         ef_search = -1;
     }
 
+    if (argc > 4) {
+        rr = std::stof(argv[4]);
+    } else {
+        rr = -1;
+    }
+
     bool is_recompute = false;
     // prepare index and ground_truth
 //    build(is_recompute);
@@ -446,11 +453,13 @@ int main(int argc, char** argv) {
 
     // search
     std::vector<uint32_t> efs = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+    std::vector<float> redundant_rate_list = {1.0, 0};
     if (ef_search != -1) {
         efs.assign(1000, ef_search);
     }
-    std::vector<float> redundant_rate_list = {1.0, 0};
-
+    if (rr != -1) {
+        redundant_rate_list.assign({rr});
+    }
     for (auto rate : redundant_rate_list) {
         redundant_rate = rate;
         logger->Info(fmt::format("sq: {}, rr: {}", sq_num_bits, redundant_rate));

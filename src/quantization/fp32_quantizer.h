@@ -17,6 +17,8 @@
 #include <cstdint>
 #include <cstring>
 
+#include "index/index_common_param.h"
+#include "nlohmann/json.hpp"
 #include "quantizer.h"
 #include "simd/simd.h"
 
@@ -26,6 +28,8 @@ template <MetricType Metric = MetricType::METRIC_TYPE_L2SQR>
 class FP32Quantizer : public Quantizer<FP32Quantizer<Metric>> {
 public:
     explicit FP32Quantizer(int dim);
+
+    FP32Quantizer(const nlohmann::json& quantization_obj, const IndexCommonParam& common_param);
 
     ~FP32Quantizer() = default;
 
@@ -47,6 +51,12 @@ public:
     float
     ComputeImpl(const uint8_t* codes1, const uint8_t* codes2);
 
+    void
+    SerializeImpl(StreamWriter& writer){};
+
+    void
+    DeserializeImpl(StreamReader& reader){};
+
     inline void
     ProcessQueryImpl(const DataType* query, Computer<FP32Quantizer<Metric>>& computer) const;
 
@@ -57,9 +67,15 @@ public:
 };
 
 template <MetricType Metric>
+FP32Quantizer<Metric>::FP32Quantizer(const nlohmann::json& quantization_obj,
+                                     const IndexCommonParam& common_param)
+    : Quantizer<FP32Quantizer<Metric>>(common_param.dim_) {
+    this->code_size_ = common_param.dim_ * sizeof(float);
+}
+
+template <MetricType Metric>
 FP32Quantizer<Metric>::FP32Quantizer(int dim) : Quantizer<FP32Quantizer<Metric>>(dim) {
-    // align 64 bytes (512 bits) to avoid illegal memory access in SIMD
-    this->code_size_ = (dim * sizeof(float) + (1 << 6) - 1) >> 6 << 6;
+    this->code_size_ = dim * sizeof(float);
 }
 
 template <MetricType Metric>
@@ -105,11 +121,11 @@ template <MetricType Metric>
 float
 FP32Quantizer<Metric>::ComputeImpl(const uint8_t* codes1, const uint8_t* codes2) {
     if (Metric == MetricType::METRIC_TYPE_IP) {
-        return InnerProduct(codes1, codes2, &this->dim_);
+        return 1-InnerProduct(codes1, codes2, &this->dim_);
     } else if (Metric == MetricType::METRIC_TYPE_L2SQR) {
         return L2Sqr(codes1, codes2, &this->dim_);
     } else if (Metric == MetricType::METRIC_TYPE_COSINE) {
-        return InnerProduct(codes1, codes2, &this->dim_);  // TODO
+        return 1-InnerProduct(codes1, codes2, &this->dim_);  // TODO
     } else {
         return 0.0f;
     }
@@ -129,13 +145,14 @@ FP32Quantizer<Metric>::ComputeDistImpl(Computer<FP32Quantizer<Metric>>& computer
                                        const uint8_t* codes,
                                        float* dists) const {
     if (Metric == MetricType::METRIC_TYPE_IP) {
-        *dists = InnerProduct(codes, computer.buf_, &this->dim_);
+        *dists = 1-InnerProduct(codes, computer.buf_, &this->dim_);
     } else if (Metric == MetricType::METRIC_TYPE_L2SQR) {
         *dists = L2Sqr(codes, computer.buf_, &this->dim_);
     } else if (Metric == MetricType::METRIC_TYPE_COSINE) {
-        *dists = InnerProduct(codes, computer.buf_, &this->dim_);  // TODO
+        *dists = 1-InnerProduct(codes, computer.buf_, &this->dim_);  // TODO
     } else {
         *dists = 0.0f;
     }
 }
+
 }  // namespace vsag

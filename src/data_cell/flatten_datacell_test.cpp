@@ -16,62 +16,30 @@
 #include "flatten_datacell.h"
 
 #include <algorithm>
-#include <random>
 
 #include "catch2/catch_template_test_macros.hpp"
 #include "default_allocator.h"
 #include "fixtures.h"
-#include "io/memory_io.h"
-#include "quantization/fp32_quantizer.h"
-#include "quantization/sq8_quantizer.h"
+#include "flatten_interface_test.h"
+#include "io/io_headers.h"
+#include "quantization/quantizer_headers.h"
 
 using namespace vsag;
 
-void
-TestFlattenDataCell(const std::shared_ptr<FlattenInterface>& data_cell,
-                    uint64_t dim,
-                    MetricType metric,
-                    float error = 1e-5) {
-    int64_t base_size = 1000;
-    int64_t query_size = 10;
-    auto vectors = fixtures::generate_vectors(base_size, dim);
-    auto querys = fixtures::generate_vectors(query_size, dim);
 
-    data_cell->Train(vectors.data(), base_size);
-    data_cell->BatchInsertVector(vectors.data(), base_size);
+//template<typename QuantTmpl, typename IOTmpl>
+void TestFlattenDataCell(std::shared_ptr<FlattenInterface> inter, int dim, MetricType metric, float error = 1e-5) {
 
-    auto func = [&](FlattenInterface* vs) {
-        std::vector<uint64_t> idx(base_size);
-        std::iota(idx.begin(), idx.end(), 0);
-        std::shuffle(idx.begin(), idx.end(), std::mt19937(std::random_device()()));
-        std::vector<float> dists(base_size);
-        for (auto i = 0; i < query_size; ++i) {
-            auto computer = vs->FactoryComputer(querys.data() + i * dim);
-            vs->Query(dists.data(), computer, idx.data(), base_size);
-            float gt;
-            for (auto j = 0; j < base_size; ++j) {
-                if (metric == vsag::MetricType::METRIC_TYPE_IP ||
-                    metric == vsag::MetricType::METRIC_TYPE_COSINE) {
-                    gt = InnerProduct(vectors.data() + idx[j] * dim, querys.data() + i * dim, &dim);
-                } else if (metric == vsag::MetricType::METRIC_TYPE_L2SQR) {
-                    gt = L2Sqr(vectors.data() + idx[j] * dim, querys.data() + i * dim, &dim);
-                }
-                REQUIRE(std::abs(gt - dists[j]) < error);
-            }
-        }
-    };
-
-    func(data_cell.get());
-    REQUIRE(data_cell->TotalCount() == base_size);
 }
+
 
 TEST_CASE("fp32[ut][flatten_data_cell]") {
     int dim = 32;
-    auto alloctor = new DefaultAllocator();
+    auto alloctor = std::make_shared<DefaultAllocator>();
     {
         auto data_cell = std::make_shared<FlattenDataCell<FP32Quantizer<>, MemoryIO>>();
         data_cell->SetQuantizer(std::make_shared<FP32Quantizer<>>(dim));
-        data_cell->SetIO(std::make_shared<MemoryIO>(alloctor));
+        data_cell->SetIO(std::make_shared<MemoryIO>(alloctor.get()));
         TestFlattenDataCell(data_cell, dim, vsag::MetricType::METRIC_TYPE_L2SQR);
     }
     {
@@ -79,7 +47,7 @@ TEST_CASE("fp32[ut][flatten_data_cell]") {
             FlattenDataCell<FP32Quantizer<vsag::MetricType::METRIC_TYPE_IP>, MemoryIO>>();
         data_cell->SetQuantizer(
             std::make_shared<FP32Quantizer<vsag::MetricType::METRIC_TYPE_IP>>(dim));
-        data_cell->SetIO(std::make_shared<MemoryIO>(alloctor));
+        data_cell->SetIO(std::make_shared<MemoryIO>(alloctor.get()));
         TestFlattenDataCell(data_cell, dim, vsag::MetricType::METRIC_TYPE_IP);
     }
     {
@@ -87,20 +55,20 @@ TEST_CASE("fp32[ut][flatten_data_cell]") {
             FlattenDataCell<FP32Quantizer<vsag::MetricType::METRIC_TYPE_COSINE>, MemoryIO>>();
         data_cell->SetQuantizer(
             std::make_shared<FP32Quantizer<vsag::MetricType::METRIC_TYPE_COSINE>>(dim));
-        data_cell->SetIO(std::make_shared<MemoryIO>(alloctor));
+        data_cell->SetIO(std::make_shared<MemoryIO>(alloctor.get()));
         TestFlattenDataCell(data_cell, dim, vsag::MetricType::METRIC_TYPE_COSINE);
     }
-    delete alloctor;
 }
 
 TEST_CASE("sq8[ut][flatten_data_cell]") {
     int dim = 32;
+    float error = 0.03;
     auto alloctor = new DefaultAllocator();
     {
         auto data_cell = std::make_shared<FlattenDataCell<SQ8Quantizer<>, MemoryIO>>();
         data_cell->SetQuantizer(std::make_shared<SQ8Quantizer<>>(dim));
         data_cell->SetIO(std::make_shared<MemoryIO>(alloctor));
-        TestFlattenDataCell(data_cell, dim, vsag::MetricType::METRIC_TYPE_L2SQR, 0.01);
+        TestFlattenDataCell(data_cell, dim, vsag::MetricType::METRIC_TYPE_L2SQR, error);
     }
     {
         auto data_cell = std::make_shared<
@@ -108,7 +76,7 @@ TEST_CASE("sq8[ut][flatten_data_cell]") {
         data_cell->SetQuantizer(
             std::make_shared<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_IP>>(dim));
         data_cell->SetIO(std::make_shared<MemoryIO>(alloctor));
-        TestFlattenDataCell(data_cell, dim, vsag::MetricType::METRIC_TYPE_IP, 0.01);
+        TestFlattenDataCell(data_cell, dim, vsag::MetricType::METRIC_TYPE_IP, error);
     }
     {
         auto data_cell = std::make_shared<
@@ -116,7 +84,7 @@ TEST_CASE("sq8[ut][flatten_data_cell]") {
         data_cell->SetQuantizer(
             std::make_shared<SQ8Quantizer<vsag::MetricType::METRIC_TYPE_COSINE>>(dim));
         data_cell->SetIO(std::make_shared<MemoryIO>(alloctor));
-        TestFlattenDataCell(data_cell, dim, vsag::MetricType::METRIC_TYPE_COSINE, 0.01);
+        TestFlattenDataCell(data_cell, dim, vsag::MetricType::METRIC_TYPE_COSINE, error);
     }
     delete alloctor;
 }

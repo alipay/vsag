@@ -62,7 +62,13 @@ public:
     ReadImpl(uint8_t* data, uint64_t size, uint64_t offset) const;
 
     [[nodiscard]] inline const uint8_t*
-    ReadImpl(uint64_t size, uint64_t offset) const;
+    ReadImpl(uint64_t size, uint64_t offset, bool& need_release) const;
+
+    inline void
+    ReleaseImpl(const uint8_t* data) const {
+        auto ptr = const_cast<uint8_t*>(data);
+        allocator_->Deallocate(ptr);
+    };
 
     inline bool
     MultiReadImpl(uint8_t* datas, uint64_t* sizes, uint64_t* offsets, uint64_t count) const;
@@ -147,14 +153,16 @@ MemoryBlockIO::ReadImpl(uint8_t* data, uint64_t size, uint64_t offset) const {
 }
 
 const uint8_t*
-MemoryBlockIO::ReadImpl(uint64_t size, uint64_t offset) const {
+MemoryBlockIO::ReadImpl(uint64_t size, uint64_t offset, bool& need_release) const {
     if (check_valid_offset(size + offset)) {
         if (check_in_one_block(offset, size + offset)) {
+            need_release = false;
             return this->get_data_ptr(offset);
         } else {
-            throw std::runtime_error(
-                "Memory Block IO don't support read cross-block data without passing data "
-                "pointer");
+            need_release = true;
+            uint8_t* ptr = reinterpret_cast<uint8_t*>(allocator_->Allocate(size));
+            this->ReadImpl(ptr, size, offset);
+            return ptr;
         }
     }
     return nullptr;

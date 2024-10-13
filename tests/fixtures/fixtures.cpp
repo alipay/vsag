@@ -16,6 +16,7 @@
 #include "fixtures.h"
 
 #include <cstdint>
+#include <iostream>
 #include <string>
 #include <unordered_set>
 
@@ -159,6 +160,47 @@ generate_hnsw_build_parameters_string(const std::string& metric_type, int64_t di
         }}
     }}
     )";
+    auto build_parameters = fmt::format(parameter_temp, metric_type, dim);
+    return build_parameters;
+}
+
+std::string
+generate_hgraphsq_build_parameters_string(const std::string& metric_type, int64_t dim) {
+    constexpr auto parameter_temp = R"(
+    {{
+      "index_type": "HGraph",
+      "metric_type": "{}",
+      "dim": {},
+      "data_type": "FP32",
+      "index_param": {{
+        "use_reorder": false,
+        "graph": {{
+          "io_type": "block_memory",
+          "io_params": {{
+            "block_size": 134217728
+          }},
+          "type": "NSW",
+          "graph_params": {{
+            "max_degree": 64,
+            "init_capacity": 1000000
+          }}
+        }},
+        "base_codes": {{
+          "io_type": "block_memory",
+          "io_params": {{
+            "block_size": 134217728
+          }},
+          "codes_type": "flatten_codes",
+          "codes_param": {{
+          }},
+          "quantization_type": "sq8",
+          "quantization_params": {{
+            "subspace": 64,
+            "nbits": 8
+          }}
+        }}
+      }}
+    }})";
     auto build_parameters = fmt::format(parameter_temp, metric_type, dim);
     return build_parameters;
 }

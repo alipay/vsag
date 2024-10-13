@@ -52,7 +52,10 @@ public:
     ReadImpl(uint8_t* data, uint64_t size, uint64_t offset) const;
 
     [[nodiscard]] inline const uint8_t*
-    ReadImpl(uint64_t size, uint64_t offset) const;
+    ReadImpl(uint64_t size, uint64_t offset, bool& need_release) const;
+
+    inline void
+    ReleaseImpl(const uint8_t* data) const {};
 
     inline bool
     MultiReadImpl(uint8_t* datas, uint64_t* sizes, uint64_t* offsets, uint64_t count) const;
@@ -104,7 +107,8 @@ MemoryIO::ReadImpl(uint8_t* data, uint64_t size, uint64_t offset) const {
 }
 
 const uint8_t*
-MemoryIO::ReadImpl(uint64_t size, uint64_t offset) const {
+MemoryIO::ReadImpl(uint64_t size, uint64_t offset, bool& need_release) const {
+    need_release = false;
     if (checkValidOffset(size + offset)) {
         return start_ + offset;
     }

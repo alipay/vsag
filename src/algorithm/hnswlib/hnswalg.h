@@ -44,6 +44,33 @@ typedef unsigned int linklistsizeint;
 
 const static float THRESHOLD_ERROR = 1e-6;
 
+inline void *alloc64B(size_t nbytes) {
+    size_t len = (nbytes + (1 << 6) - 1) >> 6 << 6;
+    auto p = std::aligned_alloc(1 << 6, len);
+    std::memset(p, 0, len);
+    return p;
+}
+
+template <typename Block = uint64_t> struct Bitset {
+    constexpr static int block_size = sizeof(Block) * 8;
+    int nbytes;
+    Block *data;
+    explicit Bitset(int n)
+        : nbytes((n + block_size - 1) / block_size * sizeof(Block)),
+          data((uint64_t *)alloc64B(nbytes)) {
+        memset(data, 0, nbytes);
+    }
+    ~Bitset() { free(data); }
+    void set(int i) {
+        data[i / block_size] |= (Block(1) << (i & (block_size - 1)));
+    }
+    bool get(int i) {
+        return (data[i / block_size] >> (i & (block_size - 1))) & 1;
+    }
+
+    void *block_address(int i) { return data + i / block_size; }
+};
+
 class HierarchicalNSW : public AlgorithmInterface<float> {
 private:
     float max_ = 0;
@@ -1337,22 +1364,18 @@ public:
     inline uint32_t
     visit_naive(std::pair<float, tableint>& current_node_pair,
           std::pair<float, tableint>& next_node_pair,
-          vl_type* visited_array,
-          vl_type visited_array_tag,
+          Bitset<uint64_t>& vis,
           std::vector<int>& to_be_visited) const {
-        int* data2 = (int*)get_linklist0(next_node_pair.second);
-        _mm_prefetch(visited_array + *(data2 + 1), _MM_HINT_T0);
-
         int* data = (int*)get_linklist0(current_node_pair.second);
         size_t size = getListCount((linklistsizeint*)data);
 
         uint32_t count_no_visited = 0;
         for (size_t j = 1; j <= size; j++) {
             int candidate_id = *(data + j);
-            if (!(visited_array[candidate_id] == visited_array_tag)) {
+            if (not vis.get(candidate_id)) {
                 to_be_visited[count_no_visited++] = candidate_id;
             }
-            visited_array[candidate_id] = visited_array_tag;
+            vis.set(candidate_id);
         }
         return count_no_visited;
     }
@@ -1360,12 +1383,8 @@ public:
     inline uint32_t
     visit_redundant(std::pair<float, tableint>& current_node_pair,
           std::pair<float, tableint>& next_node_pair,
-          vl_type* visited_array,
-          vl_type visited_array_tag,
+          Bitset<uint64_t>& vis,
           std::vector<int>& to_be_visited) const {
-        int* data2 = (int*)get_linklist0(next_node_pair.second);
-        _mm_prefetch(visited_array + *(data2 + 1), _MM_HINT_T0);
-
         uint32_t count_no_visited = 0;
         size_t dim = *(size_t*)dist_func_param_;
         size_t code_size = 0;
@@ -1383,28 +1402,12 @@ public:
                 _mm_prefetch((char*)(code + (j + 4) * (code_size_aligned_) + code_size + 8),
                              _MM_HINT_T0);
             }
-            if (j + 8 < size) {
-                _mm_prefetch(&visited_array[*(int64_t*)(code + (j + 8) * (code_size_aligned_) + code_size + 8)],
-                             _MM_HINT_T0);
-            }
             uint64_t candidate_id = *(int64_t*)(code + j * (code_size_aligned_) + code_size + 8);
-            if (!(visited_array[candidate_id] == visited_array_tag)) {
+            if (not vis.get(candidate_id)) {
                 to_be_visited[count_no_visited++] = j;  // note here return j
             }
-            visited_array[candidate_id] = visited_array_tag;
-
-//            auto* neighbor_code = get_encoded_data(candidate_id, code_size_aligned_);
-//            for (int k = 0; k < code_size + 8; k++) {
-//                assert((code + j * (code_size_aligned_))[k] == neighbor_code[k]);
-//            }
+            vis.set(candidate_id);
         }
-//        for (size_t j = 1; j <= size; j++) {
-//            int candidate_id = *(data + j);
-//            if (!(visited_array[candidate_id] == visited_array_tag)) {
-//                to_be_visited[count_no_visited++] = candidate_id;
-//            }
-//            visited_array[candidate_id] = visited_array_tag;
-//        }
         return count_no_visited;
     }
 
@@ -1417,9 +1420,7 @@ public:
                       const void* data_point,
                       size_t ef,
                       BaseFilterFunctor* isIdAllowed = nullptr) const {
-        VisitedList* vl = visited_list_pool_->getFreeVisitedList();
-        vl_type* visited_array = vl->mass;
-        vl_type visited_array_tag = vl->curV;
+        Bitset<uint64_t> vis(cur_element_count_);
 
         std::priority_queue<std::pair<float, tableint>,
                             std::vector<std::pair<float, tableint>>,
@@ -1473,6 +1474,7 @@ public:
         top_candidates.emplace(curdist, ep_id);
         candidate_set.emplace(-curdist, ep_id);
         tableint currObj = ep_id;
+        vis.set(ep_id);
 
         for (int level = maxlevel_; level > 0; level--) {
             bool changed = true;
@@ -1498,7 +1500,7 @@ public:
                         }
                     }
                     tableint cand = datal[i];
-                    if (visited_array[cand] == visited_array_tag) {
+                    if (vis.get(cand)) {
                         continue;
                     }
                     float d = 0;
@@ -1520,7 +1522,7 @@ public:
                         d = fstdistfunc_(data_point, getDataByInternalId(cand), dist_func_param_);
                     }
 
-                    visited_array[cand] = visited_array_tag;
+                    vis.set(cand);
                     if (top_candidates.size() < ef || lowerBound > d) {
                         candidate_set.emplace(-d, cand);
 
@@ -1560,8 +1562,7 @@ public:
             if (current_node_pair.second >= cut_num_) {
                 uint32_t count_no_visited = visit_naive(current_node_pair,
                                                         next_node_pair,
-                                                        visited_array,
-                                                        visited_array_tag,
+                                                        vis,
                                                         to_be_visited);
                 dist_cmp += count_no_visited;
 
@@ -1624,8 +1625,7 @@ public:
             } else {
                 uint32_t count_no_visited = visit_redundant(current_node_pair,
                                                             next_node_pair,
-                                                            visited_array,
-                                                            visited_array_tag,
+                                                            vis,
                                                             to_be_visited);
                 dist_cmp += count_no_visited;
 
@@ -1675,7 +1675,6 @@ public:
             }
         }
 
-        visited_list_pool_->releaseVisitedList(vl);
         return {top_candidates, {dist_cmp, hops}};
     }
 

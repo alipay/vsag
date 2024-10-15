@@ -253,22 +253,20 @@ TEST_CASE("hnsw int8 recall", "[ft][index][hnsw]") {
     auto buildindex = hnsw->Build(base);
     REQUIRE(buildindex.has_value());
 
-    {
-        for (int i = 0; i < num_vectors; i++) {
-            auto query = vsag::Dataset::Make();
-            query->NumElements(1)->Dim(dim)->Int8Vectors(data.get() + i * dim)->Owner(false);
-            auto search_parameters = R"(
+    for (int i = 0; i < num_vectors; i++) {
+        auto query = vsag::Dataset::Make();
+        query->NumElements(1)->Dim(dim)->Int8Vectors(data.get() + i * dim)->Owner(false);
+        auto search_parameters = R"(
                 {
                     "hnsw": {
                         "ef_search": 100
                     }
                 }
                 )";
-            int64_t k = 10;
-            auto result = hnsw->KnnSearch(query, k, search_parameters);
-            REQUIRE(result.has_value());
-            REQUIRE(result.value()->GetIds()[0] == ids[i]);
-        }
+        int64_t k = 10;
+        auto result = hnsw->KnnSearch(query, k, search_parameters);
+        REQUIRE(result.has_value());
+        REQUIRE(result.value()->GetIds()[0] == ids[i]);
     }
 }
 

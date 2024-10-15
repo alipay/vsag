@@ -87,3 +87,12 @@ clean:                  ## Clear build/ directory.
 .PHONY: install
 install:                ## Build and install the release version of vsag.
 	cmake --install build/
+
+.PHONY: pyvsag          ## Build pyvsag wheel
+pyvsag: release
+	cp ./build-release/_pyvsag.*.so python/pyvsag/
+	cp ./build-release/src/libvsag.so python/pyvsag/
+	cp /lib/x86_64-linux-gnu/libgfortran.so.5 python/pyvsag/
+	find python/pyvsag -type f -name "*.so*" -exec patchelf --set-rpath '$$ORIGIN' {} \;
+	find python/pyvsag -type f -name "*.so*" -exec sh -c "readelf -d {} | grep RUNPATH" \;
+	cd python/ && python3 setup.py bdist_wheel

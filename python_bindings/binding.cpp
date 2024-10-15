@@ -183,7 +183,7 @@ private:
     std::shared_ptr<vsag::Index> index_;
 };
 
-PYBIND11_MODULE(pyvsag, m) {
+PYBIND11_MODULE(_pyvsag, m) {
     m.def("kmeans", &kmeans, "Kmeans");
     py::class_<Index>(m, "Index")
         .def(py::init<std::string, std::string&>(), py::arg("name"), py::arg("parameters"))

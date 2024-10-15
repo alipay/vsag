@@ -224,7 +224,6 @@ TEST_CASE("hnsw int8 recall", "[ft][index][hnsw]") {
 
     int64_t num_vectors = 1000;
     int64_t dim = 104;
-    auto metric_type = "ip";
 
     nlohmann::json hnsw_parameters{{"max_degree", 12}, {"ef_construction", 50}, {"ef_search", 50}};
     nlohmann::json index_parameters{

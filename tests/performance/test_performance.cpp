@@ -416,8 +416,8 @@ valid_and_extrcat_top_k(const std::string& input, int64_t& number) {
     std::smatch match;
     if (std::regex_match(input, match, pattern)) {
         number = std::stoi(match[1].str());
-        if (number <= 0 || number > 100) {
-            std::cerr << "top k must be set to a value between 1 and 100" << std::endl;
+        if (number <= 0) {
+            std::cerr << "top k must be set to a value more than 0" << std::endl;
             exit(-1);
         }
         return true;

@@ -1118,7 +1118,7 @@ public:
 
     void
     optimize() override {
-        constexpr static size_t sample_points_num = 10000;
+        constexpr static size_t sample_points_num = 1000;
         constexpr static size_t k = 10;
         size_t dim = *(size_t*)dist_func_param_;
 

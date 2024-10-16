@@ -140,6 +140,7 @@ CreateFreshHnswParameters::FromJson(const std::string& json_string) {
     obj.space = parrent_obj.space;
     obj.use_static = false;
     obj.normalize = parrent_obj.normalize;
+    obj.type = parrent_obj.type;
 
     // set obj.use_reversed_edges
     obj.use_reversed_edges = true;

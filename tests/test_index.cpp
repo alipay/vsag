@@ -782,8 +782,13 @@ TEST_CASE("remove vectors from the index", "[ft][index]") {
     vsag::Options::Instance().logger()->SetLevel(vsag::Logger::Level::kDEBUG);
     int64_t num_vectors = 1000;
     int64_t dim = 64;
-    auto index_name = "fresh_hnsw";
+    auto index_name = GENERATE("fresh_hnsw", "diskann");
     auto metric_type = GENERATE("cosine", "ip", "l2");
+
+    if (index_name == std::string("diskann") and metric_type == std::string("cosine")) {
+        return;  // TODO: support cosine for diskann
+    }
+
     bool need_normalize = metric_type != std::string("cosine");
     auto [ids, vectors] = fixtures::generate_ids_and_vectors(num_vectors, dim, need_normalize);
     auto index = fixtures::generate_index(index_name, metric_type, num_vectors, dim, ids, vectors);
@@ -802,82 +807,87 @@ TEST_CASE("remove vectors from the index", "[ft][index]") {
     }
     )";
 
-    // remove half data
-    int correct = 0;
-    for (int i = 0; i < num_vectors; i++) {
-        auto query = vsag::Dataset::Make();
-        query->NumElements(1)->Dim(dim)->Float32Vectors(vectors.data() + i * dim)->Owner(false);
+    if (index_name != std::string("diskann")) {  // index that supports remove
+        // remove half data
 
-        int64_t k = 10;
-        auto result = index->KnnSearch(query, k, search_parameters);
-        REQUIRE(result.has_value());
-        if (result.value()->GetIds()[0] == ids[i]) {
-            correct += 1;
-        }
-    }
-    float recall_before = ((float)correct) / num_vectors;
+        int correct = 0;
+        for (int i = 0; i < num_vectors; i++) {
+            auto query = vsag::Dataset::Make();
+            query->NumElements(1)->Dim(dim)->Float32Vectors(vectors.data() + i * dim)->Owner(false);
 
-    for (int i = 0; i < num_vectors / 2; ++i) {
-        auto result = index->Remove(ids[i]);
-        REQUIRE(result.has_value());
-        REQUIRE(result.value());
-    }
-    auto wrong_result = index->Remove(-1);
-    REQUIRE(wrong_result.has_value());
-    REQUIRE_FALSE(wrong_result.value());
-
-    REQUIRE(index->GetNumElements() == num_vectors / 2);
-
-    // test recall for half data
-    correct = 0;
-    for (int i = 0; i < num_vectors; i++) {
-        auto query = vsag::Dataset::Make();
-        query->NumElements(1)->Dim(dim)->Float32Vectors(vectors.data() + i * dim)->Owner(false);
-
-        int64_t k = 10;
-        auto result = index->KnnSearch(query, k, search_parameters);
-        REQUIRE(result.has_value());
-        if (i < num_vectors / 2) {
-            REQUIRE(result.value()->GetIds()[0] != ids[i]);
-        } else {
+            int64_t k = 10;
+            auto result = index->KnnSearch(query, k, search_parameters);
+            REQUIRE(result.has_value());
             if (result.value()->GetIds()[0] == ids[i]) {
                 correct += 1;
             }
         }
-    }
-    float recall = ((float)correct) / (num_vectors / 2);
-    REQUIRE(recall >= 0.98);
+        float recall_before = ((float)correct) / num_vectors;
 
-    // remove all data
-    for (int i = num_vectors / 2; i < num_vectors; ++i) {
-        auto result = index->Remove(i);
-        REQUIRE(result.has_value());
-        REQUIRE(result.value());
-    }
-
-    // add data into index again
-    correct = 0;
-    auto dataset = vsag::Dataset::Make();
-    dataset->NumElements(num_vectors)
-        ->Dim(dim)
-        ->Float32Vectors(vectors.data())
-        ->Ids(ids.data())
-        ->Owner(false);
-    auto result = index->Add(dataset);
-
-    for (int i = 0; i < num_vectors; i++) {
-        auto query = vsag::Dataset::Make();
-        query->NumElements(1)->Dim(dim)->Float32Vectors(vectors.data() + i * dim)->Owner(false);
-
-        int64_t k = 10;
-        auto result = index->KnnSearch(query, k, search_parameters);
-        REQUIRE(result.has_value());
-        if (result.value()->GetIds()[0] == ids[i]) {
-            correct += 1;
+        for (int i = 0; i < num_vectors / 2; ++i) {
+            auto result = index->Remove(ids[i]);
+            REQUIRE(result.has_value());
+            REQUIRE(result.value());
         }
+        auto wrong_result = index->Remove(-1);
+        REQUIRE(wrong_result.has_value());
+        REQUIRE_FALSE(wrong_result.value());
+
+        REQUIRE(index->GetNumElements() == num_vectors / 2);
+
+        // test recall for half data
+        correct = 0;
+        for (int i = 0; i < num_vectors; i++) {
+            auto query = vsag::Dataset::Make();
+            query->NumElements(1)->Dim(dim)->Float32Vectors(vectors.data() + i * dim)->Owner(false);
+
+            int64_t k = 10;
+            auto result = index->KnnSearch(query, k, search_parameters);
+            REQUIRE(result.has_value());
+            if (i < num_vectors / 2) {
+                REQUIRE(result.value()->GetIds()[0] != ids[i]);
+            } else {
+                if (result.value()->GetIds()[0] == ids[i]) {
+                    correct += 1;
+                }
+            }
+        }
+        float recall = ((float)correct) / (num_vectors / 2);
+        REQUIRE(recall >= 0.98);
+
+        // remove all data
+        for (int i = num_vectors / 2; i < num_vectors; ++i) {
+            auto result = index->Remove(i);
+            REQUIRE(result.has_value());
+            REQUIRE(result.value());
+        }
+
+        // add data into index again
+        correct = 0;
+        auto dataset = vsag::Dataset::Make();
+        dataset->NumElements(num_vectors)
+            ->Dim(dim)
+            ->Float32Vectors(vectors.data())
+            ->Ids(ids.data())
+            ->Owner(false);
+        auto result = index->Add(dataset);
+
+        for (int i = 0; i < num_vectors; i++) {
+            auto query = vsag::Dataset::Make();
+            query->NumElements(1)->Dim(dim)->Float32Vectors(vectors.data() + i * dim)->Owner(false);
+
+            int64_t k = 10;
+            auto result = index->KnnSearch(query, k, search_parameters);
+            REQUIRE(result.has_value());
+            if (result.value()->GetIds()[0] == ids[i]) {
+                correct += 1;
+            }
+        }
+        float recall_after = ((float)correct) / num_vectors;
+        REQUIRE(std::abs(recall_before - recall_after) < 0.001);
+    } else {  // index that does not supports remove
+        REQUIRE_THROWS(index->Remove(-1));
     }
-    float recall_after = ((float)correct) / num_vectors;
-    REQUIRE(abs(recall_before - recall_after) < 0.001);
 }
 
 TEST_CASE("index with bsa", "[ft][index]") {

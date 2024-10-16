@@ -15,7 +15,23 @@
 
 #pragma once
 
-namespace vsag {
-enum class MetricType { METRIC_TYPE_L2SQR = 0, METRIC_TYPE_IP = 1, METRIC_TYPE_COSINE = 2 };
+#include <cstdint>
 
-}  // namespace vsag
+#include "basic_io.h"
+
+class IOReadObject {
+public:
+    explicit IOReadObject(std::function<void(const uint8_t*)> func) : release_func_(func){};
+
+    const uint8_t* data_;
+
+    bool need_release_{false};
+
+    std::function<void(const uint8_t*)> release_func_{};
+
+    ~IOReadObject() {
+        if (need_release_) {
+            release_func_(data_);
+        }
+    }
+};

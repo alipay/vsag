@@ -20,8 +20,10 @@
 #endif
 
 #include <cstring>
+#include <nlohmann/json.hpp>
 
 #include "basic_io.h"
+#include "index/index_common_param.h"
 #include "vsag/allocator.h"
 
 namespace vsag {
@@ -29,6 +31,12 @@ namespace vsag {
 class MemoryIO : public BasicIO<MemoryIO> {
 public:
     explicit MemoryIO(Allocator* allocator) : allocator_(allocator) {
+        start_ = reinterpret_cast<uint8_t*>(allocator_->Allocate(MIN_SIZE));
+        current_size_ = MIN_SIZE;
+    }
+
+    MemoryIO(const nlohmann::json& io_obj, const IndexCommonParam& common_param)
+        : allocator_(common_param.allocator_) {
         start_ = reinterpret_cast<uint8_t*>(allocator_->Allocate(MIN_SIZE));
         current_size_ = MIN_SIZE;
     }
@@ -41,16 +49,25 @@ public:
     WriteImpl(const uint8_t* data, uint64_t size, uint64_t offset);
 
     inline bool
-    ReadImpl(uint8_t* data, uint64_t size, uint64_t offset) const;
+    ReadImpl(uint64_t size, uint64_t offset, uint8_t* data) const;
 
     [[nodiscard]] inline const uint8_t*
-    ReadImpl(uint64_t size, uint64_t offset) const;
+    ReadImpl(uint64_t size, uint64_t offset, bool& need_release) const;
+
+    inline void
+    ReleaseImpl(const uint8_t* data) const {};
 
     inline bool
     MultiReadImpl(uint8_t* datas, uint64_t* sizes, uint64_t* offsets, uint64_t count) const;
 
     inline void
     PrefetchImpl(uint64_t offset, uint64_t cache_line = 64);
+
+    inline void
+    SerializeImpl(StreamWriter& writer);
+
+    inline void
+    DeserializeImpl(StreamReader& reader);
 
 private:
     [[nodiscard]] inline bool
@@ -68,7 +85,7 @@ private:
     }
 
 private:
-    Allocator* allocator_{nullptr};
+    Allocator* const allocator_{nullptr};
     uint8_t* start_{nullptr};
     uint64_t current_size_{0};
     static const uint64_t MIN_SIZE = 1024;
@@ -81,7 +98,7 @@ MemoryIO::WriteImpl(const uint8_t* data, uint64_t size, uint64_t offset) {
 }
 
 bool
-MemoryIO::ReadImpl(uint8_t* data, uint64_t size, uint64_t offset) const {
+MemoryIO::ReadImpl(uint64_t size, uint64_t offset, uint8_t* data) const {
     bool ret = checkValidOffset(size + offset);
     if (ret) {
         memcpy(data, start_ + offset, size);
@@ -90,7 +107,8 @@ MemoryIO::ReadImpl(uint8_t* data, uint64_t size, uint64_t offset) const {
 }
 
 const uint8_t*
-MemoryIO::ReadImpl(uint64_t size, uint64_t offset) const {
+MemoryIO::ReadImpl(uint64_t size, uint64_t offset, bool& need_release) const {
+    need_release = false;
     if (checkValidOffset(size + offset)) {
         return start_ + offset;
     }
@@ -100,7 +118,7 @@ bool
 MemoryIO::MultiReadImpl(uint8_t* datas, uint64_t* sizes, uint64_t* offsets, uint64_t count) const {
     bool ret = true;
     for (uint64_t i = 0; i < count; ++i) {
-        ret &= this->ReadImpl(datas, sizes[i], offsets[i]);
+        ret &= this->ReadImpl(sizes[i], offsets[i], datas);
         datas += sizes[i];
     }
     return ret;
@@ -110,6 +128,19 @@ MemoryIO::PrefetchImpl(uint64_t offset, uint64_t cache_line) {
 #if defined(ENABLE_SSE)
     _mm_prefetch(this->start_ + offset, _MM_HINT_T0);  // todo
 #endif
+}
+void
+MemoryIO::SerializeImpl(StreamWriter& writer) {
+    StreamWriter::WriteObj(writer, this->current_size_);
+    writer.Write(reinterpret_cast<char*>(this->start_), current_size_);
+}
+
+void
+MemoryIO::DeserializeImpl(StreamReader& reader) {
+    allocator_->Deallocate(this->start_);
+    StreamReader::ReadObj(reader, this->current_size_);
+    this->start_ = static_cast<uint8_t*>(allocator_->Allocate(this->current_size_));
+    reader.Read(reinterpret_cast<char*>(this->start_), current_size_);
 }
 
 }  // namespace vsag

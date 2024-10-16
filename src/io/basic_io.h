@@ -17,6 +17,9 @@
 
 #include <cstdint>
 
+#include "stream_reader.h"
+#include "stream_writer.h"
+
 namespace vsag {
 
 template <typename IOTmpl>
@@ -24,7 +27,7 @@ class BasicIO {
 public:
     BasicIO<IOTmpl>() = default;
 
-    ~BasicIO() = default;
+    virtual ~BasicIO() = default;
 
     inline void
     Write(const uint8_t* data, uint64_t size, uint64_t offset) {
@@ -32,13 +35,13 @@ public:
     }
 
     inline bool
-    Read(uint8_t* data, uint64_t size, uint64_t offset) const {
-        return cast().ReadImpl(data, size, offset);
+    Read(uint64_t size, uint64_t offset, uint8_t* data) const {
+        return cast().ReadImpl(size, offset, data);
     }
 
     [[nodiscard]] inline const uint8_t*
-    Read(uint64_t size, uint64_t offset) const {
-        return cast().ReadImpl(size, offset);
+    Read(uint64_t size, uint64_t offset, bool& need_release) const {
+        return cast().ReadImpl(size, offset, need_release);  // TODO(LHT129): use IOReadObject
     }
 
     inline bool
@@ -49,6 +52,21 @@ public:
     inline void
     Prefetch(uint64_t offset, uint64_t cache_line = 64) {
         return cast().PrefetchImpl(offset, cache_line);
+    }
+
+    inline void
+    Serialize(StreamWriter& writer) {
+        return cast().SerializeImpl(writer);
+    }
+
+    inline void
+    Deserialize(StreamReader& reader) {
+        return cast().DeserializeImpl(reader);
+    }
+
+    inline void
+    Release(const uint8_t* data) const {
+        return cast().ReleaseImpl(data);
     }
 
 private:

@@ -28,6 +28,7 @@
 
 #include "../algorithm/hnswlib/hnswlib.h"
 #include "../common.h"
+#include "../data_type.h"
 #include "../default_allocator.h"
 #include "../impl/conjugate_graph.h"
 #include "../logger.h"
@@ -70,6 +71,7 @@ public:
     HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
          int M,
          int ef_construction,
+         DataTypes type,
          bool use_static = false,
          bool use_reversed_edges = false,
          bool use_conjugate_graph = false,
@@ -280,6 +282,9 @@ private:
     tl::expected<bool, Error>
     init_memory_space();
 
+    void
+    get_vectors(const DatasetPtr& base, void*& vectors, size_t& data_size) const;
+
     BinarySet
     empty_binaryset() const;
 
@@ -295,6 +300,7 @@ private:
     bool empty_index_ = false;
     bool use_reversed_edges_ = false;
     bool is_init_memory_ = false;
+    DataTypes type_;
 
     std::shared_ptr<SafeAllocator> allocator_;
 

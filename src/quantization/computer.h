@@ -35,7 +35,7 @@ template <typename T>
 class Computer : public ComputerInterface {
 public:
     ~Computer() {
-        delete[] buf_;
+        quantizer_->ReleaseComputer(*this);
     }
 
     explicit Computer(const T* quantizer) : quantizer_(quantizer){};

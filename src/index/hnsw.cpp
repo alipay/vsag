@@ -173,6 +173,7 @@ HNSW::build(const DatasetPtr& base) {
             logger::info("start transform sq");
             if (sq_num_bits_ == 8 or sq_num_bits_ == 4) {
                 alg_hnsw->transform_base_int4();
+                alg_hnsw->optimize();
             } else {
                 throw std::invalid_argument(fmt::format("invalid sq_num_bits()", sq_num_bits_));
             }

@@ -180,6 +180,12 @@ install:                ## Build and install the release version of vsag.
 ## Contribution Guidelines
 Contributions are welcomed and greatly appreciated. Please read our [contribution guidelines](./CONTRIBUTING.md) for detailed contribution workflow. 
 
+## Who's Using VSAG
+
+- OCEANBASE: https://github.com/oceanbase/oceanbase
+- TuGraph: https://github.com/TuGraph-family/tugraph-db
+- GreptimeDB: https://github.com/GreptimeTeam/greptimedb
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=alipay/vsag&type=Date)](https://star-history.com/#alipay/vsag&Date)

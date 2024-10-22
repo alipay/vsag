@@ -149,3 +149,9 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     csv_to_dataset(args.csv_file, args.size, args.column, args.query_size, args.id_column, args.vector_column, args.vector_dim, args.index_type, args.output_file)
+
+
+
+
+
+

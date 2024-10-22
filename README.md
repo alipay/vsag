@@ -1,19 +1,10 @@
 # VSAG
 
-## What is VSAG
-```
-____    ____   _______.     ___       _______ 
-\   \  /   /  /       |    /   \     /  _____|
- \   \/   /  |   (----`   /  ^  \   |  |  __  
-  \      /    \   \      /  /_\  \  |  | |_ | 
-   \    / .----)   |    /  _____  \ |  |__| | 
-    \__/  |_______/    /__/     \__\ \______| 
-```
 VSAG is a vector indexing library used for similarity search. The indexing algorithm allows users to search through various sizes of vector sets, especially those that cannot fit in memory. The library also provides methods for generating parameters based on vector dimensions and data scale, allowing developers to use it without understanding the algorithm’s principles. VSAG is written in C++ and provides a Python wrapper package called pyvsag. Developed by the Vector Database Team at Ant Group.
 
 ## Performance
 The VSAG algorithm achieves a significant boost of efficiency and outperforms the previous **state-of-the-art (SOTA)** by a clear margin. Specifically, VSAG's QPS exceeds that of the previous SOTA algorithm, Glass, by over 100%, and the baseline algorithm, HNSWLIB, by over 300% according to the ann-benchmark result on the GIST dataset at 90% recall.
-The test in [ann-benchmarks](https://ann-benchmarks.com/) is running on an r6i.16xlarge machine on AWS with `--parallelism 31`, single-CPU, and hyperthreading disabled. 
+The test in [ann-benchmarks](https://ann-benchmarks.com/) is running on an r6i.16xlarge machine on AWS with `--parallelism 31`, single-CPU, and hyperthreading disabled.
 The result is as follows:
 
 ### gist-960-euclidean
@@ -123,46 +114,24 @@ main(int argc, char** argv) {
 }
 ```
 
-## Developer Guide
-### Dependencies
-```bash
-# for Debian/Ubuntu
-$ ./scripts/deps/install_deps_ubuntu.sh
+## Building from Source
+Please read the [DEVELOPMENT](./DEVELOPMENT.md) guide for instructions on how to build.
 
-# for CentOS/AliOS
-$ ./scripts/deps/install_deps_centos.sh
-```
-### VSAG Build Tool
-```bash
-Usage: make <target>
 
-Targets:
-help:                   ## Show the help.
-debug:                  ## Build vsag with debug options.
-release:                ## Build vsag with release options.
-distribution:           ## Build vsag with distribution options.
-fmt:                    ## Format codes.
-test:                   ## Build and run unit tests.
-asan:                   ## Build with AddressSanitizer option.
-test_asan: asan         ## Run unit tests with AddressSanitizer option.
-tsan:                   ## Build with ThreadSanitizer option.
-test_tsan: tsan         ## Run unit tests with ThreadSanitizer option.
-test_cov:               ## Build and run unit tests with code coverage enabled.
-clean:                  ## Clear build/ directory.
-install:                ## Build and install the release version of vsag.
-```
-### Project Structure
-`benchs/`: benchmark script in Python</br>
-`cmake/`: cmake util functions</br>
-`docker/`: the dockerfile to build develop and ci image</br>
-`examples/`: cpp and python example codes</br>
-`externs/`: third-party libraries</br>
-`include/`: export header files</br>
-`mockimpl/`: the mock implementation that can be used in interface test</br>
-`python_bindings/`: the python bindings</br>
-`scripts/`: useful scripts</br>
-`src/`: the source codes and unit tests</br>
-`tests/`: the functional tests</br>
+## How to Contribute
+Contributions are always welcome! See [CONTRIBUTING](./CONTRIBUTING.md) for ways to get started.
+
+
+## Who is using
+VSAG has been integrated with the following database systems.
+
+<img alt="OceanBase" src="" height="60" />
+
+If your system use VSAG - feel free to make a PR to add it to the list.
+
+## Community
+Thrive together in VSAG community with users and developers from all around the world.
+- Discuss at [discord]()
 
 ## Roadmap
 - v0.11 (ETA: Jul. 2024)
@@ -177,13 +146,9 @@ install:                ## Build and install the release version of vsag.
   - support freshHNSW index
   - support automated parameter
 
-## Contribution Guidelines
-Contributions are welcomed and greatly appreciated. Please read our [contribution guidelines](./CONTRIBUTING.md) for detailed contribution workflow. 
-
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=alipay/vsag&type=Date)](https://star-history.com/#alipay/vsag&Date)
 
 ## License
 [Apache License 2.0](./LICENSE)
-

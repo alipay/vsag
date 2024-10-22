@@ -124,7 +124,7 @@ HNSW::build(const DatasetPtr& base) {
         auto ids = base->GetIds();
         void* vectors = nullptr;
         size_t data_size = 0;
-        get_vectors(base, vectors, data_size);
+        get_vectors(base, &vectors, &data_size);
         std::vector<int64_t> failed_ids;
         {
             SlowTaskTimer t("hnsw graph");
@@ -166,7 +166,7 @@ HNSW::add(const DatasetPtr& base) {
         auto ids = base->GetIds();
         void* vectors = nullptr;
         size_t data_size = 0;
-        get_vectors(base, vectors, data_size);
+        get_vectors(base, &vectors, &data_size);
         std::vector<int64_t> failed_ids;
 
         std::unique_lock lock(rw_mutex_);
@@ -221,7 +221,7 @@ HNSW::knn_search(const DatasetPtr& query,
         CHECK_ARGUMENT(query->GetNumElements() == 1, "query dataset should contain 1 vector only");
         void* vector = nullptr;
         size_t data_size = 0;
-        get_vectors(query, vector, data_size);
+        get_vectors(query, &vector, &data_size);
         int64_t query_dim = query->GetDim();
         CHECK_ARGUMENT(
             query_dim == dim_,
@@ -341,7 +341,7 @@ HNSW::range_search(const DatasetPtr& query,
         CHECK_ARGUMENT(query->GetNumElements() == 1, "query dataset should contain 1 vector only");
         void* vector = nullptr;
         size_t data_size = 0;
-        get_vectors(query, vector, data_size);
+        get_vectors(query, &vector, &data_size);
         int64_t query_dim = query->GetDim();
         CHECK_ARGUMENT(
             query_dim == dim_,
@@ -811,15 +811,13 @@ HNSW::init_memory_space() {
 }
 
 void
-HNSW::get_vectors(const vsag::DatasetPtr& base, void*& vectors, size_t& data_size) const {
+HNSW::get_vectors(const vsag::DatasetPtr& base, void** vectors_ptr, size_t* data_size_ptr) const {
     if (type_ == DataTypes::DATA_TYPE_FLOAT) {
-        vectors = (void*)base->GetFloat32Vectors();
-        data_size = dim_ * sizeof(float);
+        *vectors_ptr = (void*)base->GetFloat32Vectors();
+        *data_size_ptr = dim_ * sizeof(float);
     } else if (type_ == DataTypes::DATA_TYPE_INT8) {
-        vectors = (void*)base->GetInt8Vectors();
-        data_size = dim_ * sizeof(int8_t);
-    } else {
-        throw std::invalid_argument("fail to support this data type");
+        *vectors_ptr = (void*)base->GetInt8Vectors();
+        *data_size_ptr = dim_ * sizeof(int8_t);
     }
 }
 

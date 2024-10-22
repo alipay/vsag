@@ -283,7 +283,7 @@ private:
     init_memory_space();
 
     void
-    get_vectors(const DatasetPtr& base, void*& vectors, size_t& data_size) const;
+    get_vectors(const DatasetPtr& base, void** vectors_ptr, size_t* data_size_ptr) const;
 
     BinarySet
     empty_binaryset() const;

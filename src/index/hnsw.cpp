@@ -124,6 +124,7 @@ HNSW::build(const DatasetPtr& base) {
         std::vector<int64_t> failed_ids;
         {
             SlowTaskTimer t("hnsw graph");
+            //#pragma omp parallel for
             for (int64_t i = 0; i < num_elements; ++i) {
                 // noexcept runtime
                 if (!alg_hnsw_->addPoint((const void*)(vectors + i * dim_), ids[i])) {
@@ -200,7 +201,7 @@ tl::expected<DatasetPtr, Error>
 HNSW::knn_search(const DatasetPtr& query,
                  int64_t k,
                  const std::string& parameters,
-                 hnswlib::BaseFilterFunctor* filter_ptr) const {
+                 BaseFilterFunctor* filter_ptr) const {
     SlowTaskTimer t("hnsw knnsearch", 20);
 
     try {
@@ -312,7 +313,7 @@ tl::expected<DatasetPtr, Error>
 HNSW::range_search(const DatasetPtr& query,
                    float radius,
                    const std::string& parameters,
-                   hnswlib::BaseFilterFunctor* filter_ptr,
+                   BaseFilterFunctor* filter_ptr,
                    int64_t limited_size) const {
     SlowTaskTimer t("hnsw rangesearch", 20);
 

@@ -44,7 +44,6 @@ const static std::string META_DATA_FILE = "_meta.data";
 
 int
 main(int argc, char* argv[]) {
-    set_level(level::off);
     if (argc != 6) {
         std::cerr << "Usage: " << argv[0]
                   << " <dataset_file_path> <process> <index_name> <build_param> <search_param>"
@@ -99,11 +98,13 @@ public:
         H5::H5File file(filename, H5F_ACC_RDONLY);
 
         // check datasets exist
+        bool has_labels = false;
         {
             auto datasets = get_datasets(file);
             assert(datasets.count("train"));
             assert(datasets.count("test"));
             assert(datasets.count("neighbors"));
+            has_labels = datasets.count("train_labels") && datasets.count("test_labels");
         }
 
         // get and (should check shape)
@@ -151,6 +152,23 @@ public:
             H5::FloatType datatype(H5::PredType::NATIVE_INT64);
             dataset.read(obj->neighbors_.get(), datatype, dataspace);
         }
+        if (has_labels) {
+            H5::DataSet dataset = file.openDataSet("/train_labels");
+            H5::DataSpace dataspace = dataset.getSpace();
+            H5::FloatType datatype(H5::PredType::NATIVE_INT64);
+            obj->train_labels_ = std::shared_ptr<int64_t[]>(
+                new int64_t[obj->number_of_base_]);
+            dataset.read(obj->train_labels_.get(), datatype, dataspace);
+        }
+
+        if (has_labels) {
+            H5::DataSet dataset = file.openDataSet("/test_labels");
+            H5::DataSpace dataspace = dataset.getSpace();
+            H5::FloatType datatype(H5::PredType::NATIVE_INT64);
+            obj->test_labels_ = std::shared_ptr<int64_t[]>(
+                new int64_t[obj->number_of_query_]);
+            dataset.read(obj->test_labels_.get(), datatype, dataspace);
+        }
 
         return obj;
     }
@@ -191,6 +209,10 @@ public:
         return dim_;
     }
 
+    bool IsMatch(int64_t query_id, int64_t base_id) {
+        return test_labels_[query_id] == train_labels_[base_id];
+    }
+
 private:
     using shape_t = std::pair<int64_t, int64_t>;
     static std::unordered_set<std::string>
@@ -227,6 +249,8 @@ private:
     std::shared_ptr<float[]> train_;
     std::shared_ptr<float[]> test_;
     std::shared_ptr<int64_t[]> neighbors_;
+    std::shared_ptr<int64_t[]> train_labels_;
+    std::shared_ptr<int64_t[]> test_labels_;
     shape_t train_shape_;
     shape_t test_shape_;
     shape_t neighbors_shape_;
@@ -349,7 +373,7 @@ public:
         // search
         auto search_start = std::chrono::steady_clock::now();
         int64_t correct = 0;
-        int64_t total = test_dataset->GetNumberOfQuery();
+        int64_t total = 100;
         spdlog::debug("total: " + std::to_string(total));
         std::vector<DatasetPtr> results;
         for (int64_t i = 0; i < total; ++i) {
@@ -358,8 +382,10 @@ public:
                 ->Dim(test_dataset->GetDim())
                 ->Float32Vectors(test_dataset->GetTest().get() + i * test_dataset->GetDim())
                 ->Owner(false);
-
-            auto result = index->KnnSearch(query, top_k, search_parameters);
+            auto filter = [&test_dataset, i](int64_t base_id){
+                return not test_dataset->IsMatch(i, base_id);
+            };
+            auto result = index->KnnSearch(query, top_k, search_parameters, filter);
             if (not result.has_value()) {
                 std::cerr << "query error: " << result.error().message << std::endl;
                 exit(-1);

@@ -156,8 +156,7 @@ public:
             H5::DataSet dataset = file.openDataSet("/train_labels");
             H5::DataSpace dataspace = dataset.getSpace();
             H5::FloatType datatype(H5::PredType::NATIVE_INT64);
-            obj->train_labels_ = std::shared_ptr<int64_t[]>(
-                new int64_t[obj->number_of_base_]);
+            obj->train_labels_ = std::shared_ptr<int64_t[]>(new int64_t[obj->number_of_base_]);
             dataset.read(obj->train_labels_.get(), datatype, dataspace);
         }
 
@@ -165,8 +164,7 @@ public:
             H5::DataSet dataset = file.openDataSet("/test_labels");
             H5::DataSpace dataspace = dataset.getSpace();
             H5::FloatType datatype(H5::PredType::NATIVE_INT64);
-            obj->test_labels_ = std::shared_ptr<int64_t[]>(
-                new int64_t[obj->number_of_query_]);
+            obj->test_labels_ = std::shared_ptr<int64_t[]>(new int64_t[obj->number_of_query_]);
             dataset.read(obj->test_labels_.get(), datatype, dataspace);
         }
 
@@ -209,7 +207,8 @@ public:
         return dim_;
     }
 
-    bool IsMatch(int64_t query_id, int64_t base_id) {
+    bool
+    IsMatch(int64_t query_id, int64_t base_id) {
         return test_labels_[query_id] == train_labels_[base_id];
     }
 
@@ -382,7 +381,7 @@ public:
                 ->Dim(test_dataset->GetDim())
                 ->Float32Vectors(test_dataset->GetTest().get() + i * test_dataset->GetDim())
                 ->Owner(false);
-            auto filter = [&test_dataset, i](int64_t base_id){
+            auto filter = [&test_dataset, i](int64_t base_id) {
                 return not test_dataset->IsMatch(i, base_id);
             };
             auto result = index->KnnSearch(query, top_k, search_parameters, filter);

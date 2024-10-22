@@ -121,17 +121,9 @@ Please read the [DEVELOPMENT](./DEVELOPMENT.md) guide for instructions on how to
 ## How to Contribute
 Contributions are always welcome! See [CONTRIBUTING](./CONTRIBUTING.md) for ways to get started.
 
-
-## Who is using
-VSAG has been integrated with the following database systems.
-
-<img alt="OceanBase" src="" height="60" />
-
-If your system use VSAG - feel free to make a PR to add it to the list.
-
 ## Community
 Thrive together in VSAG community with users and developers from all around the world.
-- Discuss at [discord]()
+- Discuss at [discord](https://discord.com/invite/JyDmUzuhrp)
 
 ## Roadmap
 - v0.11 (ETA: Jul. 2024)

@@ -1,6 +1,6 @@
 # VSAG
 
-VSAG is a vector indexing library used for similarity search. The indexing algorithm allows users to search through various sizes of vector sets, especially those that cannot fit in memory. The library also provides methods for generating parameters based on vector dimensions and data scale, allowing developers to use it without understanding the algorithm’s principles. VSAG is written in C++ and provides a Python wrapper package called pyvsag. Developed by the Vector Database Team at Ant Group.
+VSAG is a vector indexing library used for similarity search. The indexing algorithm allows users to search through various sizes of vector sets, especially those that cannot fit in memory. The library also provides methods for generating parameters based on vector dimensions and data scale, allowing developers to use it without understanding the algorithm’s principles. VSAG is written in C++ and provides a Python wrapper package called pyvsag.
 
 ## Performance
 The VSAG algorithm achieves a significant boost of efficiency and outperforms the previous **state-of-the-art (SOTA)** by a clear margin. Specifically, VSAG's QPS exceeds that of the previous SOTA algorithm, Glass, by over 100%, and the baseline algorithm, HNSWLIB, by over 300% according to the ann-benchmark result on the GIST dataset at 90% recall.
@@ -117,26 +117,39 @@ main(int argc, char** argv) {
 ## Building from Source
 Please read the [DEVELOPMENT](./DEVELOPMENT.md) guide for instructions on how to build.
 
+## Who's Using VSAG
+- OceanBase: https://github.com/oceanbase/oceanbase
+- TuGraph: https://github.com/TuGraph-family/tugraph-db
+- GreptimeDB: https://github.com/GreptimeTeam/greptimedb
+
+If your system uses VSAG, then feel free to make a pull request to add it to the list.
 
 ## How to Contribute
-Contributions are always welcome! See [CONTRIBUTING](./CONTRIBUTING.md) for ways to get started.
+
+Although VSAG is initially developed by the Vector Database Team at Ant Group, it's the work of
+the [community](https://github.com/alipay/vsag/graphs/contributors), and contributions are always welcome!
+See [CONTRIBUTING](./CONTRIBUTING.md) for ways to get started.
 
 ## Community
 Thrive together in VSAG community with users and developers from all around the world.
 - Discuss at [discord](https://discord.com/invite/JyDmUzuhrp)
 
 ## Roadmap
-- v0.11 (ETA: Jul. 2024)
-  - support cosine distance type, with normalization
-  - support EnhanceGraph on HNSW
-- v1.0 (ETA: Aug. 2024)
-  - support IVFFlat index
-  - support int8 datatype
-  - support DFS index
-- v1.1 (ETA: Sep. 2024)
-  - support FP16 datatype
-  - support freshHNSW index
+- v0.12 (ETA: Oct. 2024)
+  - introduce datacell as the new index framework
+  - support pluggable scalar quantization(known as SQ) in datacell
+  - implement a new Hierarchical Graph(named HGraph) index based on datacell
+  - support INT8 datatype on HNSW Index
+
+- v0.13 (ETA: Nov. 2024)
+  - support inverted index(be like IVFFlat) based on datacell
+  - introduce pluggable product quantization(known as PQ) in datacell
+  - support extrainfo storage within vector
+
+- v0.14 (ETA: Dec. 2024)
+  - implement a new MultiIndex that supports efficient pre-filtering on enumerable tags
   - support automated parameter
+  - support sparse vector searching
 
 ## Star History
 

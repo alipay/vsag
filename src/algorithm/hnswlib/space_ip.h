@@ -34,6 +34,9 @@ public:
         } else if (type == vsag::DataTypes::DATA_TYPE_INT8) {
             fstdistfunc_ = vsag::GetINT8InnerProductDistanceFunc(dim);
             data_size_ = dim * sizeof(int8_t);
+        } else {
+            throw std::invalid_argument(
+                fmt::format("no support for this metric: {}", datatype_to_str(type)));
         }
     }
 

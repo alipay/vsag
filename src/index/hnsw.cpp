@@ -819,8 +819,7 @@ HNSW::get_vectors(const vsag::DatasetPtr& base, void** vectors_ptr, size_t* data
         *vectors_ptr = (void*)base->GetInt8Vectors();
         *data_size_ptr = dim_ * sizeof(int8_t);
     } else {
-        throw std::invalid_argument(
-            fmt::format("no support for this metric: {}", datatype_to_str(type_)));
+        throw std::invalid_argument(fmt::format("no support for this metric: {}", (int)type_));
     }
 }
 

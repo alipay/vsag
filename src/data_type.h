@@ -28,6 +28,7 @@ datatype_to_str(DataTypes type) {
         case DataTypes::DATA_TYPE_FP16:
             return "float16";
     }
+    return "unknown type";
 }
 
 }  // namespace vsag

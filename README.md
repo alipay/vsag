@@ -118,9 +118,9 @@ main(int argc, char** argv) {
 Please read the [DEVELOPMENT](./DEVELOPMENT.md) guide for instructions on how to build.
 
 ## Who's Using VSAG
-- OceanBase: https://github.com/oceanbase/oceanbase
-- TuGraph: https://github.com/TuGraph-family/tugraph-db
-- GreptimeDB: https://github.com/GreptimeTeam/greptimedb
+- [OceanBase](https://github.com/oceanbase/oceanbase)
+- [TuGraph](https://github.com/TuGraph-family/tugraph-db)
+- [GreptimeDB](https://github.com/GreptimeTeam/greptimedb)
 
 If your system uses VSAG, then feel free to make a pull request to add it to the list.
 

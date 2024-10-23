@@ -18,4 +18,16 @@
 namespace vsag {
 enum class DataTypes { DATA_TYPE_FLOAT = 0, DATA_TYPE_INT8 = 1, DATA_TYPE_FP16 = 2 };
 
+inline std::string
+datatype_to_str(DataTypes type) {
+    switch (type) {
+        case DataTypes::DATA_TYPE_FLOAT:
+            return "float32";
+        case DataTypes::DATA_TYPE_INT8:
+            return "int8";
+        case DataTypes::DATA_TYPE_FP16:
+            return "float16";
+    }
+}
+
 }  // namespace vsag

@@ -44,6 +44,7 @@ const static std::string META_DATA_FILE = "_meta.data";
 
 int
 main(int argc, char* argv[]) {
+    set_level(level::off);
     if (argc != 6) {
         std::cerr << "Usage: " << argv[0]
                   << " <dataset_file_path> <process> <index_name> <build_param> <search_param>"
@@ -372,7 +373,7 @@ public:
         // search
         auto search_start = std::chrono::steady_clock::now();
         int64_t correct = 0;
-        int64_t total = 100;
+        int64_t total = test_dataset->GetNumberOfQuery();
         spdlog::debug("total: " + std::to_string(total));
         std::vector<DatasetPtr> results;
         for (int64_t i = 0; i < total; ++i) {

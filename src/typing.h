@@ -16,41 +16,9 @@
 #pragma once
 
 #include <cstdint>
-#include <memory>
-#include <mutex>
-#include <roaring.hh>
-#include <vector>
-
-#include "vsag/bitset.h"
 
 namespace vsag {
 
-class BitsetImpl : public Bitset {
-public:
-    BitsetImpl() = default;
-    ~BitsetImpl() override = default;
-
-    BitsetImpl(const BitsetImpl&) = delete;
-    BitsetImpl&
-    operator=(const BitsetImpl&) = delete;
-    BitsetImpl(BitsetImpl&&) = delete;
-
-public:
-    void
-    Set(int64_t pos, bool value) override;
-
-    bool
-    Test(int64_t pos) override;
-
-    uint64_t
-    Count() override;
-
-    std::string
-    Dump() override;
-
-private:
-    std::mutex mutex_;
-    roaring::Roaring r_;
-};
-
-}  //namespace vsag
+using InnerIdType = uint32_t;  // inner id's type; index's vector count may less than 2^31 - 1
+using LabelType = uint64_t;    // external id's type
+}  // namespace vsag

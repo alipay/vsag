@@ -8,7 +8,7 @@ The test in [ann-benchmarks](https://ann-benchmarks.com/) is running on an r6i.1
 The result is as follows:
 
 ### gist-960-euclidean
-![](gist-960-euclidean_10_euclidean.png)
+![](./docs/gist-960-euclidean_10_euclidean.png)
 
 ## Getting Started
 ### Integrate with CMake
@@ -132,7 +132,8 @@ See [CONTRIBUTING](./CONTRIBUTING.md) for ways to get started.
 
 ## Community
 Thrive together in VSAG community with users and developers from all around the world.
-- Discuss at [discord](https://discord.com/invite/JyDmUzuhrp)
+- Discuss at [discord](https://discord.com/invite/JyDmUzuhrp).
+- Follow us on [Weixin Official Accounts](./docs/weixin-qr.jpg)（微信公众平台）to get the latest news.
 
 ## Roadmap
 - v0.12 (ETA: Oct. 2024)

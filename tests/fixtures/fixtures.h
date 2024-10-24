@@ -1,3 +1,4 @@
+
 // Copyright 2024-present the vsag project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -136,4 +137,9 @@ struct IOItem {
 std::vector<IOItem>
 GenTestItems(uint64_t count, uint64_t max_length, uint64_t max_index = 100000);
 
+void
+init_classic_pool();
+
+vsag::DatasetPtr
+generate_one_dataset(int64_t dim, uint64_t count);
 }  // Namespace fixtures

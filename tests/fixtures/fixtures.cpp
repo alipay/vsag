@@ -20,6 +20,8 @@
 #include <unordered_set>
 
 #include "fmt/format.h"
+#include "test_dataset.h"
+#include "test_pool.h"
 #include "vsag/dataset.h"
 
 namespace vsag {
@@ -264,6 +266,87 @@ GenTestItems(uint64_t count, uint64_t max_length, uint64_t max_index) {
         auto vec = fixtures::generate_vectors(1, max_length, false, random());
         memcpy(item.data_, vec.data(), item.length_);
     }
+    return result;
+}
+
+template <typename T>
+static T*
+CopyVector(const std::vector<T>& vec) {
+    auto result = new T[vec.size()];
+    memcpy(result, vec.data(), vec.size() * sizeof(T));
+    return result;
+}
+
+static void
+init_classic_datasets() {
+    if (TestPool<vsag::Dataset>::CheckInit()) {
+        return;
+    }
+    auto dims = get_common_used_dims();
+    auto counts = {1000};
+    for (auto dim : dims) {
+        for (auto count : counts) {
+            std::string key = fmt::format("[{}][{}][float][classic]", dim, count);
+            auto dataset = vsag::Dataset::Make();
+            auto [ids, vectors] = generate_ids_and_vectors(count, dim, true, time(nullptr));
+            dataset->Dim(dim)
+                ->NumElements(count)
+                ->Float32Vectors(CopyVector(vectors))
+                ->Ids(CopyVector(ids))
+                ->Owner(true);
+            TestPool<vsag::Dataset>::Set(key, dataset);
+        }
+    }
+    TestPool<vsag::Dataset>::SetInit();
+}
+
+static void
+inti_classic_test_datasets() {
+    if (TestPool<TestDataset>::CheckInit()) {
+        return;
+    }
+    auto dims = get_common_used_dims();
+    auto counts = {1000};
+    auto query_count = 100;
+    const std::vector<std::string> strs = {"[l2]", "[ip]", "[cosine]"};
+    for (auto dim : dims) {
+        for (auto count : counts) {
+            std::string key = fmt::format("[{}][{}][float][classic]", dim, count);
+            auto base = TestPool<vsag::Dataset>::Get(key);
+            auto start = random() % (count - query_count);
+            auto query = vsag::Dataset::Make();
+            query->Dim(dim)
+                ->NumElements(query_count)
+                ->Float32Vectors(base->GetFloat32Vectors() + start * dim)
+                ->Ids(base->GetIds() + start)
+                ->Owner(false);
+            auto gt = vsag::Dataset::Make();  // TODO(LHT) brute_force
+            gt->Dim(1)->NumElements(query_count)->Ids(base->GetIds() + start)->Owner(false);
+            for (auto str : strs) {
+                auto new_key = key + str;
+                auto test_dataset = std::make_shared<TestDataset>(base, query, gt);
+                TestPool<TestDataset>::Set(new_key, test_dataset);
+            }
+        }
+    }
+    TestPool<TestDataset>::SetInit();
+}
+
+void
+init_classic_pool() {
+    init_classic_datasets();
+    inti_classic_test_datasets();
+}
+
+vsag::DatasetPtr
+generate_one_dataset(int64_t dim, uint64_t count) {
+    auto result = vsag::Dataset::Make();
+    auto [ids, vectors] = generate_ids_and_vectors(count, dim, true, time(nullptr));
+    result->Dim(dim)
+        ->NumElements(count)
+        ->Float32Vectors(CopyVector(vectors))
+        ->Ids(CopyVector(ids))
+        ->Owner(true);
     return result;
 }
 

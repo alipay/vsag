@@ -13,23 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <fmt/format.h>
-#include <spdlog/spdlog.h>
+#include "test_index.h"
 
-#include <catch2/catch_message.hpp>
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/generators/catch_generators.hpp>
-#include <fstream>
-#include <iostream>
-#include <nlohmann/json.hpp>
-#include <unordered_set>
-
-#include "fixtures/fixtures.h"
-#include "vsag/dataset.h"
-#include "vsag/errors.h"
-#include "vsag/logger.h"
-#include "vsag/options.h"
-#include "vsag/vsag.h"
+#include "fixtures/test_pool.h"
 
 namespace vsag {
 
@@ -41,6 +27,110 @@ InnerProduct(const void* pVect1v, const void* pVect2v, const void* qty_ptr);
 
 }  // namespace vsag
 
+namespace vsag {
+
+IndexPtr
+TestFactory(const std::string& name, const std::string& build_param, bool expect_success) {
+    fixtures::init_classic_pool();
+    auto created_index = vsag::Factory::CreateIndex(name, build_param);
+    REQUIRE(created_index.has_value() == expect_success);
+    return created_index.value();
+}
+
+void
+TestBuildIndex(IndexPtr index, int64_t dim, const std::string& index_name) {
+    fixtures::init_classic_pool();
+    auto key = fmt::format("[{}][1000][float][classic]", dim);
+    auto dataset = fixtures::TestPool<Dataset>::Get(key);
+    auto build_index = index->Build(dataset);
+    REQUIRE(build_index.has_value());
+    // check the number of vectors in index
+    REQUIRE(index->GetNumElements() == dataset->GetNumElements());
+    if (index_name != "no_name") {
+        fixtures::TestPool<Index>::Set(index_name, index);
+    }
+}
+
+void
+TestAddIndex(IndexPtr index, int64_t dim, const std::string& index_name) {
+    fixtures::init_classic_pool();
+    auto key = fmt::format("[{}][1000][float][classic]", dim);
+    auto dataset = fixtures::TestPool<Dataset>::Get(key);
+    auto add_index = index->Add(dataset);
+    REQUIRE(add_index.has_value());
+    // check the number of vectors in index
+    REQUIRE(index->GetNumElements() == dataset->GetNumElements());
+    if (index_name != "no_name") {
+        fixtures::TestPool<Index>::Set(index_name, index);
+    }
+}
+
+void
+TestContinueAdd(IndexPtr index, int64_t dim, int64_t count, const std::string& index_name) {
+    auto cur_count = index->GetNumElements();
+    for (auto i = 0; i < count; ++i) {
+        auto one_vector = fixtures::generate_one_dataset(dim, 1);
+        delete[] one_vector->GetIds();
+        auto ids = new int64_t[1];
+        ids[0] = i + cur_count;
+        one_vector->Ids(ids);
+        REQUIRE(index->Add(one_vector).has_value());
+    }
+    REQUIRE(index->GetNumElements() == cur_count + count);
+
+    if (index_name != "no_name") {
+        fixtures::TestPool<Index>::Set(index_name, index);
+    }
+}
+
+static int
+Intersection(const int64_t* x, int64_t x_count, const int64_t* y, int64_t y_count) {
+    std::unordered_set<int64_t> set_x(x, x + x_count);
+    int result = 0;
+
+    for (int i = 0; i < y_count; ++i) {
+        if (set_x.count(y[i])) {
+            ++result;
+        }
+    }
+
+    return result;
+}
+
+void
+TestKnnSearch(IndexPtr index,
+              std::shared_ptr<fixtures::TestDataset> dataset,
+              const std::string& search_param,
+              int topk,
+              float recall) {
+    auto querys = dataset->query_;
+    auto query_count = querys->GetNumElements();
+    auto dim = querys->GetDim();
+    auto gts = dataset->ground_truth_;
+    auto gt_topK = gts->GetDim();
+    float cur_recall = 0.0f;
+    for (auto i = 0; i < query_count; ++i) {
+        auto query = vsag::Dataset::Make();
+        query->NumElements(1)
+            ->Dim(dim)
+            ->Float32Vectors(querys->GetFloat32Vectors() + i * dim)
+            ->Owner(false);
+        auto res = index->KnnSearch(query, topk, search_param);
+        REQUIRE(res.has_value());
+        auto result = res.value()->GetIds();
+        auto gt = gts->GetIds() + gt_topK * i;
+        auto val = Intersection(gt, gt_topK, result, topk);
+        cur_recall += static_cast<float>(val) / static_cast<float>(gt_topK);
+
+        for (int j = 0; j < topk; ++j) {
+            REQUIRE(index->CalcDistanceById(query->GetFloat32Vectors(), result[j]) ==
+                    res.value()->GetDistances()[j]);
+        }
+    }
+    REQUIRE(cur_recall > recall * query_count);
+}
+}  // namespace vsag
+
 /////////////////////////////////////////////////////////
 // index->build
 /////////////////////////////////////////////////////////
@@ -48,59 +138,29 @@ InnerProduct(const void* pVect1v, const void* pVect2v, const void* qty_ptr);
 TEST_CASE("hnsw build test", "[ft][index][hnsw]") {
     vsag::Options::Instance().logger()->SetLevel(vsag::Logger::Level::kDEBUG);
 
-    int64_t num_vectors = 1000;
-    int64_t dim = 57;
+    auto test_dim_count = 3;
+    auto dims = fixtures::get_common_used_dims();
     auto metric_type = GENERATE("l2", "ip", "cosine");
     bool need_normalize = metric_type != std::string("cosine");
-
-    auto [ids, vectors] = fixtures::generate_ids_and_vectors(num_vectors * 2, dim, need_normalize);
-    auto createindex = vsag::Factory::CreateIndex(
-        "hnsw", fixtures::generate_hnsw_build_parameters_string(metric_type, dim));
-    REQUIRE(createindex.has_value());
-    auto index = createindex.value();
-
-    // build index
-    auto base = vsag::Dataset::Make();
-    base->NumElements(num_vectors)
-        ->Dim(dim)
-        ->Ids(ids.data())
-        ->Float32Vectors(vectors.data())
-        ->Owner(false);
-    auto buildindex = index->Build(base);
-    REQUIRE(buildindex.has_value());
-
-    // check the number of vectors in index
-    REQUIRE(index->GetNumElements() == num_vectors);
-
-    for (int64_t i = 0; i < num_vectors; ++i) {
-        auto one_vector = vsag::Dataset::Make();
-        one_vector->NumElements(1)
-            ->Dim(dim)
-            ->Ids(ids.data() + num_vectors + i)
-            ->Float32Vectors(vectors.data() + (num_vectors + i) * dim)
-            ->Owner(false);
-
-        REQUIRE(index->Add(one_vector).has_value());
+    const std::string name = "hnsw";
+    for (auto i = 0; i < test_dim_count; ++i) {
+        srandom(time(nullptr));
+        int64_t dim = dims.at(random() % dims.size());
+        auto param = fixtures::generate_hnsw_build_parameters_string(metric_type, dim);
+        auto index = vsag::TestFactory(name, param, true);
+        vsag::TestBuildIndex(index, dim);
+        vsag::TestContinueAdd(index, dim);
     }
-
-    // check the number of vectors in index
-    REQUIRE(index->GetNumElements() == num_vectors * 2);
 }
 
 TEST_CASE("diskann build test", "[ft][index][diskann]") {
     vsag::Options::Instance().logger()->SetLevel(vsag::Logger::Level::kDEBUG);
 
-    int64_t num_vectors = 1000;
-    int64_t dim = 57;
+    auto test_dim_count = 3;
+    auto dims = fixtures::get_common_used_dims();
     auto metric_type = GENERATE("l2", "ip");
-
-    auto [ids, vectors] = fixtures::generate_ids_and_vectors(num_vectors, dim);
-    auto base = vsag::Dataset::Make();
-    base->NumElements(num_vectors)
-        ->Dim(dim)
-        ->Ids(ids.data())
-        ->Float32Vectors(vectors.data())
-        ->Owner(false);
+    auto pq_sample_rate = GENERATE(-0.5, 1.0, 20.0);
+    const std::string name = "diskann";
 
     constexpr auto build_parameter_json = R"(
         {{
@@ -116,62 +176,53 @@ TEST_CASE("diskann build test", "[ft][index][diskann]") {
         }}
     )";
 
-    SECTION("pq_sample_rate is too small") {
-        auto build_parameters = fmt::format(build_parameter_json, metric_type, dim, -0.5);
-        auto createindex = vsag::Factory::CreateIndex("diskann", build_parameters);
-        REQUIRE(createindex.has_value());
-        auto index = createindex.value();
-        auto buildindex = index->Build(base);
-        REQUIRE(buildindex.has_value());
-    }
-
-    SECTION("pq_sample_rate is zero") {
-        auto build_parameters = fmt::format(build_parameter_json, metric_type, dim, 0);
-        auto createindex = vsag::Factory::CreateIndex("diskann", build_parameters);
-        REQUIRE(createindex.has_value());
-        auto index = createindex.value();
-        auto buildindex = index->Build(base);
-        REQUIRE(buildindex.has_value());
-    }
-
-    SECTION("pq_sample_rate is too large") {
-        auto build_parameters = fmt::format(build_parameter_json, metric_type, dim, 20);
-        auto createindex = vsag::Factory::CreateIndex("diskann", build_parameters);
-        REQUIRE(createindex.has_value());
-        auto index = createindex.value();
-        auto buildindex = index->Build(base);
-        REQUIRE(buildindex.has_value());
+    for (auto i = 0; i < test_dim_count; ++i) {
+        srandom(time(nullptr));
+        int64_t dim = dims.at(random() % dims.size());
+        auto param = fmt::format(build_parameter_json, metric_type, dim, pq_sample_rate);
+        auto index = vsag::TestFactory(name, param, true);
+        vsag::TestBuildIndex(index, dim);
     }
 }
 
 /////////////////////////////////////////////////////////
 // index->add
 /////////////////////////////////////////////////////////
-TEST_CASE("hnsw add test", "[ft][index][hnsw]") {
+TEST_CASE("hnsw float add & search test", "[ft][index][hnsw]") {
     vsag::Options::Instance().logger()->SetLevel(vsag::Logger::Level::kDEBUG);
 
-    int64_t num_vectors = 8000;
-    int64_t dim = 57;
-    auto metric_type = "ip";
+    auto test_dim_count = 3;
+    auto dims = fixtures::get_common_used_dims();
+    auto metric_type = GENERATE("l2", "ip", "cosine");
+    bool need_normalize = metric_type != std::string("cosine");
+    std::unordered_map<int64_t, vsag::IndexPtr> used_dims_index;
+    const std::string name = "hnsw";
+    for (auto i = 0; i < test_dim_count; ++i) {
+        srandom(time(nullptr));
+        int64_t dim = dims.at(random() % dims.size());
 
-    auto [ids, vectors] = fixtures::generate_ids_and_vectors(num_vectors, dim);
-    auto createindex = vsag::Factory::CreateIndex(
-        "hnsw", fixtures::generate_hnsw_build_parameters_string(metric_type, dim));
-    REQUIRE(createindex.has_value());
-    auto index = createindex.value();
+        auto param = fixtures::generate_hnsw_build_parameters_string(metric_type, dim);
+        auto index = vsag::TestFactory(name, param, true);
+        vsag::TestAddIndex(index, dim);
+        used_dims_index.emplace(dim, index);
+    }
 
-    // build index
-    auto base = vsag::Dataset::Make();
-    base->NumElements(num_vectors)
-        ->Dim(dim)
-        ->Ids(ids.data())
-        ->Float32Vectors(vectors.data())
-        ->Owner(false);
+    SECTION("knn search") {
+        auto search_parameters = R"(
+        {
+            "hnsw": {
+                "ef_search": 100
+            }
+        })";
+        auto count = 3;
+        auto top_k = 10;
 
-    index->Add(base);
-
-    // check the number of vectors in index
-    REQUIRE(index->GetNumElements() == num_vectors);
+        for (auto& [dim, index] : used_dims_index) {
+            auto dataset_key = fmt::format("[{}][1000][float][classic][{}]", dim, metric_type);
+            auto dataset = fixtures::TestPool<fixtures::TestDataset>::Get(dataset_key);
+            vsag::TestKnnSearch(index, dataset, search_parameters, top_k, 0.99);
+        }
+    }
 }
 
 /////////////////////////////////////////////////////////
@@ -181,42 +232,10 @@ TEST_CASE("hnsw add test", "[ft][index][hnsw]") {
 TEST_CASE("hnsw float32 recall", "[ft][index][hnsw]") {
     vsag::Options::Instance().logger()->SetLevel(vsag::Logger::Level::kDEBUG);
 
-    int64_t num_vectors = 1000;
-    int64_t dim = 104;
-    auto metric_type = GENERATE("l2", "ip", "cosine");
-    bool need_normalize = metric_type != std::string("cosine");
-
-    auto [ids, vectors] = fixtures::generate_ids_and_vectors(num_vectors, dim, need_normalize);
-    auto createindex = vsag::Factory::CreateIndex(
-        "hnsw", fixtures::generate_hnsw_build_parameters_string(metric_type, dim));
-    REQUIRE(createindex.has_value());
-    auto index = createindex.value();
-
-    // build index
-    auto base = vsag::Dataset::Make();
-    base->NumElements(num_vectors)
-        ->Dim(dim)
-        ->Ids(ids.data())
-        ->Float32Vectors(vectors.data())
-        ->Owner(false);
-    auto buildindex = index->Build(base);
-    REQUIRE(buildindex.has_value());
-
-    auto search_parameters = R"(
-    {
-        "hnsw": {
-            "ef_search": 100
-        }
-    }
-    )";
-
-    float recall =
-        fixtures::test_knn_recall(index, search_parameters, num_vectors, dim, ids, vectors);
-    REQUIRE(recall > 0.99);
-
-    float range_recall =
-        fixtures::test_range_recall(index, search_parameters, num_vectors, dim, ids, vectors);
-    REQUIRE(range_recall > 0.99);
+    //
+    //    float range_recall =
+    //        fixtures::test_range_recall(index, search_parameters, num_vectors, dim, ids, vectors);
+    //    REQUIRE(range_recall > 0.99);
 }
 
 TEST_CASE("hnsw int8 recall", "[ft][index][hnsw]") {

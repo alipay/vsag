@@ -59,8 +59,13 @@ asan:                   ## Build with AddressSanitizer option.
 
 .PHONY: test_asan
 test_asan: asan         ## Run unit tests with AddressSanitizer option.
-	./build/tests/unittests -d yes ${UT_FILTER} --allow-running-no-tests ${UT_SHARD}
-	./build/tests/functests -d yes ${UT_FILTER} --allow-running-no-tests ${UT_SHARD}
+	./build/tests/unittests -d yes ${UT_FILTER} --allow-running-no-tests --shard-count 1 --shard-index 0 &
+	./build/tests/functests -d yes ${UT_FILTER} --allow-running-no-tests --shard-count 4 --shard-index 0 &
+	./build/tests/functests -d yes ${UT_FILTER} --allow-running-no-tests --shard-count 4 --shard-index 2 &
+	./build/tests/functests -d yes ${UT_FILTER} --allow-running-no-tests --shard-count 4 --shard-index 3 &
+	./build/tests/functests -d yes ${UT_FILTER} --allow-running-no-tests --shard-count 4 --shard-index 1
+
+#./build/tests/functests -d yes ${UT_FILTER} --allow-running-no-tests ${UT_SHARD}
 	./build/mockimpl/tests_mockimpl -d yes ${UT_FILTER} --allow-running-no-tests ${UT_SHARD}
 
 .PHONY: tsan

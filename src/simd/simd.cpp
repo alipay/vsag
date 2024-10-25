@@ -32,6 +32,59 @@ float (*InnerProductDistanceSIMD16ExtResiduals)(const void*, const void*, const 
 float (*InnerProductDistanceSIMD4Ext)(const void*, const void*, const void*);
 float (*InnerProductDistanceSIMD4ExtResiduals)(const void*, const void*, const void*);
 
+//double
+//INT8_InnerProduct512_AVX512_impl(const void* pVect1v, const void* pVect2v, size_t qty);
+//
+//int32_t
+//AVX512_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim);
+//
+//int32_t
+//INT4_IP_avx512_impl(const void* p1_vec, const void* p2_vec, int dim);
+//
+//double
+//INT8_IP_impl(const void* pVect1, const void* pVect2, size_t qty);
+//
+//int32_t
+//INT4_IP_impl(const void* p1_vec, const void* p2_vec, int dim);
+//
+//int32_t
+//GENERIC_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim);
+//
+//int32_t
+//AVX2_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim);
+//
+//int32_t
+//SSE_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim);
+
+int32_t
+INT4_IP(const void* p1_vec, const void* p2_vec, int dim) {
+#ifdef ENABLE_AVX512
+    return INT4_IP_avx512_impl(p1_vec, p2_vec, dim);
+#else
+    return INT4_IP_impl(p1_vec, p2_vec, dim);
+#endif
+}
+
+int32_t
+INT4_L2_precompute(int32_t norm1, int32_t norm2, const void* p1_vec, const void* p2_vec, int dim) {
+    return norm1 + norm2 - 2 * INT4_IP(p1_vec, p2_vec, dim);
+}
+
+double
+INT8_IP(const void* pVect1v, const void* pVect2v, size_t qty) {
+#ifdef ENABLE_AVX512
+    return INT8_InnerProduct512_AVX512_impl(pVect1v, pVect2v, qty);
+#else
+    return INT8_IP_impl(pVect1v, pVect2v, qty);
+#endif
+}
+
+double
+INT8_L2_precompute(
+    int64_t norm1, double norm2, const void* pVect1v, const void* pVect2v, size_t qty) {
+    return norm1 + norm2 - 2.0 * INT8_IP(pVect1v, pVect2v, qty);
+}
+
 SimdStatus
 setup_simd() {
     L2SqrSIMD16Ext = L2Sqr;

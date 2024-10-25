@@ -91,6 +91,30 @@ struct SimdStatus {
 SimdStatus
 setup_simd();
 
+double
+INT8_IP_impl(const void* pVect1, const void* pVect2, size_t qty);
+
+int32_t
+INT4_IP_impl(const void* p1_vec, const void* p2_vec, int dim);
+
+int32_t
+GENERIC_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim);
+
+int32_t
+INT4_IP(const void* p1_vec, const void* p2_vec, int dim);
+
+double
+INT8_IP(const void* pVect1v, const void* pVect2v, size_t qty);
+
+int32_t
+INT4_L2_precompute(
+    int32_t norm1, int32_t norm2, const void* p1_vec, const void* p2_vec, int dim);
+
+double
+INT8_L2_precompute(
+    int64_t norm1, double norm2, const void* pVect1v, const void* pVect2v, size_t qty);
+
+
 float
 L2Sqr(const void* pVect1v, const void* pVect2v, const void* qty_ptr);
 
@@ -103,6 +127,9 @@ void
 PQDistanceFloat256(const void* single_dim_centers, float single_dim_val, void* result);
 
 #if defined(ENABLE_SSE)
+int32_t
+SSE_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim);
+
 float
 L2SqrSIMD16ExtSSE(const void* pVect1v, const void* pVect2v, const void* qty_ptr);
 float
@@ -133,6 +160,9 @@ PQDistanceSSEFloat256(const void* single_dim_centers, float single_dim_val, void
 #endif
 
 #if defined(ENABLE_AVX)
+int32_t
+AVX2_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim);
+
 float
 L2SqrSIMD16ExtAVX(const void* pVect1v, const void* pVect2v, const void* qty_ptr);
 float
@@ -144,6 +174,15 @@ PQDistanceAVXFloat256(const void* single_dim_centers, float single_dim_val, void
 #endif
 
 #if defined(ENABLE_AVX512)
+double
+INT8_InnerProduct512_AVX512_impl(const void* pVect1v, const void* pVect2v, size_t qty);
+
+int32_t
+AVX512_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim);
+
+int32_t
+INT4_IP_avx512_impl(const void* p1_vec, const void* p2_vec, int dim);
+
 float
 L2SqrSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_ptr);
 float

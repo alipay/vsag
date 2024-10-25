@@ -243,9 +243,6 @@ if (ENABLE_TSAN)
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=thread")
 endif ()
 
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx512f -mavx512pf -mavx512er -mavx512cd -mavx512vl -mavx512bw -mavx512dq -mavx512ifma -mavx512vbmi")
-add_definitions (-DENABLE_AVX512=1)
-
 # sources
 add_subdirectory (src)
 add_subdirectory (mockimpl)

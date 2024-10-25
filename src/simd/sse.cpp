@@ -22,6 +22,38 @@ namespace vsag {
 #define PORTABLE_ALIGN32 __attribute__((aligned(32)))
 #define PORTABLE_ALIGN64 __attribute__((aligned(64)))
 
+extern int32_t
+GENERIC_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim);
+
+int32_t
+SSE_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim) {
+    if (dim == 0) {
+        return 0;
+    }
+    alignas(128) int16_t temp[8];
+    int32_t result = 0;
+    uint64_t d = 0;
+    __m128i sum = _mm_setzero_si128();
+    __m128i mask = _mm_set1_epi8(0xf);
+    for (; d + 31 < dim; d += 32) {
+        auto xx = _mm_loadu_si128((__m128i*)(codes1 + (d >> 1)));
+        auto yy = _mm_loadu_si128((__m128i*)(codes2 + (d >> 1)));
+        auto xx1 = _mm_and_si128(xx, mask);                     // 16 * 8bits
+        auto xx2 = _mm_and_si128(_mm_srli_epi16(xx, 4), mask);  // 16 * 8bits
+        auto yy1 = _mm_and_si128(yy, mask);
+        auto yy2 = _mm_and_si128(_mm_srli_epi16(yy, 4), mask);
+
+        sum = _mm_add_epi16(sum, _mm_maddubs_epi16(xx1, yy1));
+        sum = _mm_add_epi16(sum, _mm_maddubs_epi16(xx2, yy2));
+    }
+    _mm_store_si128((__m128i*)temp, sum);
+    for (int i = 0; i < 8; ++i) {
+        result += temp[i];
+    }
+    result += GENERIC_SQ4UniformComputeCodesIP(codes1 + (d >> 1), codes2 + (d >> 1), dim - d);
+    return result;
+}
+
 extern float
 L2Sqr(const void* pVect1v, const void* pVect2v, const void* qty_ptr);
 

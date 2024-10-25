@@ -246,87 +246,8 @@ public:
         delete visited_list_pool_;
     }
 
-    double
-    INT8_InnerProduct_impl(const void* pVect1, const void* pVect2, size_t qty) const {
-        int8_t* vec1 = (int8_t*)pVect1;
-        int8_t* vec2 = (int8_t*)pVect2;
-        double res = 0;
-        for (size_t i = 0; i < qty; i++) {
-            res += vec1[i] * vec2[i];
-        }
-        return res;
-    }
 
-    int32_t
-    INT8_IP_TEST(const void* p1_vec, const void* p2_vec, int dim) const override {
-        return INT8_IP(p1_vec, p2_vec, dim);
-    }
 
-    double
-    INT8_InnerProduct512_AVX512_impl(const void* pVect1v,
-                                     const void* pVect2v,
-                                     size_t qty,
-                                     uint8_t* prefetch = nullptr) const {
-        __mmask32 mask = 0xFFFFFFFF;
-        __mmask64 mask64 = 0xFFFFFFFFFFFFFFFF;
-
-        int32_t cTmp[16];
-
-        int8_t* pVect1 = (int8_t*)pVect1v;
-        int8_t* pVect2 = (int8_t*)pVect2v;
-        const int8_t* pEnd1 = pVect1 + qty;
-
-        __m512i sum512 = _mm512_set1_epi32(0);
-
-        while (pVect1 < pEnd1) {
-            // sum512 = _mm512_dpbusd_epi32(sum512, _mm512_load_epi32(pVect1), _mm512_load_epi32(pVect2));
-            __m256i v1 = _mm256_maskz_loadu_epi8(mask, pVect1);
-            __m512i v1_512 = _mm512_cvtepi8_epi16(v1);
-            pVect1 += 32;
-            __m256i v2 = _mm256_maskz_loadu_epi8(mask, pVect2);
-            __m512i v2_512 = _mm512_cvtepi8_epi16(v2);
-            pVect2 += 32;
-            //            _mm_prefetch(prefetch, _MM_HINT_T0);
-            //            prefetch += 32;
-            sum512 = _mm512_add_epi32(sum512, _mm512_madd_epi16(v1_512, v2_512));
-        }
-
-        _mm512_mask_storeu_epi32(cTmp, mask64, sum512);
-        double res = 0;
-        for (int i = 0; i < 16; i++) {
-            res += cTmp[i];
-        }
-        return res;
-    }
-
-    double
-    INT8_IP(const void* pVect1v, const void* pVect2v, size_t qty) const {
-#ifdef ENABLE_AVX512
-        return INT8_InnerProduct512_AVX512_impl(pVect1v, pVect2v, qty);
-#else
-        return INT8_InnerProduct_impl(pVect1v, pVect2v, qty);
-#endif
-    }
-
-    double
-    INT8_L2_precompute(int64_t norm1,
-            double norm2,
-            const void* pVect1v,
-            const void* pVect2v,
-            size_t qty) const {
-        //        norm1 =
-        //            INT8_IP(static_cast<const int8_t*>(pVect1v), static_cast<const int8_t*>(pVect1v), qty);
-        //        norm2 =
-        //            INT8_IP(static_cast<const int8_t*>(pVect2v), static_cast<const int8_t*>(pVect2v), qty);
-
-        //        assert(norm1 == norm1_);
-        //        assert(norm2 == norm2_);
-
-        double innerProduct = INT8_InnerProduct512_AVX512_impl(pVect1v, pVect2v, qty, nullptr);
-
-        double l2Distance = norm1 + norm2 - 2.0 * innerProduct;
-        return l2Distance;
-    }
 
     void
     compute_sq_interval() override {
@@ -373,300 +294,9 @@ public:
         for (int i = 0; i < cur_element_count_; i++) {
             auto* code = get_encoded_data(i, dim + 8);
             transform_to_int8((float*)getDataByInternalId(i), code);
-            int64_t norm = INT8_IP(code, code, dim);
+            int64_t norm = vsag::INT8_IP(code, code, dim);
             memcpy(code + dim, &norm, 8);
         }
-    }
-
-    std::vector<int32_t>
-    INT4_L2_batch(std::vector<int32_t>& n1_vec,
-                  double norm2,
-                  std::vector<const void*>& p1_vec,
-                  const void* query,
-                  int size) const {
-        std::vector<int32_t> ret(size);
-        for (int i = 0; i < size; i++) {
-            ret[i] = INT4_L2_precompute(n1_vec[i], norm2, p1_vec[i], query, 960);
-        }
-        return ret;
-    }
-
-    inline int32_t
-    INT4_L2_precompute(
-        int32_t norm1, int32_t norm2, const void* p1_vec, const void* p2_vec, int dim) const {
-        return norm1 + norm2 - 2 * INT4_IP_avx512_impl(p1_vec, p2_vec, dim);
-    }
-
-    int32_t
-    INT4_L2(const void* p1_vec, const void* p2_vec, int dim) const override {
-#ifdef ENABLE_AVX512
-        return INT4_L2_avx512_impl(p1_vec, p2_vec, dim);
-#elif defined(__AVX2__)
-        return INT4_L2_avx2_impl(p1_vec, p2_vec, dim);
-#else
-        return INT4_L2_impl(p1_vec, p2_vec, dim);
-#endif
-    }
-
-    inline int32_t
-    reduce_add_i16x16(__m256i x) const {
-        // x: 16 * 16bits
-        auto sumh = _mm_add_epi16(_mm256_extracti128_si256(x, 0),   // 8 * 16bits
-                                  _mm256_extracti128_si256(x, 1));  // 8 * 16bits
-        // sumh: 8 * 16bits
-        auto tmp = _mm256_cvtepi16_epi32(sumh);
-        // tmp:  8 * 32bits
-        auto sumhh = _mm_add_epi32(_mm256_extracti128_si256(tmp, 0),   // 4 * 32bits
-                                   _mm256_extracti128_si256(tmp, 1));  // 4 * 32bits
-        // sumhh: 4 * 32bits
-        auto tmp2 = _mm_hadd_epi32(sumhh, sumhh);
-        // tmp2:  2 * 32bits
-
-        return _mm_extract_epi32(tmp2, 0) + _mm_extract_epi32(tmp2, 1);
-    }
-
-    int32_t
-    INT4_L2_avx2_impl(const void* p1_vec, const void* p2_vec, int dim) const override {
-        int8_t* x = (int8_t*)p1_vec;
-        int8_t* y = (int8_t*)p2_vec;
-        __m256i sum1 = _mm256_setzero_si256(), sum2 = _mm256_setzero_si256();
-        __m256i mask = _mm256_set1_epi8(0xf);
-        for (int i = 0; i < dim; i += 64) {
-            auto xx = _mm256_loadu_si256((__m256i*)(x + i / 2));
-            auto yy = _mm256_loadu_si256((__m256i*)(y + i / 2));
-            auto xx1 = _mm256_and_si256(xx, mask);
-            auto xx2 = _mm256_and_si256(_mm256_srli_epi16(xx, 4), mask);
-            auto yy1 = _mm256_and_si256(yy, mask);
-            auto yy2 = _mm256_and_si256(_mm256_srli_epi16(yy, 4), mask);
-            auto d1 = _mm256_sub_epi8(xx1, yy1);
-            auto d2 = _mm256_sub_epi8(xx2, yy2);
-            d1 = _mm256_abs_epi8(d1);
-            d2 = _mm256_abs_epi8(d2);
-            sum1 = _mm256_add_epi16(sum1, _mm256_maddubs_epi16(d1, d1));
-            sum2 = _mm256_add_epi16(sum2, _mm256_maddubs_epi16(d2, d2));
-        }
-        sum1 = _mm256_add_epi32(sum1, sum2);
-        return reduce_add_i16x16(sum1);
-    }
-
-    int32_t
-    INT4_L2_avx512_impl(const void* p1_vec, const void* p2_vec, int dim) const override {
-        int d = 0;
-        int8_t* x = (int8_t*)p1_vec;
-        int8_t* y = (int8_t*)p2_vec;
-        __m512i sum = _mm512_setzero_si512();
-        __m512i mask = _mm512_set1_epi8(0xf);
-        for (d = 0; d < dim / 2; d += 64) {
-            auto xx = _mm512_loadu_si512((__m512i*)(x + d));
-            auto yy = _mm512_loadu_si512((__m512i*)(y + d));
-            if (d + 64 >= dim / 2) {
-                __m512i mask_overflow = _mm512_setr_epi32(0xffffffff,
-                                                          0xffffffff,
-                                                          0xffffffff,
-                                                          0xffffffff,
-                                                          0xffffffff,
-                                                          0xffffffff,
-                                                          0xffffffff,
-                                                          0xffffffff,
-                                                          0,
-                                                          0,
-                                                          0,
-                                                          0,
-                                                          0,
-                                                          0,
-                                                          0,
-                                                          0);
-                xx = _mm512_and_si512(xx, mask_overflow);
-                yy = _mm512_and_si512(yy, mask_overflow);
-            }
-            auto xx1 = _mm512_and_si512(xx, mask);                        // 64 * 8bits
-            auto xx2 = _mm512_and_si512(_mm512_srli_epi16(xx, 4), mask);  // 64 * 8bits
-            auto yy1 = _mm512_and_si512(yy, mask);
-            auto yy2 = _mm512_and_si512(_mm512_srli_epi16(yy, 4), mask);
-            auto d1 = _mm512_sub_epi8(xx1, yy1);  // 64 * 8bits
-            auto d2 = _mm512_sub_epi8(xx2, yy2);
-            d1 = _mm512_abs_epi8(d1);  // 64 * 8bits
-            d2 = _mm512_abs_epi8(d2);
-            sum = _mm512_add_epi16(
-                sum, _mm512_maddubs_epi16(d1, d1));  // _mm512_maddubs_epi16(d1, d1): 32 * 16bits
-            sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(d2, d2));  // sum1: 32 * 16bits
-        }
-        alignas(512) int16_t temp[32];
-        _mm512_store_si512((__m512i*)temp, sum);
-        int32_t result = 0;
-        for (int i = 0; i < 32; ++i) {
-            result += temp[i];
-        }
-        return result;
-    }
-
-    int32_t
-    INT4_IP(const void* p1_vec, const void* p2_vec, int dim) const override {
-#ifdef ENABLE_AVX512
-        return INT4_IP_avx512_impl(p1_vec, p2_vec, dim);
-#else
-        return INT4_IP_impl(p1_vec, p2_vec, dim);
-#endif
-    }
-
-    inline int32_t
-    GENERIC_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim) const {
-        int32_t result = 0;
-
-        for (uint64_t d = 0; d < dim; d += 2) {
-            float x_lo = codes1[d >> 1] & 0x0f;
-            float x_hi = (codes1[d >> 1] & 0xf0) >> 4;
-            float y_lo = codes2[d >> 1] & 0x0f;
-            float y_hi = (codes2[d >> 1] & 0xf0) >> 4;
-
-            result += (x_lo * y_lo + x_hi * y_hi);
-        }
-
-        return result;
-    }
-
-    inline int32_t
-    SSE_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim) const {
-        if (dim == 0) {
-            return 0;
-        }
-        alignas(128) int16_t temp[8];
-        int32_t result = 0;
-        uint64_t d = 0;
-        __m128i sum = _mm_setzero_si128();
-        __m128i mask = _mm_set1_epi8(0xf);
-        for (; d + 31 < dim; d += 32) {
-            auto xx = _mm_loadu_si128((__m128i*)(codes1 + (d >> 1)));
-            auto yy = _mm_loadu_si128((__m128i*)(codes2 + (d >> 1)));
-            auto xx1 = _mm_and_si128(xx, mask);                     // 16 * 8bits
-            auto xx2 = _mm_and_si128(_mm_srli_epi16(xx, 4), mask);  // 16 * 8bits
-            auto yy1 = _mm_and_si128(yy, mask);
-            auto yy2 = _mm_and_si128(_mm_srli_epi16(yy, 4), mask);
-
-            sum = _mm_add_epi16(sum, _mm_maddubs_epi16(xx1, yy1));
-            sum = _mm_add_epi16(sum, _mm_maddubs_epi16(xx2, yy2));
-        }
-        _mm_store_si128((__m128i*)temp, sum);
-        for (int i = 0; i < 8; ++i) {
-            result += temp[i];
-        }
-        result += GENERIC_SQ4UniformComputeCodesIP(codes1 + (d >> 1), codes2 + (d >> 1), dim - d);
-        return result;
-    }
-
-    inline int32_t
-    AVX2_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim) const {
-        if (dim == 0) {
-            return 0;
-        }
-        alignas(256) int16_t temp[16];
-        int32_t result = 0;
-        uint64_t d = 0;
-        __m256i sum = _mm256_setzero_si256();
-        __m256i mask = _mm256_set1_epi8(0xf);
-        for (; d + 63 < dim; d += 64) {
-            auto xx = _mm256_loadu_si256((__m256i*)(codes1 + (d >> 1)));
-            auto yy = _mm256_loadu_si256((__m256i*)(codes2 + (d >> 1)));
-            auto xx1 = _mm256_and_si256(xx, mask);                        // 32 * 8bits
-            auto xx2 = _mm256_and_si256(_mm256_srli_epi16(xx, 4), mask);  // 32 * 8bits
-            auto yy1 = _mm256_and_si256(yy, mask);
-            auto yy2 = _mm256_and_si256(_mm256_srli_epi16(yy, 4), mask);
-
-            sum = _mm256_add_epi16(sum, _mm256_maddubs_epi16(xx1, yy1));
-            sum = _mm256_add_epi16(sum, _mm256_maddubs_epi16(xx2, yy2));
-        }
-        _mm256_store_si256((__m256i*)temp, sum);
-        for (int i = 0; i < 16; ++i) {
-            result += temp[i];
-        }
-        result += SSE_SQ4UniformComputeCodesIP(codes1 + (d >> 1), codes2 + (d >> 1), dim - d);
-        return result;
-    }
-
-    inline int32_t
-    AVX512_SQ4UniformComputeCodesIP(const uint8_t* codes1, const uint8_t* codes2, uint64_t dim) const {
-        if (dim == 0) {
-            return 0;
-        }
-        alignas(512) int16_t temp[32];
-        int32_t result = 0;
-        uint64_t d = 0;
-        __m512i sum = _mm512_setzero_si512();
-        __m512i mask = _mm512_set1_epi8(0xf);
-        for (; d + 127 < dim; d += 128) {
-            auto xx = _mm512_loadu_si512((__m512i*)(codes1 + (d >> 1)));
-            auto yy = _mm512_loadu_si512((__m512i*)(codes2 + (d >> 1)));
-            auto xx1 = _mm512_and_si512(xx, mask);                        // 64 * 8bits
-            auto xx2 = _mm512_and_si512(_mm512_srli_epi16(xx, 4), mask);  // 64 * 8bits
-            auto yy1 = _mm512_and_si512(yy, mask);
-            auto yy2 = _mm512_and_si512(_mm512_srli_epi16(yy, 4), mask);
-
-            sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(xx1, yy1));
-            sum = _mm512_add_epi16(sum, _mm512_maddubs_epi16(xx2, yy2));
-        }
-        _mm512_store_si512((__m512i*)temp, sum);
-        for (int i = 0; i < 32; ++i) {
-            result += temp[i];
-        }
-//        result += (temp[0] + temp[1] + temp[2] + temp[3]);
-//        result += (temp[4] + temp[5] + temp[6] + temp[7]);
-//        result += (temp[8] + temp[9] + temp[10] + temp[11]);
-//        result += (temp[12] + temp[13] + temp[14] + temp[15]);
-//
-//        result += (temp[16] + temp[17] + temp[18] + temp[19]);
-//        result += (temp[20] + temp[21] + temp[22] + temp[23]);
-//        result += (temp[24] + temp[25] + temp[26] + temp[27]);
-//        result += (temp[28] + temp[29] + temp[30] + temp[31]);
-
-        result += AVX2_SQ4UniformComputeCodesIP(codes1 + (d >> 1), codes2 + (d >> 1), dim - d);
-        return result;
-    }
-
-    inline int32_t
-    INT4_IP_avx512_impl(const void* p1_vec, const void* p2_vec, int dim) const {
-        const uint8_t* x = (const uint8_t*)p1_vec;
-        const uint8_t* y = (const uint8_t*)p2_vec;
-        return AVX512_SQ4UniformComputeCodesIP(x, y, dim);
-    }
-
-    int32_t
-    INT4_IP_impl(const void* p1_vec, const void* p2_vec, int dim) const override {
-        int8_t* x = (int8_t*)p1_vec;
-        int8_t* y = (int8_t*)p2_vec;
-        int32_t sum = 0;
-        for (int d = 0; d < dim / 2; ++d) {
-            {
-                int32_t xx = x[d] & 15;
-                int32_t yy = y[d] & 15;
-                sum += xx * yy;
-            }
-            {
-                int32_t xx = (x[d] >> 4) & 15;
-                int32_t yy = (y[d] >> 4) & 15;
-                sum += xx * yy;
-            }
-        }
-        return sum;
-    }
-
-    int32_t
-    INT4_L2_impl(const void* p1_vec, const void* p2_vec, int dim) const override {
-        int8_t* x = (int8_t*)p1_vec;
-        int8_t* y = (int8_t*)p2_vec;
-        int32_t sum = 0;
-        for (int d = 0; d < dim / 2; ++d) {
-            {
-                int32_t xx = x[d] & 15;
-                int32_t yy = y[d] & 15;
-                sum += (xx - yy) * (xx - yy);
-            }
-            {
-                int32_t xx = (x[d] >> 4) & 15;
-                int32_t yy = (y[d] >> 4) & 15;
-                sum += (xx - yy) * (xx - yy);
-            }
-        }
-        return sum;
     }
 
     inline int8_t*
@@ -712,6 +342,11 @@ public:
         } else if (sq_num_bits_ == 8) {
             code_size = dim;
         }
+#ifdef ENABLE_AVX512
+        vsag::logger::info("using SIMD");
+#else
+        vsag::logger::info("not using SIMD");
+#endif
 
         struct AlignedDeleter {
             void
@@ -754,10 +389,10 @@ public:
             auto* code = get_encoded_data(i, code_size_aligned_);
             if (sq_num_bits_ == 4) {
                 transform_to_int4((float*)getDataByInternalId(i), code);
-                norm = INT4_IP(code, code, dim);
+                norm = vsag::INT4_IP(code, code, dim);
             } else if (sq_num_bits_ == 8){
                 transform_to_int8((float*)getDataByInternalId(i), code);
-                norm = INT8_IP(code, code, dim);
+                norm = vsag::INT8_IP(code, code, dim);
             }
             memcpy(code + code_size, &norm, 8);
         }
@@ -1180,7 +815,7 @@ public:
                     best_po = try_po;
                     best_pl = try_pl;
                 }
-                vsag::logger::info(fmt::format("try po = {}, pl = {}, gaining {:.2f}% improvement",
+                vsag::logger::info(fmt::format("test on neighbor = {}, line = {}, improving {:.2f}%",
                        try_po,
                        try_pl,
                        100.0 * (baseline_ela / ela - 1)));
@@ -1188,7 +823,7 @@ public:
         }
 
         vsag::logger::info(fmt::format(
-            "setting best po = {}, best pl = {}, gaining {:.2f}% performance improvement",
+            "set best neighbor = {}, line = {}, improving {:.2f}%",
             best_po,
             best_pl,
             100.0 * (baseline_ela / min_ela - 1)));
@@ -1445,13 +1080,13 @@ public:
             query_int8.reset(new int8_t[code_size]);
             transform_to_int8((const float*)data_point, query_int8.get());
             transformed_query = (const void*)query_int8.get();
-            norm2 = INT8_IP(query_int8.get(), query_int8.get(), dim);
+            norm2 = vsag::INT8_IP(query_int8.get(), query_int8.get(), dim);
         }
         if (sq_num_bits_ == 4) {
             query_int8.reset(new int8_t[code_size]);
             transform_to_int4((const float*)data_point, query_int8.get());
             transformed_query = (const void*)query_int8.get();
-            norm2 = INT4_IP(query_int8.get(), query_int8.get(), dim);
+            norm2 = vsag::INT4_IP(query_int8.get(), query_int8.get(), dim);
         }
 
         float lowerBound;
@@ -1460,10 +1095,10 @@ public:
         float curdist = 0;
 
         if (sq_num_bits_ == 4) {
-            curdist = INT4_L2_precompute(
+            curdist = vsag::INT4_L2_precompute(
                 *((int64_t*)(codes_top + code_size)), norm2, codes_top, transformed_query, dim);
         } else if (sq_num_bits_ == 8) {
-            curdist = INT8_L2_precompute(
+            curdist = vsag::INT8_L2_precompute(
                 *((int64_t*)(codes_top + code_size)), norm2, codes_top, transformed_query, dim);
         } else {
             curdist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
@@ -1504,14 +1139,14 @@ public:
                     float d = 0;
                     if (sq_num_bits_ == 4) {
                         codes_top = get_encoded_data(cand, code_size_aligned_);
-                        d = INT4_L2_precompute(*((int64_t*)(codes_top + code_size)),
+                        d = vsag::INT4_L2_precompute(*((int64_t*)(codes_top + code_size)),
                                                      norm2,
                                                      codes_top,
                                                      transformed_query,
                                                      dim);
                     } else if (sq_num_bits_ == 8) {
                         codes_top = get_encoded_data(cand, code_size_aligned_);
-                        d = INT8_L2_precompute(*((int64_t*)(codes_top + code_size)),
+                        d = vsag::INT8_L2_precompute(*((int64_t*)(codes_top + code_size)),
                                                norm2,
                                                codes_top,
                                                transformed_query,
@@ -1589,10 +1224,10 @@ public:
 
                         auto* codes = get_encoded_data(candidate_id, code_size_aligned_);
                         if (sq_num_bits_ == 4) {
-                            dist = INT4_L2_precompute(
+                            dist = vsag::INT4_L2_precompute(
                                 *((int64_t*)(codes + code_size)), norm2, codes, transformed_query, dim);
                         } else {
-                            dist = INT8_L2_precompute(
+                            dist = vsag::INT8_L2_precompute(
                                 *((int64_t*)(codes + code_size)), norm2, codes, transformed_query, dim);
                         }
 
@@ -1643,14 +1278,14 @@ public:
                     }
                     to_be_prefetch_ = nullptr;
                     if (sq_num_bits_ == 4) {
-                        dist = INT4_L2_precompute(
+                        dist = vsag::INT4_L2_precompute(
                             *((int64_t*)(code + to_be_visited[j] * (code_size_aligned_) + code_size)),
                             norm2,
                             code + to_be_visited[j] * (code_size_aligned_),
                             transformed_query,
                             dim);
                     } else if (sq_num_bits_ == 8) {
-                        dist = INT8_L2_precompute(
+                        dist = vsag::INT8_L2_precompute(
                             *((int64_t*)(code + to_be_visited[j] * (code_size_aligned_) + code_size)),
                             norm2,
                             code + to_be_visited[j] * (code_size_aligned_),

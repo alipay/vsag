@@ -28,6 +28,8 @@
 #include "index/diskann_zparameters.h"
 #include "index/hnsw.h"
 #include "index/hnsw_zparameters.h"
+#include "index/multi_index.h"
+#include "index/multi_index_zparameters.h"
 #include "vsag/vsag.h"
 
 namespace vsag {
@@ -81,6 +83,10 @@ Factory::CreateIndex(const std::string& origin_name,
                                              params.use_opq,
                                              params.use_bsa,
                                              params.use_async_io);
+        } else if (name == MULTI_INDEX) {
+            auto params = CreateMultiIndexParameters::FromJson(parameters);
+            logger::debug("created a multi index");
+            return std::make_shared<MultiIndex>(params.subindex_type, params.parameters);
         } else {
             LOG_ERROR_AND_RETURNS(
                 ErrorType::UNSUPPORTED_INDEX, "failed to create index(unsupported): ", name);

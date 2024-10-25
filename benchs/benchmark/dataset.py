@@ -135,20 +135,66 @@ def vector_parse_wrapper(dim):
 """
 python script.py data/base.csv 1000000 --id_column=id --vector_column=base_vector --vector_size=2048 --output_file=test.hdf5
 """
+def generate_random_data():
+    n_labels = 10
+    n_bases = 1000
+    n_querys = 10000
+    dims = 256
+    per_bases = n_bases // n_labels
+    per_querys = n_querys // n_labels
+    bases = np.random.rand(n_bases, dims)
+    querys = np.random.rand(n_querys, dims)
+    query_labels = np.random.rand(n_bases, dims)
+    base_labels = np.random.randint(0, n_labels, size=n_bases)
+    query_labels = np.random.randint(0, n_labels, size=n_querys)
+
+    train = []
+    test = []
+    neighbors = []
+    final_distances = []
+    train_labels = []
+    test_labels = []
+    for t in range(n_labels):
+        bases_mask = bases[base_labels == t]
+        querys_mask = querys[query_labels == t]
+        nbrs = NearestNeighbors(n_neighbors=10, metric="euclidean", algorithm='brute').fit(bases_mask)
+        batch_size = 50
+        n_query = len(querys_mask)
+        distances = []
+        indices = []
+
+        for i in tqdm(range(0, n_query, batch_size)):
+            end = min(i + batch_size, n_query)
+            batch_query = querys_mask[i:end]
+            D_batch, I_batch = nbrs.kneighbors(batch_query)
+            distances.append(D_batch)
+            indices.append(I_batch + len(train_labels))
+
+        D = np.vstack(distances)
+        I = np.vstack(indices)
+        train.extend(bases_mask)
+        test.extend(querys_mask)
+        final_distances.extend(D)
+        neighbors.extend(I)
+        train_labels.extend(len(bases_mask) * [t])
+        test_labels.extend(len(querys_mask) * [t])
+    train_labels = np.array(train_labels)
+    test_labels = np.array(test_labels)
+
+    with h5py.File("random.hdf5", "w") as f:
+        f.create_dataset("train", data=np.array(train))
+        f.create_dataset("test", data=np.array(test))
+        f.create_dataset("train_labels", data=np.array(train_labels, dtype=np.int64))
+        f.create_dataset("test_labels", data=np.array(test_labels, dtype=np.int64))
+        f.create_dataset("neighbors", data=np.array(neighbors))
+        f.create_dataset("distances", data=np.array(final_distances))
+        f.attrs["type"] = "dense"
+        f.attrs["distance"] = "euclidean"
+        f.attrs["dimension"] = dims
+        f.attrs["point_type"] = "float"
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Convert CSV to dataset")
-    parser.add_argument("csv_file", help="Path to the CSV file")
-    parser.add_argument("size", type=int, help="Size of dataset")
-    parser.add_argument("--query_size", type=int, default=10000, help="Index number")
-    parser.add_argument("--id_column", help="Name of the ID column")
-    parser.add_argument("--vector_column", help="Name of the vector column")
-    parser.add_argument("--vector_dim", type=int, help="Dim of the vector")
-    parser.add_argument("--index_type", choices=["angular", "euclidean"], default="angular", help="Type of index")
-    parser.add_argument("--output_file", help="Path to the output file")
-
-    args = parser.parse_args()
-    csv_to_dataset(args.csv_file, args.size, args.column, args.query_size, args.id_column, args.vector_column, args.vector_dim, args.index_type, args.output_file)
+    generate_random_data()
 
 
 

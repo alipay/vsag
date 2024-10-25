@@ -15,6 +15,7 @@
 #pragma once
 
 #include <algorithm>
+#include <iostream>
 #include <memory>
 #include <set>
 #include <string>

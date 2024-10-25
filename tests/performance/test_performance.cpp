@@ -99,11 +99,13 @@ public:
         H5::H5File file(filename, H5F_ACC_RDONLY);
 
         // check datasets exist
+        bool has_labels = false;
         {
             auto datasets = get_datasets(file);
             assert(datasets.count("train"));
             assert(datasets.count("test"));
             assert(datasets.count("neighbors"));
+            has_labels = datasets.count("train_labels") && datasets.count("test_labels");
         }
 
         // get and (should check shape)
@@ -176,6 +178,21 @@ public:
             H5::FloatType datatype(H5::PredType::NATIVE_INT64);
             dataset.read(obj->neighbors_.get(), datatype, dataspace);
         }
+        if (has_labels) {
+            H5::DataSet dataset = file.openDataSet("/train_labels");
+            H5::DataSpace dataspace = dataset.getSpace();
+            H5::FloatType datatype(H5::PredType::NATIVE_INT64);
+            obj->train_labels_ = std::shared_ptr<int64_t[]>(new int64_t[obj->number_of_base_]);
+            dataset.read(obj->train_labels_.get(), datatype, dataspace);
+        }
+
+        if (has_labels) {
+            H5::DataSet dataset = file.openDataSet("/test_labels");
+            H5::DataSpace dataspace = dataset.getSpace();
+            H5::FloatType datatype(H5::PredType::NATIVE_INT64);
+            obj->test_labels_ = std::shared_ptr<int64_t[]>(new int64_t[obj->number_of_query_]);
+            dataset.read(obj->test_labels_.get(), datatype, dataspace);
+        }
 
         return obj;
     }
@@ -230,6 +247,20 @@ public:
         return test_data_type_;
     }
 
+    int64_t*
+    GetTrainLabels() const {
+        return train_labels_.get();
+    }
+    int64_t*
+    GetTestLabels() const {
+        return test_labels_.get();
+    }
+
+    bool
+    IsMatch(int64_t query_id, int64_t base_id) {
+        return test_labels_[query_id] == train_labels_[base_id];
+    }
+
 private:
     using shape_t = std::pair<int64_t, int64_t>;
     static std::unordered_set<std::string>
@@ -266,6 +297,8 @@ private:
     std::shared_ptr<char[]> train_;
     std::shared_ptr<char[]> test_;
     std::shared_ptr<int64_t[]> neighbors_;
+    std::shared_ptr<int64_t[]> train_labels_;
+    std::shared_ptr<int64_t[]> test_labels_;
     shape_t train_shape_;
     shape_t test_shape_;
     shape_t neighbors_shape_;
@@ -295,7 +328,11 @@ public:
         int64_t total_base = test_dataset->GetNumberOfBase();
         auto ids = range(total_base);
         auto base = Dataset::Make();
-        base->NumElements(total_base)->Dim(test_dataset->GetDim())->Ids(ids.get())->Owner(false);
+        base->NumElements(total_base)
+            ->Dim(test_dataset->GetDim())
+            ->Ids(ids.get())
+            ->Tags(test_dataset->GetTrainLabels())
+            ->Owner(false);
         if (test_dataset->GetTrainDataType() == vsag::DATATYPE_FLOAT32) {
             base->Float32Vectors((const float*)test_dataset->GetTrain());
         } else if (test_dataset->GetTrainDataType() == vsag::DATATYPE_INT8) {
@@ -398,14 +435,19 @@ public:
         std::vector<DatasetPtr> results;
         for (int64_t i = 0; i < total; ++i) {
             auto query = Dataset::Make();
-            query->NumElements(1)->Dim(test_dataset->GetDim())->Owner(false);
-
+            query->NumElements(1)
+                ->Dim(test_dataset->GetDim())
+                ->Tags(test_dataset->GetTestLabels() + i)
+                ->Owner(false);
             if (test_dataset->GetTestDataType() == vsag::DATATYPE_FLOAT32) {
                 query->Float32Vectors((const float*)test_dataset->GetOneTest(i));
             } else if (test_dataset->GetTestDataType() == vsag::DATATYPE_INT8) {
                 query->Int8Vectors((const int8_t*)test_dataset->GetOneTest(i));
             }
-            auto result = index->KnnSearch(query, top_k, search_parameters);
+            auto filter = [&test_dataset, i](int64_t base_id) {
+                return not test_dataset->IsMatch(i, base_id);
+            };
+            auto result = index->KnnSearch(query, top_k, search_parameters, filter);
             if (not result.has_value()) {
                 std::cerr << "query error: " << result.error().message << std::endl;
                 exit(-1);

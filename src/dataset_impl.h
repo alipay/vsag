@@ -45,11 +45,13 @@ public:
             allocator_->Deallocate((void*)this->GetDistances());
             allocator_->Deallocate((void*)this->GetInt8Vectors());
             allocator_->Deallocate((void*)this->GetFloat32Vectors());
+            allocator_->Deallocate((void*)this->GetTags());
         } else {
             delete[] this->GetIds();
             delete[] this->GetDistances();
             delete[] this->GetInt8Vectors();
             delete[] this->GetFloat32Vectors();
+            delete[] this->GetTags();
         }
     }
 
@@ -159,6 +161,20 @@ public:
             return std::get<const float*>(iter->second);
         }
 
+        return nullptr;
+    }
+
+    DatasetPtr
+    Tags(const int64_t* tags) override {
+        this->data_[DATAKEY_TAGS] = tags;
+        return shared_from_this();
+    }
+
+    const int64_t*
+    GetTags() const override {
+        if (auto iter = this->data_.find(DATAKEY_TAGS); iter != this->data_.end()) {
+            return std::get<const int64_t*>(iter->second);
+        }
         return nullptr;
     }
 

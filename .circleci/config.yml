@@ -1,16 +1,51 @@
 version: 2.1
 
+workflows:
+  pull-request-workflow:
+    jobs:
+      - pull-request-check:
+          filters:
+            branches:
+              ignore:
+                - main
+  main-branch-workflow:
+    jobs:
+      - main-branch-check:
+          filters:
+            branches:
+              only:
+                - main
+
 jobs:
-  run-tests:
+  pull-request-check:
     docker:
       - image: vsaglib/vsag:ubuntu
     resource_class: medium
     steps:
       - checkout
       - run: ./scripts/check_format.sh
+      - restore_cache:
+          keys:
+            - fork-cache-{{ checksum "CMakeLists.txt" }}
+      - run: make asan
+      - save_cache:
+          key: fork-cache-{{ checksum "CMakeLists.txt" }}
+          paths:
+            - ./build
       - run: make test_asan
 
-workflows:
-  ci-workflow:
-    jobs:
-      - run-tests
+  main-branch-check:
+    docker:
+      - image: vsaglib/vsag:ubuntu
+    resource_class: medium
+    steps:
+      - checkout
+      - run: ./scripts/check_format.sh
+      - restore_cache:
+          keys:
+            - main-ccache-{{ checksum "CMakeLists.txt" }}
+      - run: make test_asan
+      - save_cache:
+          key: main-ccache-{{ checksum "CMakeLists.txt" }}
+          paths:
+            - ./build

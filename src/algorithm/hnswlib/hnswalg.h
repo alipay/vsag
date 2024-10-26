@@ -38,6 +38,11 @@
 #include "visited_list_pool.h"
 #include "../../simd/simd.h"
 
+namespace vsag {
+extern int32_t (*INT4_IP)(const void* p1_vec, const void* p2_vec, int dim);
+extern double (*INT8_IP)(const void* pVect1v, const void* pVect2v, size_t qty);
+}
+
 namespace hnswlib {
 typedef unsigned int tableint;
 typedef unsigned int linklistsizeint;

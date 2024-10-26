@@ -149,13 +149,23 @@ template <typename data_t> size_t InMemDataStore<data_t>::save(std::stringstream
         {
             out.write((char *)(_data + _loc_to_memory_index[i] * this->_dim), this->_dim * sizeof(data_t));
         }
-        if (_compute_norms) {
-
-        }
         return bytes_written;
     }
     return save_data_in_base_dimensions(out, _data, num_points, this->get_dims(), this->get_aligned_dim(), 0U);
 }
+
+
+template <typename data_t> size_t InMemDataStore<data_t>::save_norms(std::stringstream &out, const location_t num_points)
+{
+    int npts_i32 = num_points, ndims_i32 = 1;
+    size_t bytes_written = 2 * sizeof(int) + num_points * sizeof(float);
+    out.seekp(0, out.beg);
+    out.write((char *)&npts_i32, sizeof(int));
+    out.write((char *)&ndims_i32, sizeof(int));
+    out.write((char*)_pre_computed_norms.get(), num_points * sizeof(float));
+    return bytes_written;
+}
+
 
 
 template <typename data_t> void InMemDataStore<data_t>::populate_data(const data_t *vectors, const location_t num_pts)
@@ -223,8 +233,8 @@ template <typename data_t> void InMemDataStore<data_t>::link_data(const data_t *
         if (!mask.test(i)) continue;
         _loc_to_memory_index[cur] = i;
         if (_compute_norms) {
-            _pre_computed_norms[cur] = InnerProduct((float *)vectors + i * this->_dim,
-                                                                  (float *)vectors + i * this->_dim, this->_dim);
+            _pre_computed_norms[cur] = std::sqrt(InnerProduct((float *)vectors + i * this->_dim,
+                                                                  (float *)vectors + i * this->_dim, this->_dim));
         }
         cur ++;
     }

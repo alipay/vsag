@@ -120,11 +120,8 @@ Index<T, TagT, LabelT>::Index(Metric m, const size_t dim, const size_t max_point
         else if (m == diskann::Metric::COSINE && std::is_floating_point<T>::value)
         {
             // This is safe because T is float inside the if block.
-            this->_distance.reset((Distance<T> *)new AVXNormalizedCosineDistanceFloat());
+            this->_distance.reset((Distance<T> *)new VsagDistanceInnerProductFloat(dim));
             this->_normalize_vecs = true;
-            diskann::cout << "Normalizing vectors and using L2 for cosine "
-                             "AVXNormalizedCosineDistanceFloat()."
-                          << std::endl;
         }
         else
         {
@@ -132,7 +129,8 @@ Index<T, TagT, LabelT>::Index(Metric m, const size_t dim, const size_t max_point
         }
         // Note: moved this to factory, keeping this for backward compatibility.
         _data_store =
-            std::make_unique<diskann::InMemDataStore<T>>((location_t)total_internal_points, _dim, this->_distance);
+            std::make_unique<diskann::InMemDataStore<T>>((location_t)total_internal_points, _dim,
+                                                         this->_distance, this->_normalize_vecs);
     }
 
     _locks = std::vector<non_recursive_mutex>(total_internal_points);
@@ -258,7 +256,7 @@ template <typename T, typename TagT, typename LabelT> size_t Index<T, TagT, Labe
 }
 
 
-template <typename T, typename TagT, typename LabelT> size_t Index<T, TagT, LabelT>::save_tags(std::stringstream& out)
+template <typename T, typename TagT, typename LabelT> size_t Index<T, TagT, LabelT>::save_vector_info(std::stringstream& out)
 {
     if (!_enable_tags)
     {
@@ -292,6 +290,11 @@ template <typename T, typename TagT, typename LabelT> size_t Index<T, TagT, Labe
     {
         throw FileException("tags_stream", e, __FUNCSIG__, __FILE__, __LINE__);
     }
+
+    if (this->_normalize_vecs) {
+        _data_store->save_norms(out, _num_frozen_pts);
+    }
+
     delete[] tag_data;
     return tag_bytes_written;
 }
@@ -531,7 +534,7 @@ void Index<T, TagT, LabelT>::save(std::stringstream &graph_stream, std::stringst
         // the error code for delete_file, but will ignore now because
         // delete should succeed if save will succeed.
         save_graph(graph_stream);
-        save_tags(tag_stream);
+        save_vector_info(tag_stream);
     }
     else
     {

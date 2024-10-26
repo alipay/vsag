@@ -11,8 +11,8 @@ namespace diskann
 
 template <typename data_t>
 InMemDataStore<data_t>::InMemDataStore(const location_t num_points, const size_t dim,
-                                       std::shared_ptr<Distance<data_t>> distance_fn)
-    : AbstractDataStore<data_t>(num_points, dim), _distance_fn(distance_fn)
+                                       std::shared_ptr<Distance<data_t>> distance_fn, bool compute_norms)
+    : AbstractDataStore<data_t>(num_points, dim), _distance_fn(distance_fn), _compute_norms(compute_norms)
 {
     _aligned_dim = ROUND_UP(dim, _distance_fn->get_required_alignment());
 }
@@ -149,6 +149,9 @@ template <typename data_t> size_t InMemDataStore<data_t>::save(std::stringstream
         {
             out.write((char *)(_data + _loc_to_memory_index[i] * this->_dim), this->_dim * sizeof(data_t));
         }
+        if (_compute_norms) {
+
+        }
         return bytes_written;
     }
     return save_data_in_base_dimensions(out, _data, num_points, this->get_dims(), this->get_aligned_dim(), 0U);
@@ -192,6 +195,14 @@ template <typename data_t> void InMemDataStore<data_t>::populate_data(const data
     }
 }
 
+float
+InnerProduct(const void* pVect1, const void* pVect2, size_t qty) {
+    float res = 0;
+    for (unsigned i = 0; i < qty; i++) {
+        res += ((float*)pVect1)[i] * ((float*)pVect2)[i];
+    }
+    return res;
+}
 
 template <typename data_t> void InMemDataStore<data_t>::link_data(const data_t *vectors, const location_t num_pts,
                                        const boost::dynamic_bitset<>& mask)
@@ -201,6 +212,9 @@ template <typename data_t> void InMemDataStore<data_t>::link_data(const data_t *
     }
     _data = const_cast<data_t *>(vectors);
     _loc_to_memory_index.resize(num_pts);
+    if (_compute_norms) {
+        _pre_computed_norms.reset(new float[num_pts]);
+    }
     _use_data_reference = true;
     this->_capacity = num_pts;
     int64_t cur = 0;
@@ -208,6 +222,10 @@ template <typename data_t> void InMemDataStore<data_t>::link_data(const data_t *
     {
         if (!mask.test(i)) continue;
         _loc_to_memory_index[cur] = i;
+        if (_compute_norms) {
+            _pre_computed_norms[cur] = InnerProduct((float *)vectors + i * this->_dim,
+                                                                  (float *)vectors + i * this->_dim, this->_dim);
+        }
         cur ++;
     }
     assert(num_pts == cur);

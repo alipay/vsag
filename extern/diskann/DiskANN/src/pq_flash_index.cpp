@@ -1348,10 +1348,6 @@ int PQFlashIndex<T, LabelT>::load_from_separate_paths(std::stringstream &pivots_
 
     size_t tag_len = 1;
     diskann::load_bin<LabelT>(tag_stream, this->tags, npts_u64, tag_len);
-    for (int i = 0; i < npts_u64; ++i)
-    {
-        tags_to_locs[this->tags[i]] = i;
-    }
 
     pq_table.load_pq_centroid_bin(pivots_stream, nchunks_u64);
     // diskann::cout << "Loaded PQ centroids and in-memory compressed vectors. #points: " << num_points

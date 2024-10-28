@@ -73,7 +73,7 @@ template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t> clas
     DISKANN_DLLEXPORT void save(const char *filename, bool compact_before_save = false) override;
 
 
-    DISKANN_DLLEXPORT void save(std::stringstream &graph_stream, std::stringstream &info_stream, bool compact_before_save = false);
+    DISKANN_DLLEXPORT void save(std::stringstream &graph_stream, std::stringstream &tag_stream, bool compact_before_save = false);
 
     // Load functions
 #ifdef EXEC_ENV_OLS

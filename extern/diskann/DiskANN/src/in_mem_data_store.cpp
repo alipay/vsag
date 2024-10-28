@@ -192,14 +192,6 @@ template <typename data_t> void InMemDataStore<data_t>::populate_data(const data
     }
 }
 
-float
-InnerProduct(const void* pVect1, const void* pVect2, size_t qty) {
-    float res = 0;
-    for (unsigned i = 0; i < qty; i++) {
-        res += ((float*)pVect1)[i] * ((float*)pVect2)[i];
-    }
-    return res;
-}
 
 template <typename data_t> void InMemDataStore<data_t>::link_data(const data_t *vectors, const location_t num_pts,
                                        const boost::dynamic_bitset<>& mask)

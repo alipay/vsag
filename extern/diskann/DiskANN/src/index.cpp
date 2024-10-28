@@ -2081,7 +2081,7 @@ void Index<T, TagT, LabelT>::_build(const DataType &data, const size_t num_point
 }
 template <typename T, typename TagT, typename LabelT>
 std::vector<size_t> Index<T, TagT, LabelT>::build(const T *data, const size_t num_points_to_load,
-                                                  const IndexWriteParameters &parameters, const std::vector<TagT> &tags, bool use_reference)
+                                   const IndexWriteParameters &parameters, const std::vector<TagT> &tags, bool use_reference)
 {
     if (num_points_to_load == 0)
     {
@@ -3741,7 +3741,7 @@ void Index<T, TagT, LabelT>::search_with_optimized_layout(const T *query, size_t
         uint32_t id = init_ids[i];
         if (id >= _nd)
             continue;
-            // FIXME: alternative instruction on aarch64
+    // FIXME: alternative instruction on aarch64
 #if defined(__i386__) || defined(__x86_64__)
         _mm_prefetch(_opt_graph + _node_size * id, _MM_HINT_T0);
 #endif
@@ -3765,7 +3765,7 @@ void Index<T, TagT, LabelT>::search_with_optimized_layout(const T *query, size_t
     {
         auto nbr = retset.closest_unexpanded();
         auto n = nbr.id;
-        // FIXME: alternative instruction on aarch64
+    // FIXME: alternative instruction on aarch64
 #if defined(__i386__) || defined(__x86_64__)
         _mm_prefetch(_opt_graph + _node_size * n + _data_len, _MM_HINT_T0);
 #endif
@@ -3773,7 +3773,7 @@ void Index<T, TagT, LabelT>::search_with_optimized_layout(const T *query, size_t
         uint32_t MaxM = *neighbors;
         neighbors++;
         for (uint32_t m = 0; m < MaxM; ++m)
-        // FIXME: alternative instruction on aarch64
+    // FIXME: alternative instruction on aarch64
 #if defined(__i386__) || defined(__x86_64__)
             _mm_prefetch(_opt_graph + _node_size * neighbors[m], _MM_HINT_T0);
 #endif

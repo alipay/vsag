@@ -206,7 +206,6 @@ template <typename T, typename LabelT = uint32_t> class PQFlashIndex
 
     // ID mapping
     LabelT* tags;
-    std::unordered_map<int64_t, uint32_t> tags_to_locs;
 
     // filter support
     uint32_t *_pts_to_label_offsets = nullptr;

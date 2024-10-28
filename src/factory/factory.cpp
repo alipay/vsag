@@ -26,8 +26,10 @@
 
 #include "index/diskann.h"
 #include "index/diskann_zparameters.h"
+#include "index/hgraph_index.h"
 #include "index/hnsw.h"
 #include "index/hnsw_zparameters.h"
+#include "index/index_common_param.h"
 #include "vsag/vsag.h"
 
 namespace vsag {
@@ -81,6 +83,30 @@ Factory::CreateIndex(const std::string& origin_name,
                                              params.use_opq,
                                              params.use_bsa,
                                              params.use_async_io);
+        } else if (name == INDEX_HGRAPH) {
+            auto json_param = nlohmann::json::parse(parameters);
+            IndexCommonParam param;
+            CHECK_ARGUMENT(json_param.contains(PARAMETER_METRIC_TYPE),
+                           fmt::format("parameters must contains {}", PARAMETER_METRIC_TYPE));
+            CHECK_ARGUMENT(json_param.contains(PARAMETER_DIM),
+                           fmt::format("parameters must contains {}", PARAMETER_DIM));
+            param.dim_ = json_param[PARAMETER_DIM];
+            if (json_param[PARAMETER_METRIC_TYPE] == METRIC_L2) {
+                param.metric_ = vsag::MetricType::METRIC_TYPE_L2SQR;
+            } else if (json_param[PARAMETER_METRIC_TYPE] == METRIC_IP) {
+                param.metric_ = vsag::MetricType::METRIC_TYPE_IP;
+            } else if (json_param[PARAMETER_METRIC_TYPE] == METRIC_COSINE) {
+                param.metric_ = vsag::MetricType::METRIC_TYPE_COSINE;
+            }
+            if (allocator != nullptr) {
+                param.allocator_ = allocator;
+            } else {
+                param.allocator_ = new DefaultAllocator();
+            }
+            logger::debug("created a hgraph index");
+            auto result = std::make_shared<HGraphIndex>(json_param["index_param"], param);
+            result->Init();
+            return result;
         } else {
             LOG_ERROR_AND_RETURNS(
                 ErrorType::UNSUPPORTED_INDEX, "failed to create index(unsupported): ", name);

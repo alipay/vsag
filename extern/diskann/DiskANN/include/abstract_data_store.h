@@ -36,7 +36,6 @@ template <typename data_t> class AbstractDataStore
 
 
     virtual size_t save(std::stringstream &out, const location_t num_pts) = 0;
-    virtual size_t save_norms(std::stringstream &out, const location_t num_points) = 0;
 
     DISKANN_DLLEXPORT virtual location_t capacity() const;
 

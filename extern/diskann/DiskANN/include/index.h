@@ -328,7 +328,7 @@ template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t> clas
 
     DISKANN_DLLEXPORT size_t save_graph(std::stringstream& out);
     DISKANN_DLLEXPORT size_t save_data(std::stringstream& out);
-    DISKANN_DLLEXPORT size_t save_vector_info(std::stringstream& out);
+    DISKANN_DLLEXPORT size_t save_tags(std::stringstream& out);
 
 
     DISKANN_DLLEXPORT size_t save_delete_list(const std::string &filename);

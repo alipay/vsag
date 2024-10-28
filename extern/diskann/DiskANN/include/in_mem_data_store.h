@@ -28,7 +28,6 @@ template <typename data_t> class InMemDataStore : public AbstractDataStore<data_
     virtual location_t load(std::stringstream &in) override;
     virtual size_t save(const std::string &filename, const location_t num_points) override;
     virtual size_t save(std::stringstream &out, const location_t num_points) override;
-    virtual size_t save_norms(std::stringstream &out, const location_t num_points) override;
 
     virtual size_t get_aligned_dim() const override;
 

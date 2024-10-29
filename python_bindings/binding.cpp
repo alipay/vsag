@@ -136,6 +136,40 @@ public:
 
     void
     Save(const std::string& filename) {
+        std::fstream file(filename, std::ios::out | std::ios::binary);
+        if (auto bs = index_->Serialize(); bs.has_value()) {
+            auto keys = bs->GetKeys();
+            std::vector<uint64_t> offsets;
+
+            uint64_t offset = 0;
+            for (auto key : keys) {
+                // [len][data...][len][data...]...
+                vsag::Binary b = bs->Get(key);
+                writeBinaryPOD(file, b.size);
+                file.write((const char*)b.data.get(), b.size);
+                offsets.push_back(offset);
+                offset += sizeof(b.size) + b.size;
+            }
+            // footer
+            for (uint64_t i = 0; i < keys.size(); ++i) {
+                // [len][key...][offset][len][key...][offset]...
+                const auto& key = keys[i];
+                int64_t len = key.length();
+                writeBinaryPOD(file, len);
+                file.write(key.c_str(), key.length());
+                writeBinaryPOD(file, offsets[i]);
+            }
+            // [num_keys][footer_offset]$
+            writeBinaryPOD(file, keys.size());
+            writeBinaryPOD(file, offset);
+            file.close();
+        } else if (bs.error().type == vsag::ErrorType::NO_ENOUGH_MEMORY) {
+            std::cerr << "no enough memory to serialize index" << std::endl;
+        }
+    }
+
+    void
+    Load(const std::string& filename) {
         std::ifstream file(filename, std::ios::in);
         file.seekg(-sizeof(uint64_t) * 2, std::ios::end);
         uint64_t num_keys, footer_offset;
@@ -169,40 +203,6 @@ public:
         }
 
         index_->Deserialize(bs);
-    }
-
-    void
-    Load(const std::string& filename) {
-        std::fstream file(filename, std::ios::out | std::ios::binary);
-        if (auto bs = index_->Serialize(); bs.has_value()) {
-            auto keys = bs->GetKeys();
-            std::vector<uint64_t> offsets;
-
-            uint64_t offset = 0;
-            for (auto key : keys) {
-                // [len][data...][len][data...]...
-                vsag::Binary b = bs->Get(key);
-                writeBinaryPOD(file, b.size);
-                file.write((const char*)b.data.get(), b.size);
-                offsets.push_back(offset);
-                offset += sizeof(b.size) + b.size;
-            }
-            // footer
-            for (uint64_t i = 0; i < keys.size(); ++i) {
-                // [len][key...][offset][len][key...][offset]...
-                const auto& key = keys[i];
-                int64_t len = key.length();
-                writeBinaryPOD(file, len);
-                file.write(key.c_str(), key.length());
-                writeBinaryPOD(file, offsets[i]);
-            }
-            // [num_keys][footer_offset]$
-            writeBinaryPOD(file, keys.size());
-            writeBinaryPOD(file, offset);
-            file.close();
-        } else if (bs.error().type == vsag::ErrorType::NO_ENOUGH_MEMORY) {
-            std::cerr << "no enough memory to serialize index" << std::endl;
-        }
     }
 
 private:

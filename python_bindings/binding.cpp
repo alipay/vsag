@@ -26,6 +26,18 @@
 
 namespace py = pybind11;
 
+template <typename T>
+static void
+writeBinaryPOD(std::ostream& out, const T& podRef) {
+    out.write((char*)&podRef, sizeof(T));
+}
+
+template <typename T>
+static void
+readBinaryPOD(std::istream& in, T& podRef) {
+    in.read((char*)&podRef, sizeof(T));
+}
+
 py::array_t<float>
 kmeans(py::array_t<float, py::array::c_style | py::array::forcecast>& datas,
        int clusters,
@@ -124,22 +136,73 @@ public:
 
     void
     Save(const std::string& filename) {
-        std::ofstream out_stream(filename, std::ios::binary);
-        auto serialize_result = index_->Serialize(out_stream);
-        if (not serialize_result.has_value()) {
-            throw std::runtime_error("serialize error: " + serialize_result.error().message);
+        std::ifstream file(filename, std::ios::in);
+        file.seekg(-sizeof(uint64_t) * 2, std::ios::end);
+        uint64_t num_keys, footer_offset;
+        readBinaryPOD(file, num_keys);
+        readBinaryPOD(file, footer_offset);
+        file.seekg(footer_offset, std::ios::beg);
+
+        std::vector<std::string> keys;  // todo: mem peak here
+        std::vector<uint64_t> offsets;
+        for (uint64_t i = 0; i < num_keys; ++i) {
+            int64_t key_len;
+            readBinaryPOD(file, key_len);
+            char key_buf[key_len + 1];
+            memset(key_buf, 0, key_len + 1);
+            file.read(key_buf, key_len);
+            keys.push_back(key_buf);
+
+            uint64_t offset;
+            readBinaryPOD(file, offset);
+            offsets.push_back(offset);
         }
-        out_stream.close();
+
+        vsag::BinarySet bs;
+        for (uint64_t i = 0; i < num_keys; ++i) {
+            file.seekg(offsets[i], std::ios::beg);
+            vsag::Binary b;
+            readBinaryPOD(file, b.size);
+            b.data.reset(new int8_t[b.size]);
+            file.read((char*)b.data.get(), b.size);
+            bs.Set(keys[i], b);
+        }
+
+        index_->Deserialize(bs);
     }
 
     void
     Load(const std::string& filename) {
-        std::ifstream in_stream(filename, std::ios::binary);
-        auto deserialize_result = index_->Deserialize(in_stream);
-        if (not deserialize_result.has_value()) {
-            throw std::runtime_error("deserialize error: " + deserialize_result.error().message);
+        std::fstream file(filename, std::ios::out | std::ios::binary);
+        if (auto bs = index_->Serialize(); bs.has_value()) {
+            auto keys = bs->GetKeys();
+            std::vector<uint64_t> offsets;
+
+            uint64_t offset = 0;
+            for (auto key : keys) {
+                // [len][data...][len][data...]...
+                vsag::Binary b = bs->Get(key);
+                writeBinaryPOD(file, b.size);
+                file.write((const char*)b.data.get(), b.size);
+                offsets.push_back(offset);
+                offset += sizeof(b.size) + b.size;
+            }
+            // footer
+            for (uint64_t i = 0; i < keys.size(); ++i) {
+                // [len][key...][offset][len][key...][offset]...
+                const auto& key = keys[i];
+                int64_t len = key.length();
+                writeBinaryPOD(file, len);
+                file.write(key.c_str(), key.length());
+                writeBinaryPOD(file, offsets[i]);
+            }
+            // [num_keys][footer_offset]$
+            writeBinaryPOD(file, keys.size());
+            writeBinaryPOD(file, offset);
+            file.close();
+        } else if (bs.error().type == vsag::ErrorType::NO_ENOUGH_MEMORY) {
+            std::cerr << "no enough memory to serialize index" << std::endl;
         }
-        in_stream.close();
     }
 
 private:

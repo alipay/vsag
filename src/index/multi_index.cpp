@@ -93,4 +93,38 @@ binary_to_binaryset(const Binary binary) {
     return binarySet;
 }
 
+
+ReaderSet
+reader_to_readerset(std::shared_ptr<Reader> reader) {
+    ReaderSet readerSet;
+    size_t offset = 0;
+
+    while (offset < reader->Size()) {
+        // 读取 key 的大小
+        size_t keySize;
+        reader->Read(offset, sizeof(size_t), &keySize);
+        offset += sizeof(size_t);
+        // 读取 key 的内容
+        std::shared_ptr<char[]> key_chars = std::shared_ptr<char[]>(new char[keySize]);
+        reader->Read(offset, keySize, key_chars.get());
+        std::string key(key_chars.get(), keySize);
+        offset += keySize;
+
+        // 读取 Binary 大小
+        size_t binarySize;
+        reader->Read(offset, sizeof(size_t), &binarySize);
+        offset += sizeof(size_t);
+
+        // 读取 Binary 数据
+        auto newReader = std::shared_ptr<SubReader>(new SubReader(reader, offset, binarySize));
+        offset += binarySize;
+
+        // 将新 Binary 放入 BinarySet
+        readerSet.Set(key, newReader);
+    }
+
+    return readerSet;
+}
+
+
 }  // namespace vsag

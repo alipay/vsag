@@ -27,6 +27,36 @@ Binary
 binaryset_to_binary(const BinarySet binarySet);
 BinarySet
 binary_to_binaryset(const Binary binary);
+ReaderSet
+reader_to_readerset(std::shared_ptr<Reader> reader);
+
+
+
+class SubReader : public Reader {
+public:
+    SubReader(std::shared_ptr<Reader> parrent_reader, uint64_t start_pos, uint64_t size) : parrent_reader_(parrent_reader), size_(size), start_pos_(start_pos) {}
+
+    void Read(uint64_t offset, uint64_t len, void* dest) override {
+        if (offset + len > size_) throw std::out_of_range("Read out of range.");
+        parrent_reader_->Read(offset + start_pos_, len, dest);
+    }
+
+    void
+    AsyncRead(uint64_t offset, uint64_t len, void* dest, CallBack callback) override {
+
+    }
+
+    uint64_t Size() const override {
+        return size_;
+    }
+
+private:
+    std::shared_ptr<Reader> parrent_reader_;
+    uint64_t size_;
+    uint64_t start_pos_;
+};
+
+
 
 class MultiIndex : public Index {
 public:
@@ -44,23 +74,34 @@ public:
         int64_t data_num = base->GetNumElements();
         int64_t data_dim = base->GetDim();
         auto datas = base->GetFloat32Vectors();
+        std::map<int64_t, std::vector<int64_t>> tag_lists;
         for (int i = 0; i < data_num; ++i) {
-            auto current_tag = tags[i];
-            if (sub_indexes_.find(current_tag) == sub_indexes_.end()) {
-                auto new_index =
-                    Factory::CreateIndex(sub_index_type_, build_params_, safe_allocator_.get());
-                if (not new_index.has_value()) {
-                    LOG_ERROR_AND_RETURNS(new_index.error().type, new_index.error().message);
-                }
-                sub_indexes_[current_tag] = new_index.value();
+            tag_lists[tags[i]].push_back(i);
+        }
+        for (const auto& item : tag_lists) {
+            auto current_tag = item.first;
+            std::cout << current_tag << std::endl;
+            auto new_index =
+                Factory::CreateIndex(sub_index_type_, build_params_, safe_allocator_.get());
+            if (not new_index.has_value()) {
+                LOG_ERROR_AND_RETURNS(new_index.error().type, new_index.error().message);
             }
+            sub_indexes_[current_tag] = new_index.value();
+            const auto& current_data_ids = item.second;
+            auto sub_data_num = current_data_ids.size();
+            auto tmp_vector_memory = std::shared_ptr<float[]>(new float[sub_data_num * data_dim]);
+
+            for (int i = 0; i < current_data_ids.size(); ++i) {
+                memcpy(tmp_vector_memory.get() + i * data_dim, datas + data_dim * current_data_ids[i], data_dim * sizeof(float));
+            }
+
             DatasetPtr sub_data = Dataset::Make();
             sub_data->Owner(false)
-                ->Ids(base->GetIds() + i)
-                ->Float32Vectors(datas + i * data_dim)
+                ->Ids(current_data_ids.data())
+                ->Float32Vectors(tmp_vector_memory.get())
                 ->Dim(data_dim)
-                ->NumElements(1);
-            auto insert_result = sub_indexes_[current_tag]->Add(sub_data);
+                ->NumElements(sub_data_num);
+            auto insert_result = sub_indexes_[current_tag]->Build(sub_data);
             if (not insert_result.has_value()) {
                 LOG_ERROR_AND_RETURNS(insert_result.error().type, insert_result.error().message);
             }
@@ -178,12 +219,10 @@ public:
                 LOG_ERROR_AND_RETURNS(new_index.error().type, new_index.error().message);
             }
             sub_indexes_[key] = new_index.value();
-            Binary binary{.data = std::make_shared<int8_t[]>(reader_set.Get(str_keys[i])->Size()),
-                          .size = reader_set.Get(str_keys[i])->Size()};
             std::cout << "deserialize:" << key << std::endl;
-            reader_set.Get(str_keys[i])->Read(0, binary.size, binary.data.get());
-            BinarySet sub_binary_set = binary_to_binaryset(binary);
-            sub_indexes_[key]->Deserialize(sub_binary_set);
+            auto reader = reader_set.Get(str_keys[i]);
+            auto sub_reader_set = reader_to_readerset(reader);
+            sub_indexes_[key]->Deserialize(sub_reader_set);
         }
         return {};
     }

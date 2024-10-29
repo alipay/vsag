@@ -317,6 +317,7 @@ public:
     Build(const std::string& dataset_path,
           const std::string& index_name,
           const std::string& build_parameters) {
+        Options::Instance().set_num_threads_building(16);
         spdlog::debug("index_name: " + index_name);
         spdlog::debug("build_parameters: " + build_parameters);
         auto index = Factory::CreateIndex(index_name, build_parameters).value();

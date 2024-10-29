@@ -27,12 +27,17 @@ debug:                  ## Build vsag with debug options.
 
 .PHONY: release
 release:                ## Build vsag with release options.
-	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Release
+	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Release -DENABLE_LIBCXX=on
 	cmake --build build --parallel ${COMPILE_JOBS}
 
 .PHONY: distribution
 distribution:           ## Build vsag with distribution options.
 	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Release -DENABLE_CXX11_ABI=off -DENABLE_LIBCXX=off
+	cmake --build build --parallel ${COMPILE_JOBS}
+
+.PHONY: abi11
+abi11:           ## Build vsag with abi11 options.
+	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Release -DENABLE_CXX11_ABI=on -DENABLE_LIBCXX=off
 	cmake --build build --parallel ${COMPILE_JOBS}
 
 .PHONY: fmt

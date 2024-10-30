@@ -264,10 +264,11 @@ template <typename data_t> void InMemDataStore<data_t>::get_vector(location_t lo
     {
         loc = _loc_to_memory_index[loc];
         memcpy(dest, _data + loc * this->_dim, this->_dim * sizeof(data_t));
-        if (_compute_norms)
-        for (int i = 0; i < this->_dim; ++i)
-        {
-            dest[i] /= _pre_computed_norms[loc];
+        if (_compute_norms) {
+            for (int i = 0; i < this->_dim; ++i)
+            {
+                dest[i] /= _pre_computed_norms[loc];
+            }
         }
         return;
     }

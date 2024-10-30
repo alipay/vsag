@@ -26,6 +26,21 @@
 
 namespace py = pybind11;
 
+void
+SetLoggerOff() {
+    vsag::Options::Instance().logger()->SetLevel(vsag::Logger::Level::kOFF);
+}
+
+void
+SetLoggerInfo() {
+    vsag::Options::Instance().logger()->SetLevel(vsag::Logger::Level::kINFO);
+}
+
+void
+SetLoggerDebug() {
+    vsag::Options::Instance().logger()->SetLevel(vsag::Logger::Level::kDEBUG);
+}
+
 template <typename T>
 static void
 writeBinaryPOD(std::ostream& out, const T& podRef) {
@@ -211,6 +226,9 @@ private:
 
 PYBIND11_MODULE(_pyvsag, m) {
     m.def("kmeans", &kmeans, "Kmeans");
+    m.def("set_logger_off", &SetLoggerOff, "SetLoggerOff");
+    m.def("set_logger_info", &SetLoggerInfo, "SetLoggerInfo");
+    m.def("set_logger_debug", &SetLoggerDebug, "SetLoggerDebug");
     py::class_<Index>(m, "Index")
         .def(py::init<std::string, std::string&>(), py::arg("name"), py::arg("parameters"))
         .def("build",

@@ -27,7 +27,7 @@ debug:                  ## Build vsag with debug options.
 
 .PHONY: release
 release:                ## Build vsag with release options.
-	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Release -DENABLE_LIBCXX=on
+	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Release
 	cmake --build build --parallel ${COMPILE_JOBS}
 
 .PHONY: distribution

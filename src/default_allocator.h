@@ -31,7 +31,7 @@ public:
     Instance() {
         static std::shared_ptr<Allocator> s_instance;
         if (s_instance == nullptr) {
-            s_instance.reset(new DefaultAllocator);
+            s_instance = std::make_shared<DefaultAllocator>();
         }
         return s_instance;
     }

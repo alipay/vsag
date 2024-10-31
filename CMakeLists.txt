@@ -49,13 +49,7 @@ option (DISABLE_AVX2_FORCE "Force disable avx2 and higher instructions" OFF)
 option (DISABLE_AVX512_FORCE "Force disable avx512 instructions" OFF)
 
 
-if (ENABLE_CXX11_ABI)
-    add_definitions (-D_GLIBCXX_USE_CXX11_ABI=1)
-    message(STATUS "Using libstdc++ with C++11 ABI")
-else ()
-    add_definitions (-D_GLIBCXX_USE_CXX11_ABI=0)
-    message(STATUS "Using libstdc++ with pre-C++11 ABI")
-endif ()
+
 
 if (ENABLE_WERROR)
     add_compile_options(-Werror)
@@ -69,7 +63,9 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -gdwarf-4")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -gdwarf-4 -Wno-deprecated-builtins")
 else()
-    message(FATAL_ERROR "gcc does not support using libc++")
+    if (ENABLE_LIBCXX)
+        message(FATAL_ERROR "gcc does not support using libc++")
+    endif()
 endif()
 
 if (ENABLE_LIBCXX)

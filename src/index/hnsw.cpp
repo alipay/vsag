@@ -71,9 +71,11 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
     }
 
     if (not allocator) {
-        allocator = DefaultAllocator::Instance();
+        allocator_ =
+            std::shared_ptr<SafeAllocator>(new SafeAllocator(DefaultAllocator::Instance()));
+    } else {
+        allocator_ = std::shared_ptr<SafeAllocator>(new SafeAllocator(allocator));
     }
-    allocator_ = std::shared_ptr<SafeAllocator>(new SafeAllocator(allocator));
 
     if (!use_static_) {
         alg_hnsw_ =

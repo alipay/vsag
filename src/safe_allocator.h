@@ -26,6 +26,10 @@ public:
     explicit SafeAllocator(Allocator* raw_allocator) : raw_allocator_(raw_allocator) {
     }
 
+    explicit SafeAllocator(std::shared_ptr<Allocator> self_own_allocator)
+        : self_own_allocator_(self_own_allocator), raw_allocator_(self_own_allocator.get()) {
+    }
+
     std::string
     Name() override {
         return raw_allocator_->Name() + "_safewrapper";
@@ -63,6 +67,7 @@ public:
 
 private:
     Allocator* raw_allocator_ = nullptr;
+    std::shared_ptr<Allocator> self_own_allocator_ = nullptr;
 };
 
 }  // namespace vsag

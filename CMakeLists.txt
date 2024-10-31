@@ -49,7 +49,13 @@ option (DISABLE_AVX2_FORCE "Force disable avx2 and higher instructions" OFF)
 option (DISABLE_AVX512_FORCE "Force disable avx512 instructions" OFF)
 
 
-
+if (ENABLE_CXX11_ABI)
+    add_definitions (-D_GLIBCXX_USE_CXX11_ABI=1)
+    message(STATUS "Using libstdc++ with C++11 ABI")
+else ()
+    add_definitions (-D_GLIBCXX_USE_CXX11_ABI=0)
+    message(STATUS "Using libstdc++ with pre-C++11 ABI")
+endif ()
 
 if (ENABLE_WERROR)
     add_compile_options(-Werror)

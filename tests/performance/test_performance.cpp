@@ -179,19 +179,17 @@ public:
             dataset.read(obj->neighbors_.get(), datatype, dataspace);
         }
         if (has_labels) {
-            H5::DataSet dataset = file.openDataSet("/train_labels");
-            H5::DataSpace dataspace = dataset.getSpace();
             H5::FloatType datatype(H5::PredType::NATIVE_INT64);
-            obj->train_labels_ = std::shared_ptr<int64_t[]>(new int64_t[obj->number_of_base_]);
-            dataset.read(obj->train_labels_.get(), datatype, dataspace);
-        }
 
-        if (has_labels) {
-            H5::DataSet dataset = file.openDataSet("/test_labels");
-            H5::DataSpace dataspace = dataset.getSpace();
-            H5::FloatType datatype(H5::PredType::NATIVE_INT64);
+            H5::DataSet train_labels_dataset = file.openDataSet("/train_labels");
+            H5::DataSpace train_labels_dataspace = train_labels_dataset.getSpace();
+            obj->train_labels_ = std::shared_ptr<int64_t[]>(new int64_t[obj->number_of_base_]);
+            train_labels_dataset.read(obj->train_labels_.get(), datatype, train_labels_dataspace);
+
+            H5::DataSet test_labels_dataset = file.openDataSet("/test_labels");
+            H5::DataSpace test_labels_dataspace = test_labels_dataset.getSpace();
             obj->test_labels_ = std::shared_ptr<int64_t[]>(new int64_t[obj->number_of_query_]);
-            dataset.read(obj->test_labels_.get(), datatype, dataspace);
+            test_labels_dataset.read(obj->test_labels_.get(), datatype, test_labels_dataspace);
         }
 
         return obj;

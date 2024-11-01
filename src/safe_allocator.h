@@ -67,7 +67,7 @@ public:
 
 private:
     Allocator* const raw_allocator_ = nullptr;
-    std::shared_ptr<Allocator> self_own_allocator_ = nullptr;
+    std::shared_ptr<Allocator> owned_allocator_ = nullptr;
 };
 
 }  // namespace vsag

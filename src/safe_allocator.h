@@ -66,7 +66,7 @@ public:
     ~SafeAllocator() override = default;
 
 private:
-    Allocator* raw_allocator_ = nullptr;
+    Allocator* const raw_allocator_ = nullptr;
     std::shared_ptr<Allocator> self_own_allocator_ = nullptr;
 };
 

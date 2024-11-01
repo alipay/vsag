@@ -120,7 +120,7 @@ public:
         using other = AllocatorWrapper<U>;
     };
 
-    Allocator* const allocator_{};
+    Allocator* allocator_{};
 };
 
 }  // namespace vsag

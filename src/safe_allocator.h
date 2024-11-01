@@ -26,8 +26,8 @@ public:
     explicit SafeAllocator(Allocator* raw_allocator) : raw_allocator_(raw_allocator) {
     }
 
-    explicit SafeAllocator(std::shared_ptr<Allocator> self_own_allocator)
-        : self_own_allocator_(self_own_allocator), raw_allocator_(self_own_allocator.get()) {
+    explicit SafeAllocator(std::shared_ptr<Allocator> owned_allocator)
+        : owned_allocator_(owned_allocator), raw_allocator_(owned_allocator.get()) {
     }
 
     std::string

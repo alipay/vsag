@@ -90,7 +90,7 @@ cov:
 	cmake --build build --parallel ${COMPILE_JOBS}
 
 .PHONY: test_cov
-test_cov: cov            ## Build and run unit tests with code coverage enabled.
+test_cov: cov           ## Build and run unit tests with code coverage enabled.
 	./build/tests/unittests -d yes ${UT_FILTER} --allow-running-no-tests ${UT_SHARD}
 	./build/tests/functests -d yes ${UT_FILTER} --allow-running-no-tests ${UT_SHARD}
 	./build/mockimpl/tests_mockimpl -d yes ${UT_FILTER} --allow-running-no-tests ${UT_SHARD}

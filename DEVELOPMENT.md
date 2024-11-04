@@ -1,4 +1,14 @@
-## Dependencies
+# VSAG developer guide
+
+## Development Environment
+There are two ways to build and develop the VSAG project now.
+
+### Docker(recommended)
+```bash
+docker pull vsaglib/vsag:ubuntu
+```
+
+### Dependencies
 ```bash
 # for Debian/Ubuntu
 $ ./scripts/deps/install_deps_ubuntu.sh
@@ -8,6 +18,7 @@ $ ./scripts/deps/install_deps_centos.sh
 ```
 
 ## VSAG Build Tool
+VSAG project use the Unix Makefiles to compile, package and install the library. Here is the commands below:
 ```bash
 Usage: make <target>
 
@@ -22,10 +33,11 @@ asan:                   ## Build with AddressSanitizer option.
 test_asan: asan         ## Run unit tests with AddressSanitizer option.
 tsan:                   ## Build with ThreadSanitizer option.
 test_tsan: tsan         ## Run unit tests with ThreadSanitizer option.
-test_cov:               ## Build and run unit tests with code coverage enabled.
+test_cov: cov           ## Build and run unit tests with code coverage enabled.
 clean:                  ## Clear build/ directory.
 install:                ## Build and install the release version of vsag.
 ```
+
 ## Project Structure
 - `benchs/`: benchmark script in Python
 - `cmake/`: cmake util functions

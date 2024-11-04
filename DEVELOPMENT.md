@@ -1,6 +1,13 @@
-# VSAG developer guide
+# VSAG Developer Guide
+
+Welcome to the developer guide for VSAG! This guide is designed to provide both new and experienced contributors with a comprehensive resource for understanding the project's codebase, development processes, and best practices.
+
+Whether you're an open-source enthusiast looking to make your first contribution or a seasoned developer seeking insights into the project's architecture, the guide aims to streamline your onboarding process and empower you to contribute effectively.
+
+Let's dive in and explore how you can become an integral part of our vibrant open-source community!
 
 ## Development Environment
+
 There are two ways to build and develop the VSAG project now.
 
 ### Docker(recommended)

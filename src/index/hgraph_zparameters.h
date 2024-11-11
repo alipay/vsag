@@ -23,10 +23,10 @@
 namespace vsag {
 class HGraphParameters {
 public:
-    explicit HGraphParameters(const IndexCommonParam& common_param, const std::string& str = "");
+    explicit HGraphParameters(const IndexCommonParam& common_param, nlohmann::json& hgraph_param);
 
     void
-    ParseStringParam(const std::string& str);
+    ParseStringParam(nlohmann::json& hgraph_param);
 
     void
     CheckAndSetKeyValue(const std::string& key, nlohmann::json& value);

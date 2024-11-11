@@ -69,19 +69,16 @@ Factory::CreateIndex(const std::string& origin_name,
             logger::debug("created a diskann index");
             return std::make_shared<DiskANN>(index_common_params, params);
         } else if (name == INDEX_HGRAPH) {
-            auto param = nlohmann::json::parse(parameters);
-            auto common_param = IndexCommonParam::CheckAndCreate(parameters);
+            auto common_param = IndexCommonParam::CheckAndCreate(parsed_params, allocator);
             if (allocator != nullptr) {
                 common_param.allocator_ = allocator;
             } else {
                 common_param.allocator_ = DefaultAllocator::Instance().get();
             }
             logger::debug("created a hgraph index");
-            std::string hgraph_str = "{}";
-            if (param.contains("index_param")) {
-                hgraph_str = param["index_param"].dump();
-            }
-            HGraphParameters hgraph_param(common_param, hgraph_str);
+            CHECK_ARGUMENT(parsed_params.contains(HGRAPH_INDEX_PARAM),
+                           fmt::format("parameters must contains {}", HGRAPH_INDEX_PARAM));
+            HGraphParameters hgraph_param(common_param, parsed_params[HGRAPH_INDEX_PARAM]);
             auto hgraph_index = std::make_shared<HGraphIndex>(hgraph_param.GetJson(), common_param);
             hgraph_index->Init();
             return hgraph_index;

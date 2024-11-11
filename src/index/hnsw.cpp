@@ -52,7 +52,7 @@ HNSW::HNSW(IndexCommonParam index_common_param, HnswParameters params)
       type_(params.type) {
     dim_ = index_common_param.dim_;
 
-    auto M = std::min(std::max((int) params.max_degree, MINIMAL_M), MAXIMAL_M);
+    auto M = std::min(std::max((int)params.max_degree, MINIMAL_M), MAXIMAL_M);
 
     if (params.ef_construction <= 0) {
         throw std::runtime_error(MESSAGE_PARAMETER);

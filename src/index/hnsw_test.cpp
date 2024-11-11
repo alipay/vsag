@@ -27,8 +27,8 @@
 #include "vsag/errors.h"
 #include "vsag/options.h"
 
-
-vsag::HnswParameters parse_hnsw_params(vsag::IndexCommonParam index_common_param) {
+vsag::HnswParameters
+parse_hnsw_params(vsag::IndexCommonParam index_common_param) {
     auto build_parameter_json = R"(
         {
             "max_degree": 12,
@@ -38,7 +38,6 @@ vsag::HnswParameters parse_hnsw_params(vsag::IndexCommonParam index_common_param
     nlohmann::json parsed_params = nlohmann::json::parse(build_parameter_json);
     return vsag::HnswParameters::FromJson(index_common_param, parsed_params);
 }
-
 
 TEST_CASE("build & add", "[ut][hnsw]") {
     vsag::logger::set_level(vsag::logger::level::debug);
@@ -79,7 +78,6 @@ TEST_CASE("build & add", "[ut][hnsw]") {
 
 TEST_CASE("build with allocator", "[ut][hnsw]") {
     vsag::logger::set_level(vsag::logger::level::debug);
-
 
     int64_t dim = 128;
     vsag::IndexCommonParam commom_param;
@@ -585,7 +583,6 @@ TEST_CASE("feedback with invalid argument", "[ut][hnsw]") {
     hnsw_obj.ef_construction = 200;
     hnsw_obj.use_conjugate_graph = true;
     auto index = std::make_shared<vsag::HNSW>(commom_param, hnsw_obj);
-
 
     nlohmann::json search_parameters{
         {"hnsw", {{"ef_search", 200}}},

@@ -32,9 +32,9 @@
 #include "../common.h"
 #include "../logger.h"
 #include "../utils.h"
+#include "diskann_zparameters.h"
 #include "vsag/index.h"
 #include "vsag/options.h"
-#include "diskann_zparameters.h"
 
 using ThreadPool = progschj::ThreadPool;
 

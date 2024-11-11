@@ -21,10 +21,10 @@
 #include <vector>
 
 #include "default_allocator.h"
+#include "index/index_common_param.h"
 #include "spdlog/spdlog.h"
 #include "vsag/errors.h"
 #include "vsag/expected.hpp"
-#include "index/index_common_param.h"
 
 namespace vsag {
 

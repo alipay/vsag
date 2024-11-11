@@ -35,13 +35,13 @@
 #include "../safe_allocator.h"
 #include "../utils.h"
 #include "base_filter_functor.h"
+#include "hnsw_zparameters.h"
+#include "index_common_param.h"
 #include "typing.h"
 #include "vsag/binaryset.h"
 #include "vsag/errors.h"
 #include "vsag/index.h"
 #include "vsag/readerset.h"
-#include "hnsw_zparameters.h"
-#include "index_common_param.h"
 
 namespace vsag {
 

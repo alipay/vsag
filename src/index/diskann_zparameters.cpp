@@ -15,15 +15,17 @@
 
 #include "diskann_zparameters.h"
 
-#include "index_common_param.h"
 #include <fmt/format-inl.h>
-#include "vsag/constants.h"
+
 #include "common.h"
+#include "index_common_param.h"
+#include "vsag/constants.h"
 
 namespace vsag {
 
 DiskannParameters
-DiskannParameters::FromJson(IndexCommonParam index_common_param, nlohmann::json& diskann_param_obj) {
+DiskannParameters::FromJson(IndexCommonParam index_common_param,
+                            nlohmann::json& diskann_param_obj) {
     DiskannParameters obj;
 
     CHECK_ARGUMENT(
@@ -43,9 +45,8 @@ DiskannParameters::FromJson(IndexCommonParam index_common_param, nlohmann::json&
                                                 PARAMETER_METRIC_TYPE,
                                                 METRIC_L2,
                                                 METRIC_IP,
-                                                (int) obj.metric));
+                                                (int)obj.metric));
     }
-
 
     // set obj.max_degree
     CHECK_ARGUMENT(

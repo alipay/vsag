@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "index_common_param.h"
-
 #include <catch2/catch_test_macros.hpp>
+
+#include "index_common_param.h"
 
 TEST_CASE("create common parameter", "[ut][hnsw]") {
     SECTION("worng metric type") {

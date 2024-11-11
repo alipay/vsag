@@ -21,14 +21,14 @@
 #include <vector>
 
 #include "../logger.h"
+#include "diskann_zparameters.h"
 #include "distance.h"
 #include "fixtures.h"
-#include "vsag/errors.h"
-#include "diskann_zparameters.h"
 #include "index_common_param.h"
+#include "vsag/errors.h"
 
-
-vsag::DiskannParameters parse_diskann_params(vsag::IndexCommonParam index_common_param) {
+vsag::DiskannParameters
+parse_diskann_params(vsag::IndexCommonParam index_common_param) {
     auto build_parameter_json = R"(
         {
             "max_degree": 16,
@@ -173,7 +173,11 @@ TEST_CASE("knn_search", "[diskann][ut]") {
     REQUIRE(result.has_value());
 
     auto query = vsag::Dataset::Make();
-    query->Dim(commom_param.dim_)->NumElements(1)->Ids(ids.data())->Float32Vectors(vectors.data())->Owner(false);
+    query->Dim(commom_param.dim_)
+        ->NumElements(1)
+        ->Ids(ids.data())
+        ->Float32Vectors(vectors.data())
+        ->Owner(false);
     int64_t k = 10;
     nlohmann::json params{{"diskann", {{"ef_search", 100}, {"beam_search", 4}, {"io_limit", 200}}}};
 
@@ -198,7 +202,10 @@ TEST_CASE("knn_search", "[diskann][ut]") {
 
     SECTION("dimension not equal") {
         auto query = vsag::Dataset::Make();
-        query->NumElements(1)->Dim(commom_param.dim_ - 1)->Float32Vectors(vectors.data())->Owner(false);
+        query->NumElements(1)
+            ->Dim(commom_param.dim_ - 1)
+            ->Float32Vectors(vectors.data())
+            ->Owner(false);
         auto result = index->KnnSearch(query, k, params.dump());
         REQUIRE_FALSE(result.has_value());
         REQUIRE(result.error().type == vsag::ErrorType::INVALID_ARGUMENT);
@@ -267,7 +274,11 @@ TEST_CASE("range_search", "[diskann][ut]") {
     REQUIRE(result.has_value());
 
     auto query = vsag::Dataset::Make();
-    query->Dim(commom_param.dim_)->NumElements(1)->Ids(ids.data())->Float32Vectors(vectors.data())->Owner(false);
+    query->Dim(commom_param.dim_)
+        ->NumElements(1)
+        ->Ids(ids.data())
+        ->Float32Vectors(vectors.data())
+        ->Owner(false);
     float radius = 9.9f;
     nlohmann::json params{{"diskann", {{"ef_search", 100}, {"beam_search", 4}, {"io_limit", 200}}}};
 
@@ -323,7 +334,10 @@ TEST_CASE("range_search", "[diskann][ut]") {
 
     SECTION("dimension not equal") {
         auto query = vsag::Dataset::Make();
-        query->NumElements(1)->Dim(commom_param.dim_ - 1)->Float32Vectors(vectors.data())->Owner(false);
+        query->NumElements(1)
+            ->Dim(commom_param.dim_ - 1)
+            ->Float32Vectors(vectors.data())
+            ->Owner(false);
         auto result = index->RangeSearch(query, radius, params.dump());
         REQUIRE_FALSE(result.has_value());
         REQUIRE(result.error().type == vsag::ErrorType::INVALID_ARGUMENT);
@@ -409,7 +423,6 @@ TEST_CASE("deserialize on not empty index", "[diskann][ut]") {
 
     auto index = std::make_shared<vsag::DiskANN>(commom_param, diskann_obj);
 
-
     int64_t num_elements = 100;
     auto [ids, vectors] = fixtures::generate_ids_and_vectors(num_elements, commom_param.dim_);
 
@@ -472,7 +485,10 @@ TEST_CASE("split building process", "[diskann][ut]") {
     float correct = 0;
     for (int i = 0; i < num_elements; i++) {
         auto query = vsag::Dataset::Make();
-        query->NumElements(1)->Dim(commom_param.dim_)->Float32Vectors(vectors.data() + i * commom_param.dim_)->Owner(false);
+        query->NumElements(1)
+            ->Dim(commom_param.dim_)
+            ->Float32Vectors(vectors.data() + i * commom_param.dim_)
+            ->Owner(false);
         int64_t k = 2;
         if (auto result = partial_index->KnnSearch(query, k, parameters.dump());
             result.has_value()) {
@@ -499,7 +515,10 @@ TEST_CASE("split building process", "[diskann][ut]") {
     correct = 0;
     for (int i = 0; i < num_elements; i++) {
         auto query = vsag::Dataset::Make();
-        query->NumElements(1)->Dim(commom_param.dim_)->Float32Vectors(vectors.data() + i * commom_param.dim_)->Owner(false);
+        query->NumElements(1)
+            ->Dim(commom_param.dim_)
+            ->Float32Vectors(vectors.data() + i * commom_param.dim_)
+            ->Owner(false);
         int64_t k = 2;
         if (auto result = partial_index->KnnSearch(query, k, parameters.dump());
             result.has_value()) {

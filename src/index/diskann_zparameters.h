@@ -15,10 +15,11 @@
 
 #pragma once
 
+#include <distance.h>
+
 #include <string>
 
 #include "index_common_param.h"
-#include <distance.h>
 
 namespace vsag {
 

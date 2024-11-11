@@ -14,9 +14,10 @@
 // limitations under the License.
 
 #include "diskann_zparameters.h"
-#include "index_common_param.h"
 
 #include <catch2/catch_test_macros.hpp>
+
+#include "index_common_param.h"
 
 TEST_CASE("create diskann with correct parameter", "[ut][diskann]") {
     vsag::IndexCommonParam commom_param;

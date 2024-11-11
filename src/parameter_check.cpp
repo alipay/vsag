@@ -18,9 +18,9 @@
 #include "index/diskann_zparameters.h"
 #include "index/hnsw_zparameters.h"
 #include "utils.h"
+#include "vsag/constants.h"
 #include "vsag/errors.h"
 #include "vsag/expected.hpp"
-#include "vsag/constants.h"
 
 namespace vsag {
 
@@ -33,10 +33,13 @@ check_diskann_hnsw_build_parameters(const std::string& json_string) {
                    fmt::format("parameters must contains {}", INDEX_HNSW));
     CHECK_ARGUMENT(parsed_params.contains(INDEX_DISKANN),
                    fmt::format("parameters must contains {}", INDEX_DISKANN));
-    if (auto ret = try_parse_parameters<HnswParameters>(index_common_params, parsed_params[INDEX_HNSW]); not ret.has_value()) {
+    if (auto ret =
+            try_parse_parameters<HnswParameters>(index_common_params, parsed_params[INDEX_HNSW]);
+        not ret.has_value()) {
         return tl::unexpected(ret.error());
     }
-    if (auto ret = try_parse_parameters<DiskannParameters>(index_common_params, parsed_params[INDEX_DISKANN]);
+    if (auto ret = try_parse_parameters<DiskannParameters>(index_common_params,
+                                                           parsed_params[INDEX_DISKANN]);
         not ret.has_value()) {
         return tl::unexpected(ret.error());
     }

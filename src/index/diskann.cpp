@@ -27,6 +27,7 @@
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <utility>
+
 #include "vsag/constants.h"
 #include "vsag/errors.h"
 #include "vsag/expected.hpp"
@@ -133,7 +134,8 @@ convert_binary_to_stream(const Binary& binary, std::stringstream& stream) {
     }
 }
 
-DiskANN::DiskANN(IndexCommonParam index_common_param, DiskannParameters diskann_parameters) : metric_(diskann_parameters.metric),
+DiskANN::DiskANN(IndexCommonParam index_common_param, DiskannParameters diskann_parameters)
+    : metric_(diskann_parameters.metric),
       L_(diskann_parameters.ef_construction),
       R_(diskann_parameters.max_degree),
       p_val_(diskann_parameters.pq_sample_rate),

@@ -24,6 +24,7 @@
 #include "spdlog/spdlog.h"
 #include "vsag/errors.h"
 #include "vsag/expected.hpp"
+#include "index/index_common_param.h"
 
 namespace vsag {
 
@@ -96,6 +97,16 @@ tl::expected<IndexOpParameters, Error>
 try_parse_parameters(const std::string& json_string) {
     try {
         return IndexOpParameters::FromJson(json_string);
+    } catch (const std::exception& e) {
+        return tl::unexpected<Error>(ErrorType::INVALID_ARGUMENT, e.what());
+    }
+}
+
+template <typename IndexOpParameters>
+tl::expected<IndexOpParameters, Error>
+try_parse_parameters(IndexCommonParam index_common_param, nlohmann::json& param_obj) {
+    try {
+        return IndexOpParameters::FromJson(index_common_param, param_obj);
     } catch (const std::exception& e) {
         return tl::unexpected<Error>(ErrorType::INVALID_ARGUMENT, e.what());
     }

@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cstdint>
+#include <nlohmann/json.hpp>
 
 #include "data_type.h"
 #include "metric_type.h"
@@ -30,6 +31,6 @@ public:
     Allocator* allocator_{nullptr};
 
     static IndexCommonParam
-    CheckAndCreate(const std::string& json_string);
+    CheckAndCreate(nlohmann::json& params, Allocator* allocator);
 };
 }  // namespace vsag

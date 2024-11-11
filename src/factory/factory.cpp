@@ -39,48 +39,32 @@ Factory::CreateIndex(const std::string& origin_name,
     try {
         std::string name = origin_name;
         transform(name.begin(), name.end(), name.begin(), ::tolower);
+        nlohmann::json parsed_params = nlohmann::json::parse(parameters);
+        auto index_common_params = IndexCommonParam::CheckAndCreate(parsed_params, allocator);
         if (name == INDEX_HNSW) {
             // read parameters from json, throw exception if not exists
-            auto params = CreateHnswParameters::FromJson(parameters);
+            CHECK_ARGUMENT(parsed_params.contains(INDEX_HNSW),
+                           fmt::format("parameters must contains {}", INDEX_HNSW));
+            auto& hnsw_param_obj = parsed_params[INDEX_HNSW];
+            auto params = HnswParameters::FromJson(index_common_params, hnsw_param_obj);
             logger::debug("created a hnsw index");
-            return std::make_shared<HNSW>(params.space,
-                                          params.max_degree,
-                                          params.ef_construction,
-                                          params.type,
-                                          params.use_static,
-                                          false,
-                                          params.use_conjugate_graph,
-                                          params.normalize,
-                                          allocator);
+            return std::make_shared<HNSW>(index_common_params, params);
         } else if (name == INDEX_FRESH_HNSW) {
             // read parameters from json, throw exception if not exists
-            auto params = CreateFreshHnswParameters::FromJson(parameters);
+            CHECK_ARGUMENT(parsed_params.contains(INDEX_HNSW),
+                           fmt::format("parameters must contains {}", INDEX_HNSW));
+            auto& hnsw_param_obj = parsed_params[INDEX_HNSW];
+            auto params = FreshHnswParameters::FromJson(index_common_params, hnsw_param_obj);
             logger::debug("created a fresh-hnsw index");
-            return std::make_shared<HNSW>(params.space,
-                                          params.max_degree,
-                                          params.ef_construction,
-                                          params.type,
-                                          params.use_static,
-                                          true,
-                                          false,
-                                          params.normalize,
-                                          allocator);
+            return std::make_shared<HNSW>(index_common_params, params);
         } else if (name == INDEX_DISKANN) {
             // read parameters from json, throw exception if not exists
-            auto params = CreateDiskannParameters::FromJson(parameters);
+            CHECK_ARGUMENT(parsed_params.contains(INDEX_DISKANN),
+                           fmt::format("parameters must contains {}", INDEX_DISKANN));
+            auto& diskann_param_obj = parsed_params[INDEX_DISKANN];
+            auto params = DiskannParameters::FromJson(index_common_params, diskann_param_obj);
             logger::debug("created a diskann index");
-            return std::make_shared<DiskANN>(params.metric,
-                                             params.dtype,
-                                             params.ef_construction,
-                                             params.max_degree,
-                                             params.pq_sample_rate,
-                                             params.pq_dims,
-                                             params.dim,
-                                             params.use_preload,
-                                             params.use_reference,
-                                             params.use_opq,
-                                             params.use_bsa,
-                                             params.use_async_io);
+            return std::make_shared<DiskANN>(index_common_params, params);
         } else {
             LOG_ERROR_AND_RETURNS(
                 ErrorType::UNSUPPORTED_INDEX, "failed to create index(unsupported): ", name);

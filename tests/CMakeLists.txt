@@ -1,7 +1,8 @@
 
 #  unittests
 file (GLOB_RECURSE UNIT_TESTS "../src/*_test.cpp")
-add_executable (unittests ${UNIT_TESTS}
+file (GLOB_RECURSE INDEX_UNIT_TESTS "../src/index/*_test.cpp")
+add_executable (unittests ${UNIT_TESTS} ${INDEX_UNIT_TESTS}
     fixtures/fixtures.cpp
 )
 if (DIST_CONTAINS_SSE)

@@ -16,9 +16,11 @@
 #pragma once
 
 #include <cstdint>
-
+#include <nlohmann/json.hpp>
 namespace vsag {
 
 using InnerIdType = uint32_t;  // inner id's type; index's vector count may less than 2^31 - 1
 using LabelType = uint64_t;    // external id's type
+
+using JsonType = nlohmann::json;  // alias for nlohmann::json type
 }  // namespace vsag

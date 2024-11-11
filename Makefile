@@ -35,6 +35,11 @@ distribution:           ## Build vsag with distribution options.
 	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Release -DENABLE_CXX11_ABI=off -DENABLE_LIBCXX=off
 	cmake --build build --parallel ${COMPILE_JOBS}
 
+.PHONY: libcxx
+libcxx:           ## Build vsag using libc++.
+	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Release -DENABLE_LIBCXX=on
+	cmake --build build --parallel ${COMPILE_JOBS}
+
 .PHONY: fmt
 fmt:                    ## Format codes.
 	find include/ -iname "*.h" -o -iname "*.cpp" | xargs clang-format -i
@@ -56,6 +61,11 @@ test:                   ## Build and run unit tests.
 asan:                   ## Build with AddressSanitizer option.
 	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON -DENABLE_CCACHE=ON
 	cmake --build build --parallel ${COMPILE_JOBS}
+
+.PHONY: test_asan_parallel 		## Run unit tests parallel with AddressSanitizer option.
+test_asan_parallel: asan
+	@./scripts/test_asan_bg.sh
+	./build/mockimpl/tests_mockimpl -d yes ${UT_FILTER} --allow-running-no-tests ${UT_SHARD}
 
 .PHONY: test_asan
 test_asan: asan         ## Run unit tests with AddressSanitizer option.

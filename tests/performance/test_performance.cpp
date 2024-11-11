@@ -179,19 +179,17 @@ public:
             dataset.read(obj->neighbors_.get(), datatype, dataspace);
         }
         if (has_labels) {
-            H5::DataSet dataset = file.openDataSet("/train_labels");
-            H5::DataSpace dataspace = dataset.getSpace();
             H5::FloatType datatype(H5::PredType::NATIVE_INT64);
-            obj->train_labels_ = std::shared_ptr<int64_t[]>(new int64_t[obj->number_of_base_]);
-            dataset.read(obj->train_labels_.get(), datatype, dataspace);
-        }
 
-        if (has_labels) {
-            H5::DataSet dataset = file.openDataSet("/test_labels");
-            H5::DataSpace dataspace = dataset.getSpace();
-            H5::FloatType datatype(H5::PredType::NATIVE_INT64);
+            H5::DataSet train_labels_dataset = file.openDataSet("/train_labels");
+            H5::DataSpace train_labels_dataspace = train_labels_dataset.getSpace();
+            obj->train_labels_ = std::shared_ptr<int64_t[]>(new int64_t[obj->number_of_base_]);
+            train_labels_dataset.read(obj->train_labels_.get(), datatype, train_labels_dataspace);
+
+            H5::DataSet test_labels_dataset = file.openDataSet("/test_labels");
+            H5::DataSpace test_labels_dataspace = test_labels_dataset.getSpace();
             obj->test_labels_ = std::shared_ptr<int64_t[]>(new int64_t[obj->number_of_query_]);
-            dataset.read(obj->test_labels_.get(), datatype, dataspace);
+            test_labels_dataset.read(obj->test_labels_.get(), datatype, test_labels_dataspace);
         }
 
         return obj;
@@ -258,6 +256,9 @@ public:
 
     bool
     IsMatch(int64_t query_id, int64_t base_id) {
+        if (this->test_labels_ == nullptr || this->train_labels_ == nullptr) {
+            return true;
+        }
         return test_labels_[query_id] == train_labels_[base_id];
     }
 
@@ -317,7 +318,6 @@ public:
     Build(const std::string& dataset_path,
           const std::string& index_name,
           const std::string& build_parameters) {
-        Options::Instance().set_num_threads_building(16);
         spdlog::debug("index_name: " + index_name);
         spdlog::debug("build_parameters: " + build_parameters);
         auto index = Factory::CreateIndex(index_name, build_parameters).value();

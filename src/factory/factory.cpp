@@ -83,7 +83,7 @@ Factory::CreateIndex(const std::string& origin_name,
                                              params.use_opq,
                                              params.use_bsa,
                                              params.use_async_io);
-        } else if (name == MULTI_INDEX) {
+        } else if (name == TAG_INDEX) {
             auto params = CreateMultiIndexParameters::FromJson(parameters);
             logger::debug("created a multi index");
             return std::make_shared<MultiIndex>(params.subindex_type, params.parameters);

@@ -20,7 +20,7 @@ extern const char* const INDEX_HGRAPH;
 extern const char* const INDEX_DISKANN;
 extern const char* const INDEX_HNSW;
 extern const char* const INDEX_FRESH_HNSW;
-extern const char* const MULTI_INDEX;
+extern const char* const TAG_INDEX;
 extern const char* const DIM;
 extern const char* const NUM_ELEMENTS;
 extern const char* const IDS;

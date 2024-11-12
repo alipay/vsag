@@ -27,12 +27,22 @@ namespace vsag {
 tl::expected<bool, Error>
 check_diskann_hnsw_build_parameters(const std::string& json_string) {
     nlohmann::json parsed_params = nlohmann::json::parse(json_string);
-    auto index_common_params = IndexCommonParam::CheckAndCreate(parsed_params, nullptr);
+    IndexCommonParam index_common_params;
+    try {
+        index_common_params = IndexCommonParam::CheckAndCreate(parsed_params, nullptr);
+    } catch (const std::exception& e) {
+        return tl::unexpected<Error>(ErrorType::INVALID_ARGUMENT, e.what());
+    }
 
-    CHECK_ARGUMENT(parsed_params.contains(INDEX_HNSW),
-                   fmt::format("parameters must contains {}", INDEX_HNSW));
-    CHECK_ARGUMENT(parsed_params.contains(INDEX_DISKANN),
-                   fmt::format("parameters must contains {}", INDEX_DISKANN));
+    if (not parsed_params.contains(INDEX_HNSW)) {
+        LOG_ERROR_AND_RETURNS(ErrorType::INVALID_ARGUMENT,
+                              fmt::format("parameters must contains {}", INDEX_HNSW));
+    }
+
+    if (not parsed_params.contains(INDEX_DISKANN)) {
+        LOG_ERROR_AND_RETURNS(ErrorType::INVALID_ARGUMENT,
+                              fmt::format("parameters must contains {}", INDEX_DISKANN));
+    }
     if (auto ret =
             try_parse_parameters<HnswParameters>(index_common_params, parsed_params[INDEX_HNSW]);
         not ret.has_value()) {

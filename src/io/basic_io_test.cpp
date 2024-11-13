@@ -23,7 +23,7 @@
 
 class WrongIO : public vsag::BasicIO<WrongIO> {};
 
-TEST_CASE("wrong io", "[ut][basic io]") {
+TEST_CASE("wrong io", "[ut][io]") {
     auto io = std::make_shared<WrongIO>();
     std::vector<uint8_t> data(100);
     bool release;

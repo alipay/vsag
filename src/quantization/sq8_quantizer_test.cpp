@@ -31,13 +31,13 @@ TestQuantizerEncodeDecodeMetricSQ8(uint64_t dim,
                                    int count,
                                    float error = 1e-5,
                                    float error_same = 1e-2) {
-    auto allocator = std::make_shared<DefaultAllocator>();
-    SQ8Quantizer<metric> quantizer(dim, allocator.get());
+    auto allocator = std::make_shared<SafeAllocator>(DefaultAllocator::Instance());
+    SQ8Quantizer<metric> quantizer(dim, allocator);
     TestQuantizerEncodeDecode(quantizer, dim, count, error);
     TestQuantizerEncodeDecodeSame(quantizer, dim, count, 255, error_same);
 }
 
-TEST_CASE("encode&decode [SQ8Quantizer]") {
+TEST_CASE("encode&decode", "[ut][quantization][SQ8Quantizer]") {
     auto dims = fixtures::get_common_used_dims();
     constexpr MetricType metrics[2] = {MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_IP};
     float error = 1e-2f;
@@ -53,13 +53,13 @@ TEST_CASE("encode&decode [SQ8Quantizer]") {
 template <MetricType metric>
 void
 TestComputeMetricSQ8(uint64_t dim, int count, float error = 1e-5) {
-    auto allocator = std::make_shared<DefaultAllocator>();
-    SQ8Quantizer<metric> quantizer(dim, allocator.get());
+    auto allocator = std::make_shared<SafeAllocator>(DefaultAllocator::Instance());
+    SQ8Quantizer<metric> quantizer(dim, allocator);
     TestComputeCodes<SQ8Quantizer<metric>, metric>(quantizer, dim, count, error);
     TestComputer<SQ8Quantizer<metric>, metric>(quantizer, dim, count, error);
 }
 
-TEST_CASE("compute [ut][sq8_quantizer]") {
+TEST_CASE("compute", "[ut][quantization][SQ8Quantizer]") {
     auto dims = fixtures::get_common_used_dims();
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
@@ -76,14 +76,14 @@ TEST_CASE("compute [ut][sq8_quantizer]") {
 template <MetricType metric>
 void
 TestSerializeAndDeserializeMetricSQ8(uint64_t dim, int count, float error = 1e-5) {
-    auto allocator = std::make_shared<DefaultAllocator>();
-    SQ8Quantizer<metric> quantizer1(dim, allocator.get());
-    SQ8Quantizer<metric> quantizer2(0, allocator.get());
+    auto allocator = std::make_shared<SafeAllocator>(DefaultAllocator::Instance());
+    SQ8Quantizer<metric> quantizer1(dim, allocator);
+    SQ8Quantizer<metric> quantizer2(0, allocator);
     TestSerializeAndDeserialize<SQ8Quantizer<metric>, metric>(
         quantizer1, quantizer2, dim, count, error);
 }
 
-TEST_CASE("serialize&deserialize [ut][sq8_quantizer]") {
+TEST_CASE("serialize&deserialize", "[ut][quantization][SQ8Quantizer]") {
     auto dims = fixtures::get_common_used_dims();
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};

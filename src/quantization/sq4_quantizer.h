@@ -28,7 +28,7 @@ namespace vsag {
 template <MetricType metric = MetricType::METRIC_TYPE_L2SQR>
 class SQ4Quantizer : public Quantizer<SQ4Quantizer<metric>> {
 public:
-    explicit SQ4Quantizer(int dim, Allocator* allocator);
+    explicit SQ4Quantizer(int dim, const SafeAllocatorPtr& allocator);
 
     bool
     TrainImpl(const DataType* data, uint64_t count);
@@ -63,7 +63,7 @@ private:
 };
 
 template <MetricType metric>
-SQ4Quantizer<metric>::SQ4Quantizer(int dim, Allocator* allocator)
+SQ4Quantizer<metric>::SQ4Quantizer(int dim, const SafeAllocatorPtr& allocator)
     : Quantizer<SQ4Quantizer<metric>>(dim, allocator) {
     this->code_size_ = (dim + (1 << 6) - 1) >> 6 << 6;
     lower_bound_.resize(dim, std::numeric_limits<DataType>::max());

@@ -16,9 +16,12 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 
 #include "data_type.h"
 #include "metric_type.h"
+#include "safe_allocator.h"
+#include "typing.h"
 #include "vsag/allocator.h"
 
 namespace vsag {
@@ -27,7 +30,7 @@ public:
     MetricType metric_{MetricType::METRIC_TYPE_L2SQR};
     DataTypes data_type_{DataTypes::DATA_TYPE_FLOAT};
     int64_t dim_{0};
-    Allocator* allocator_{nullptr};
+    SafeAllocatorPtr allocator_{nullptr};
 
     static IndexCommonParam
     CheckAndCreate(const std::string& json_string);

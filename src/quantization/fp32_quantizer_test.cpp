@@ -29,13 +29,13 @@ const auto counts = {10, 101};
 template <MetricType metric>
 void
 TestQuantizerEncodeDecodeMetricFP32(uint64_t dim, int count, float error = 1e-5) {
-    auto allocator = std::make_shared<DefaultAllocator>();
-    FP32Quantizer<metric> quantizer(dim, allocator.get());
+    auto allocator = std::make_shared<SafeAllocator>(DefaultAllocator::Instance());
+    FP32Quantizer<metric> quantizer(dim, allocator);
     TestQuantizerEncodeDecode(quantizer, dim, count, error);
     TestQuantizerEncodeDecodeSame(quantizer, dim, count, 65536, error);
 }
 
-TEST_CASE("encode&decode [ut][fp32_quantizer]") {
+TEST_CASE("encode&decode", "[ut][quantization][FP32Quantizer]") {
     constexpr MetricType metrics[2] = {MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_IP};
     float error = 2e-5f;
     for (auto dim : dims) {
@@ -49,14 +49,14 @@ TEST_CASE("encode&decode [ut][fp32_quantizer]") {
 template <MetricType metric>
 void
 TestComputeMetricFP32(uint64_t dim, int count, float error = 1e-5) {
-    auto allocator = std::make_shared<DefaultAllocator>();
-    FP32Quantizer<metric> quantizer(dim, allocator.get());
+    auto allocator = std::make_shared<SafeAllocator>(DefaultAllocator::Instance());
+    FP32Quantizer<metric> quantizer(dim, allocator);
     TestComputeCodes<FP32Quantizer<metric>, metric>(quantizer, dim, count, error);
     TestComputeCodesSame<FP32Quantizer<metric>, metric>(quantizer, dim, count, 65536);
     TestComputer<FP32Quantizer<metric>, metric>(quantizer, dim, count, error);
 }
 
-TEST_CASE("compute [ut][fp32_quantizer]") {
+TEST_CASE("compute", "[ut][quantization][FP32Quantizer]") {
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
     float error = 2e-5f;
@@ -72,14 +72,14 @@ TEST_CASE("compute [ut][fp32_quantizer]") {
 template <MetricType metric>
 void
 TestSerializeAndDeserializeMetricFP32(uint64_t dim, int count, float error = 1e-5) {
-    auto allocator = std::make_shared<DefaultAllocator>();
-    FP32Quantizer<metric> quantizer1(dim, allocator.get());
-    FP32Quantizer<metric> quantizer2(0, allocator.get());
+    auto allocator = std::make_shared<SafeAllocator>(DefaultAllocator::Instance());
+    FP32Quantizer<metric> quantizer1(dim, allocator);
+    FP32Quantizer<metric> quantizer2(0, allocator);
     TestSerializeAndDeserialize<FP32Quantizer<metric>, metric>(
         quantizer1, quantizer2, dim, count, error);
 }
 
-TEST_CASE("serialize&deserialize [ut][fp32_quantizer]") {
+TEST_CASE("serialize&deserialize", "[ut][quantization][FP32Quantizer]") {
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
     float error = 2e-5f;

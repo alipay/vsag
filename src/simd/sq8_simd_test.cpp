@@ -48,7 +48,7 @@ namespace avx512 = avx2;
         REQUIRE(fixtures::dist_t(gt) == fixtures::dist_t(avx512));                                 \
     }
 
-TEST_CASE("SQ8 SIMD Compute Codes", "[SQ8 SIMD]") {
+TEST_CASE("SQ8 SIMD Compute Codes", "[ut][simd][SQ8]") {
     auto dims = fixtures::get_common_used_dims();
     int64_t count = 100;
     std::vector<uint8_t> vec1, vec2;
@@ -71,7 +71,7 @@ TEST_CASE("SQ8 SIMD Compute Codes", "[SQ8 SIMD]") {
     }
 }
 
-TEST_CASE("SQ8 SIMD Compute", "[SQ8 SIMD]") {
+TEST_CASE("SQ8 SIMD Compute", "[ut][simd][SQ8]") {
     auto dims = fixtures::get_common_used_dims();
     int64_t count = 100;
     for (const auto& dim : dims) {

@@ -24,19 +24,19 @@ using namespace vsag;
 
 auto block_memory_io_block_sizes = {64, 1023, 4096, 123123, 1024 * 1024};
 
-TEST_CASE("read&write [ut][memory_block_io]") {
-    auto allocator = std::make_unique<DefaultAllocator>();
+TEST_CASE("read&write", "[ut][io][memory_block_io]") {
+    auto allocator = std::make_shared<SafeAllocator>(DefaultAllocator::Instance());
     for (auto block_size : block_memory_io_block_sizes) {
-        auto io = std::make_unique<MemoryBlockIO>(allocator.get(), block_size);
+        auto io = std::make_unique<MemoryBlockIO>(allocator, block_size);
         TestBasicReadWrite(*io);
     }
 }
 
-TEST_CASE("serialize&deserialize [ut][memory_block_io]") {
-    auto allocator = std::make_unique<DefaultAllocator>();
+TEST_CASE("serialize&deserialize", "[ut][io][memory_block_io]") {
+    auto allocator = std::make_shared<SafeAllocator>(DefaultAllocator::Instance());
     for (auto block_size : block_memory_io_block_sizes) {
-        auto wio = std::make_unique<MemoryBlockIO>(allocator.get(), block_size);
-        auto rio = std::make_unique<MemoryBlockIO>(allocator.get(), block_size);
+        auto wio = std::make_unique<MemoryBlockIO>(allocator, block_size);
+        auto rio = std::make_unique<MemoryBlockIO>(allocator, block_size);
         TestSerializeAndDeserialize(*wio, *rio);
     }
 }

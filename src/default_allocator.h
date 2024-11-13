@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "logger.h"
+#include "safe_allocator.h"
 #include "vsag/allocator.h"
 
 namespace vsag {
@@ -81,8 +82,10 @@ public:
     using difference_type = ptrdiff_t;
 
     AllocatorWrapper(Allocator* allocator) {
-        this->allocator_ = allocator;
+        this->allocator_ = std::make_shared<SafeAllocator>(allocator);
     }
+
+    AllocatorWrapper(const SafeAllocatorPtr& allocator) : allocator_(allocator){};
 
     template <class U>
     AllocatorWrapper(const AllocatorWrapper<U>& other) : allocator_(other.allocator_) {
@@ -120,7 +123,7 @@ public:
         using other = AllocatorWrapper<U>;
     };
 
-    Allocator* allocator_{};
+    SafeAllocatorPtr allocator_{nullptr};
 };
 
 }  // namespace vsag

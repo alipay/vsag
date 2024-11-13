@@ -33,7 +33,7 @@ namespace avx2 = sse;
 namespace avx512 = avx2;
 #endif
 
-TEST_CASE("Normalize SIMD Compute", "[simd]") {
+TEST_CASE("Normalize SIMD Compute", "[ut][simd][Normalize]") {
     auto dims = fixtures::get_common_used_dims();
     int64_t count = 100;
     for (auto& dim : dims) {

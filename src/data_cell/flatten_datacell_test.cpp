@@ -28,81 +28,82 @@ using namespace vsag;
 
 template <typename QuantTmpl, typename IOTmpl, MetricType metric>
 void
-TestFlattenDataCell(int dim,
-                    std::shared_ptr<Allocator> allocator,
+TestFlattenDataCell(const IndexCommonParam& common_param,
                     const JsonType& quantizer_json,
                     const JsonType& io_json,
                     float error = 1e-5) {
     auto counts = {100, 1000};
-    IndexCommonParam common;
-    common.dim_ = dim;
-    common.allocator_ = allocator.get();
-    common.metric_ = metric;
     for (auto count : counts) {
-        auto flatten =
-            std::make_shared<FlattenDataCell<QuantTmpl, IOTmpl>>(quantizer_json, io_json, common);
+        auto flatten = std::make_shared<FlattenDataCell<QuantTmpl, IOTmpl>>(
+            quantizer_json, io_json, common_param);
         FlattenInterfaceTest test(flatten, metric);
-        test.BasicTest(dim, count, error);
-        auto other =
-            std::make_shared<FlattenDataCell<QuantTmpl, IOTmpl>>(quantizer_json, io_json, common);
-        test.TestSerializeAndDeserialize(dim, other, error);
+        test.BasicTest(common_param.dim_, count, error);
+        auto other = std::make_shared<FlattenDataCell<QuantTmpl, IOTmpl>>(
+            quantizer_json, io_json, common_param);
+        test.TestSerializeAndDeserialize(common_param.dim_, other, error);
     }
 }
 
 template <typename IOTmpl>
 void
-TestFlattenDataCellFP32(int dim,
-                        std::shared_ptr<Allocator> allocator,
+TestFlattenDataCellFP32(const IndexCommonParam& common_param,
                         const JsonType& quantizer_json,
                         const JsonType& io_json,
                         float error = 1e-5) {
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
     TestFlattenDataCell<FP32Quantizer<metrics[0]>, IOTmpl, metrics[0]>(
-        dim, allocator, quantizer_json, io_json, error);
+        common_param, quantizer_json, io_json, error);
     TestFlattenDataCell<FP32Quantizer<metrics[1]>, IOTmpl, metrics[1]>(
-        dim, allocator, quantizer_json, io_json, error);
+        common_param, quantizer_json, io_json, error);
     TestFlattenDataCell<FP32Quantizer<metrics[2]>, IOTmpl, metrics[2]>(
-        dim, allocator, quantizer_json, io_json, error);
+        common_param, quantizer_json, io_json, error);
 }
 
 TEST_CASE("fp32", "[ut][flatten_data_cell]") {
-    auto allocator = std::make_shared<DefaultAllocator>();
+    auto allocator = std::make_shared<SafeAllocator>(DefaultAllocator::Instance());
     auto fp32_param = JsonType::parse("{}");
     auto io_param = JsonType::parse("{}");
     auto dims = {8, 64, 512};
     float error = 1e-5;
     for (auto dim : dims) {
-        TestFlattenDataCellFP32<MemoryIO>(dim, allocator, fp32_param, io_param, error);
-        TestFlattenDataCellFP32<MemoryBlockIO>(dim, allocator, fp32_param, io_param, error);
+        IndexCommonParam common_param;
+        common_param.dim_ = dim;
+        common_param.allocator_ = allocator;
+        common_param.data_type_ = DataTypes::DATA_TYPE_FLOAT;
+        TestFlattenDataCellFP32<MemoryIO>(common_param, fp32_param, io_param, error);
+        TestFlattenDataCellFP32<MemoryBlockIO>(common_param, fp32_param, io_param, error);
     }
 }
 
 template <typename IOTmpl>
 void
-TestFlattenDataCellSQ8(int dim,
-                       std::shared_ptr<Allocator> allocator,
+TestFlattenDataCellSQ8(const IndexCommonParam& common_param,
                        const JsonType& quantizer_json,
                        const JsonType& io_json,
                        float error = 1e-5) {
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
     TestFlattenDataCell<SQ8Quantizer<metrics[0]>, IOTmpl, metrics[0]>(
-        dim, allocator, quantizer_json, io_json, error);
+        common_param, quantizer_json, io_json, error);
     TestFlattenDataCell<SQ8Quantizer<metrics[1]>, IOTmpl, metrics[1]>(
-        dim, allocator, quantizer_json, io_json, error);
+        common_param, quantizer_json, io_json, error);
     TestFlattenDataCell<SQ8Quantizer<metrics[2]>, IOTmpl, metrics[2]>(
-        dim, allocator, quantizer_json, io_json, error);
+        common_param, quantizer_json, io_json, error);
 }
 
 TEST_CASE("sq8", "[ut][flatten_data_cell]") {
-    auto allocator = std::make_shared<DefaultAllocator>();
+    auto allocator = std::make_shared<SafeAllocator>(DefaultAllocator::Instance());
     auto sq8_param = JsonType::parse("{}");
     auto io_param = JsonType::parse("{}");
     auto dims = {32, 64, 512};
     auto error = 2e-2f;
     for (auto dim : dims) {
-        TestFlattenDataCellSQ8<MemoryIO>(dim, allocator, sq8_param, io_param, error);
-        TestFlattenDataCellSQ8<MemoryBlockIO>(dim, allocator, sq8_param, io_param, error);
+        IndexCommonParam common_param;
+        common_param.dim_ = dim;
+        common_param.allocator_ = allocator;
+        common_param.data_type_ = DataTypes::DATA_TYPE_FLOAT;
+        TestFlattenDataCellSQ8<MemoryIO>(common_param, sq8_param, io_param, error);
+        TestFlattenDataCellSQ8<MemoryBlockIO>(common_param, sq8_param, io_param, error);
     }
 }

@@ -32,13 +32,13 @@ TestQuantizerEncodeDecodeMetricSQ4Uniform(uint64_t dim,
                                           int count,
                                           float error = 1e-5,
                                           float error_same = 1e-2) {
-    auto allocator = std::make_shared<DefaultAllocator>();
-    SQ4UniformQuantizer<metric> quantizer(dim, allocator.get());
+    auto allocator = std::make_shared<SafeAllocator>(DefaultAllocator::Instance());
+    SQ4UniformQuantizer<metric> quantizer(dim, allocator);
     TestQuantizerEncodeDecode(quantizer, dim, count, error);
     TestQuantizerEncodeDecodeSame(quantizer, dim, count, 15, error_same);
 }
 
-TEST_CASE("SQ4 Uniform Encode and Decode", "[ut][SQ4UniformQuantizer]") {
+TEST_CASE("SQ4 Uniform Encode and Decode", "[ut][quantization][SQ4UniformQuantizer]") {
     constexpr MetricType metrics[2] = {MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_IP};
     float error = 2 * 1.0f / 15.0f;
     for (auto dim : dims) {
@@ -53,12 +53,12 @@ TEST_CASE("SQ4 Uniform Encode and Decode", "[ut][SQ4UniformQuantizer]") {
 template <MetricType metric>
 void
 TestComputeMetricSQ4Uniform(uint64_t dim, int count, float error = 1e-5) {
-    auto allocator = std::make_shared<DefaultAllocator>();
-    SQ4UniformQuantizer<metric> quantizer(dim, allocator.get());
+    auto allocator = std::make_shared<SafeAllocator>(DefaultAllocator::Instance());
+    SQ4UniformQuantizer<metric> quantizer(dim, allocator);
     TestComputeCodesSame<SQ4UniformQuantizer<metric>, metric>(quantizer, dim, count, error);
 }
 
-TEST_CASE("compute [ut][SQ4UniformQuantizer]") {
+TEST_CASE("compute", "[ut][quantization][SQ4UniformQuantizer]") {
     constexpr MetricType metrics[2] = {MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_IP};
     float error = 4 * 1.0f / 15.0f;
     for (auto dim : dims) {

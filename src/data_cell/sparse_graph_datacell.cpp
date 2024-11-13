@@ -29,7 +29,7 @@ SparseGraphDataCell::SparseGraphDataCell(const JsonType& graph_param,
     }
 }
 
-SparseGraphDataCell::SparseGraphDataCell(Allocator* allocator, uint32_t max_degree)
+SparseGraphDataCell::SparseGraphDataCell(const SafeAllocatorPtr& allocator, uint32_t max_degree)
     : allocator_(allocator), neighbors_(allocator_) {
     this->maximum_degree_ = max_degree;
 }

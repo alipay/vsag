@@ -62,7 +62,7 @@ namespace avx512 = avx2;
         REQUIRE(fixtures::dist_t(gt) == fixtures::dist_t(avx512)); \
     }
 
-TEST_CASE("SQ4 SIMD Compute Codes", "[SQ4 SIMD]") {
+TEST_CASE("SQ4 SIMD Compute Codes", "[ut][simd][SQ4]") {
     const std::vector<uint32_t> dims = {1, 8, 16, 32, 97, 129, 256};
     int64_t count = 100;
     for (const auto& dim : dims) {
@@ -78,7 +78,7 @@ TEST_CASE("SQ4 SIMD Compute Codes", "[SQ4 SIMD]") {
     }
 }
 
-TEST_CASE("SQ4 SIMD Compute", "[SQ4 SIMD]") {
+TEST_CASE("SQ4 SIMD Compute", "[ut][simd][SQ4]") {
     const std::vector<int64_t> dims = {1, 8, 16, 32, 97, 129, 256};
     int64_t count = 100;
     for (const auto& dim : dims) {

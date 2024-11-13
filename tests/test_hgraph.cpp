@@ -17,34 +17,31 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
-#include <fstream>
-#include <iostream>
 #include <limits>
-#include <nlohmann/json.hpp>
-#include <numeric>
-#include <random>
 
 #include "simd/simd.h"
 #include "test_index.h"
-#include "vsag/errors.h"
 #include "vsag/vsag.h"
 
-TEST_CASE_METHOD(fixtures::TestIndex, "HNSW Build & ContinueAdd Test", "[ft][hnsw]") {
-    auto dims = fixtures::get_common_used_dims(3);
+TEST_CASE_METHOD(fixtures::TestIndex, "HGraph Build & ContinueAdd Test", "[ft][hgraph]") {
+    auto dims = fixtures::get_common_used_dims(2);
     auto metric_type = GENERATE("l2", "ip", "cosine");
-    const std::string name = "hnsw";
+    std::string base_quantization_str = GENERATE("sq8", "fp32");
+    const std::string name = "hgraph";
     for (auto& dim : dims) {
-        auto param = fixtures::generate_hnsw_build_parameters_string(metric_type, dim);
+        auto param = fixtures::generate_hgraph_build_parameters_string(
+            metric_type, dim, base_quantization_str);
         auto index = TestFactory(name, param, true);
         TestBuildIndex(index, dim);
         TestContinueAdd(index, dim);
     }
 }
 
-TEST_CASE_METHOD(fixtures::TestIndex, "HNSW Float General Test", "[ft][hnsw]") {
-    auto dims = fixtures::get_common_used_dims(3);
+TEST_CASE_METHOD(fixtures::TestIndex, "HGraph Float General Test", "[ft][hgraph]") {
+    auto dims = fixtures::get_common_used_dims(2);
     auto metric_type = GENERATE("l2", "ip", "cosine");
-    const std::string name = "hnsw";
+    std::string base_quantization_str = GENERATE("sq8", "fp32");
+    const std::string name = "hgraph";
     auto search_parameters = R"(
     {
         "hnsw": {
@@ -53,13 +50,14 @@ TEST_CASE_METHOD(fixtures::TestIndex, "HNSW Float General Test", "[ft][hnsw]") {
     }
     )";
     for (auto& dim : dims) {
-        auto build_param = fixtures::generate_hnsw_build_parameters_string(metric_type, dim);
+        auto build_param = fixtures::generate_hgraph_build_parameters_string(
+            metric_type, dim, base_quantization_str);
         FastGeneralTest(name, build_param, search_parameters, metric_type, dim);
     }
 }
 
-TEST_CASE_METHOD(fixtures::TestIndex, "HNSW Factory Test With Exceptions", "[ft][hnsw]") {
-    auto name = "hnsw";
+TEST_CASE_METHOD(fixtures::TestIndex, "HGraph Factory Test With Exceptions", "[ft][hgraph]") {
+    auto name = "hgraph";
     SECTION("Empty parameters") {
         auto param = "{}";
         REQUIRE_THROWS(TestFactory(name, param, false));
@@ -67,14 +65,13 @@ TEST_CASE_METHOD(fixtures::TestIndex, "HNSW Factory Test With Exceptions", "[ft]
 
     SECTION("No dim param") {
         auto param = R"(
-        {
+        {{
             "dtype": "float32",
             "metric_type": "l2",
-            "hnsw": {
-                "max_degree": 64,
-                "ef_construction": 500
-            }
-        })";
+            "index_param": {{
+                "base_quantization_type": "sq8"
+            }}
+        }})";
         REQUIRE_THROWS(TestFactory(name, param, false));
     }
 
@@ -85,9 +82,8 @@ TEST_CASE_METHOD(fixtures::TestIndex, "HNSW Factory Test With Exceptions", "[ft]
             "dtype": "float32",
             "metric_type": "{}",
             "dim": 23,
-            "hnsw": {{
-                "max_degree": 64,
-                "ef_construction": 500
+            "index_param": {{
+                "base_quantization_type": "sq8"
             }}
         }})";
         auto param = fmt::format(param_tmp, metric);
@@ -95,127 +91,100 @@ TEST_CASE_METHOD(fixtures::TestIndex, "HNSW Factory Test With Exceptions", "[ft]
     }
 
     SECTION("Invalid datatype param") {
-        auto datatype = GENERATE("fp32", "uint8_t", "binary", "", "float");
+        auto datatype = GENERATE("fp32", "uint8_t", "binary", "", "float", "int8");
         constexpr const char* param_tmp = R"(
         {{
             "dtype": "{}",
             "metric_type": "l2",
             "dim": 23,
-            "hnsw": {{
-                "max_degree": 64,
-                "ef_construction": 500
+            "index_param": {{
+                "base_quantization_type": "sq8"
             }}
         }})";
         auto param = fmt::format(param_tmp, datatype);
         REQUIRE_THROWS(TestFactory(name, param, false));
     }
-    // TODO(lht)dim check
-    /*
+
     SECTION("Invalid dim param") {
-        auto dim = GENERATE(-1, std::numeric_limits<uint64_t>::max(), 0, 8.6);
-        auto param_tmp = R"(
+        int dim = GENERATE(-1, 231231, 0);
+        constexpr const char* param_tmp = R"(
         {{
             "dtype": "float32",
             "metric_type": "l2",
             "dim": {},
-            "hnsw": {{
-                "max_degree": 64,
-                "ef_construction": 500
+            "index_param": {{
+                "base_quantization_type": "sq8"
             }}
         }})";
         auto param = fmt::format(param_tmp, dim);
         REQUIRE_THROWS(TestFactory(name, param, false));
+        auto float_param = R"(
+        {
+            "dtype": "float32",
+            "metric_type": "l2",
+            "dim": 3.51,
+            "index_param": {
+                "base_quantization_type": "sq8"
+            }
+        })";
+        REQUIRE_THROWS(TestFactory(name, float_param, false));
     }
-    */
 
-    SECTION("Miss hnsw param") {
+    SECTION("Miss hgraph param") {
         auto param = GENERATE(
             R"({{
                 "dtype": "float32",
                 "metric_type": "l2",
                 "dim": 35,
-                "hnsw": {{
-                    "ef_construction": 500
+                "index_param": {{
                 }}
             }})",
             R"({{
                 "dtype": "float32",
                 "metric_type": "l2",
-                "dim": 35,
-                "hnsw": {{
-                    "max_degree": 64,
-                }}
+                "dim": 35
             }})");
         REQUIRE_THROWS(TestFactory(name, param, false));
     }
 
-    SECTION("Invalid hnsw param max_degree") {
-        auto max_degree = GENERATE(-1, 0, 256, 3);
+    SECTION("Invalid hgraph param base_quantization_type") {
+        auto base_quantization_types = GENERATE("pq", "fsa", "sq8_uniform");
         // TODO(LHT): test for float param
         constexpr const char* param_temp =
             R"({{
                 "dtype": "float32",
                 "metric_type": "l2",
                 "dim": 35,
-                "hnsw": {{
-                    "max_degree": {},
-                    "ef_construction": 500
+                "index_param": {{
+                    "base_quantization_type": "{}"
                 }}
             }})";
-        auto param = fmt::format(param_temp, max_degree);
+        auto param = fmt::format(param_temp, base_quantization_types);
         REQUIRE_THROWS(TestFactory(name, param, false));
-    }
-
-    SECTION("Invalid hnsw param ef_construction") {
-        auto ef_construction = GENERATE(-1, 0, 100000, 31);
-        // TODO(LHT): test for float param
-        constexpr const char* param_temp =
-            R"({{
-                "dtype": "float32",
-                "metric_type": "l2",
-                "dim": 35,
-                "hnsw": {{
-                    "max_degree": 32,
-                    "ef_construction": {}
-                }}
-            }})";
-        auto param = fmt::format(param_temp, ef_construction);
-        REQUIRE_THROWS(TestFactory(name, param, false));
-    }
-
-    SECTION("No match name and parameters") {
-        auto new_name = GENERATE("diskann", "hgraph", "hsnw", "", "hnswlib");
-        auto param =
-            R"({{
-                "dtype": "float32",
-                "metric_type": "l2",
-                "dim": 135,
-                "hnsw": {{
-                    "max_degree": 32,
-                    "ef_construction": 500
-                }}
-            }})";
-        REQUIRE_THROWS(TestFactory(new_name, param, false));
     }
 
     SECTION("Success") {
-        auto dims = fixtures::get_common_used_dims(3);
+        auto dims = fixtures::get_common_used_dims(2);
         auto metric_type = GENERATE("l2", "ip", "cosine");
+        std::string base_quantization_str = GENERATE("sq8", "fp32");
         for (auto& dim : dims) {
-            auto build_param = fixtures::generate_hnsw_build_parameters_string(metric_type, dim);
+            auto build_param = fixtures::generate_hgraph_build_parameters_string(
+                metric_type, dim, base_quantization_str);
             auto index = TestFactory(name, build_param, true);
             std::string metric = metric_type;
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(
+                dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             SaveIndex(key, index, IndexStatus::Factory);
         }
     }
 }
 
-TEST_CASE_METHOD(fixtures::TestIndex, "HNSW Build & Add Test With Exceptions", "[ft][hnsw]") {
+TEST_CASE_METHOD(fixtures::TestIndex, "HGraph Build & Add Test With Exceptions", "[ft][hgraph]") {
     vsag::Options::Instance().logger()->SetLevel(vsag::Logger::Level::kINFO);
-    auto dims = fixtures::get_common_used_dims(3);
+    auto dims = fixtures::get_common_used_dims(2);
     auto metric_type = GENERATE("l2", "ip", "cosine");
-    const std::string name = "hnsw";
+    std::string base_quantization_str = GENERATE("sq8", "fp32");
+    const std::string name = "hgraph";
     std::string metric = metric_type;
     auto search_parameters = R"(
     {
@@ -225,10 +194,12 @@ TEST_CASE_METHOD(fixtures::TestIndex, "HNSW Build & Add Test With Exceptions", "
     }
     )";
     for (auto& dim : dims) {
-        auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+        auto key =
+            KeyGenIndex(dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
         auto [index, status] = LoadIndex(key);
         if (index == nullptr || status != IndexStatus::Factory) {
-            auto build_param = fixtures::generate_hnsw_build_parameters_string(metric_type, dim);
+            auto build_param = fixtures::generate_hgraph_build_parameters_string(
+                metric_type, dim, base_quantization_str);
             index = FastGeneralTest(
                 name, build_param, search_parameters, metric_type, dim, IndexStatus::Factory);
             SaveIndex(key, index, IndexStatus::Factory);
@@ -238,7 +209,8 @@ TEST_CASE_METHOD(fixtures::TestIndex, "HNSW Build & Add Test With Exceptions", "
     SECTION("Invalid dim for build") {
         auto incorrect_dim = GENERATE(-1, 20, 32131);
         for (auto& dim : dims) {
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(
+                dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto [index, status] = LoadIndex(key);
             std::vector<int64_t> ids(1);
             std::vector<float> vectors(dim);
@@ -259,7 +231,8 @@ TEST_CASE_METHOD(fixtures::TestIndex, "HNSW Build & Add Test With Exceptions", "
     SECTION("Invalid dim for add") {
         auto incorrect_dim = GENERATE(-1, 20, 32131);
         for (auto& dim : dims) {
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(
+                dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto [index, status] = LoadIndex(key);
             std::vector<int64_t> ids(1);
             std::vector<float> vectors(dim);
@@ -276,11 +249,11 @@ TEST_CASE_METHOD(fixtures::TestIndex, "HNSW Build & Add Test With Exceptions", "
             TestAddIndex(index, dataset, false);
         }
     }
-    // TODO(LHT): bugfix
-    /*
+
     SECTION("Invalid data=nullptr for build & add") {
         for (auto& dim : dims) {
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(
+                dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto [index, status] = LoadIndex(key);
             std::vector<int64_t> ids(1);
             auto dataset = vsag::Dataset::Make();
@@ -293,12 +266,12 @@ TEST_CASE_METHOD(fixtures::TestIndex, "HNSW Build & Add Test With Exceptions", "
             TestBuildIndex(index, dataset, false);
         }
     }
-     */
+
     // TODO(LHT): bugfix
     /*
     SECTION("Invalid data is short for build & add") {
         for (auto& dim : dims) {
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto [index, status] = LoadIndex(key);
             std::vector<int64_t> ids(3);
             std::vector<float> base(2 * dim);
@@ -318,7 +291,7 @@ TEST_CASE_METHOD(fixtures::TestIndex, "HNSW Build & Add Test With Exceptions", "
     /*
     SECTION("Invalid id=nullptr for build & add") {
         for (auto& dim : dims) {
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto [index, status] = LoadIndex(key);
             std::vector<float> vectors(dim);
             auto dataset = vsag::Dataset::Make();
@@ -336,7 +309,7 @@ TEST_CASE_METHOD(fixtures::TestIndex, "HNSW Build & Add Test With Exceptions", "
     /*
     SECTION("Invalid id is short for build & add") {
         for (auto& dim : dims) {
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto [index, status] = LoadIndex(key);
             std::vector<int64_t> ids(2);
             std::vector<float> base(3 * dim);
@@ -353,7 +326,8 @@ TEST_CASE_METHOD(fixtures::TestIndex, "HNSW Build & Add Test With Exceptions", "
      */
     SECTION("Success") {
         for (auto& dim : dims) {
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(
+                dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto [index, status] = LoadIndex(key);
             vsag::Options::Instance().logger()->Info(fmt::format("dim={}, metric={}", dim, metric));
             TestAddIndex(index, dim, true);
@@ -363,12 +337,13 @@ TEST_CASE_METHOD(fixtures::TestIndex, "HNSW Build & Add Test With Exceptions", "
 }
 
 TEST_CASE_METHOD(fixtures::TestIndex,
-                 "HNSW KnnSearch & RangeSearch Test With Exceptions",
-                 "[ft][hnsw]") {
+                 "HGraph KnnSearch & RangeSearch Test With Exceptions",
+                 "[ft][hgraph]") {
     vsag::Options::Instance().logger()->SetLevel(vsag::Logger::Level::kINFO);
-    auto dims = fixtures::get_common_used_dims(3);
+    auto dims = fixtures::get_common_used_dims(2);
     auto metric_type = GENERATE("l2", "ip", "cosine");
-    const std::string name = "hnsw";
+    std::string base_quantization_str = GENERATE("sq8", "fp32");
+    const std::string name = "hgraph";
     std::string metric = metric_type;
     auto search_parameters = R"(
     {
@@ -382,10 +357,12 @@ TEST_CASE_METHOD(fixtures::TestIndex,
     float recall = 0.99;
 
     for (auto& dim : dims) {
-        auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+        auto key =
+            KeyGenIndex(dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
         auto [index, status] = LoadIndex(key);
         if (index == nullptr || status != IndexStatus::Build) {
-            auto build_param = fixtures::generate_hnsw_build_parameters_string(metric_type, dim);
+            auto build_param = fixtures::generate_hgraph_build_parameters_string(
+                metric_type, dim, base_quantization_str);
             index = FastGeneralTest(
                 name, build_param, search_parameters, metric_type, dim, IndexStatus::Build);
             SaveIndex(key, index, IndexStatus::Build);
@@ -406,7 +383,8 @@ TEST_CASE_METHOD(fixtures::TestIndex,
                                         }
                                     })");
         for (auto& dim : dims) {
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(
+                dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto dataset_key = KeyGen(dim, dataset_base_count);
             auto [index, status] = LoadIndex(key);
             TestKnnSearch(index, GetDataset(dataset_key), new_param, top_k, recall, false);
@@ -424,7 +402,8 @@ TEST_CASE_METHOD(fixtures::TestIndex,
             }})";
         auto new_param = fmt::format(param_temp, ef_search);
         for (auto& dim : dims) {
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(
+                dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto dataset_key = KeyGen(dim, dataset_base_count);
             auto [index, status] = LoadIndex(key);
             TestKnnSearch(index, GetDataset(dataset_key), new_param, top_k, recall, false);
@@ -435,7 +414,8 @@ TEST_CASE_METHOD(fixtures::TestIndex,
     SECTION("Invalid topk value for knn search") {
         auto topk = GENERATE(-1, 0, -100);
         for (auto& dim : dims) {
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(
+                dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto dataset_key = KeyGen(dim, dataset_base_count);
             auto [index, status] = LoadIndex(key);
             TestKnnSearch(index, GetDataset(dataset_key), search_parameters, topk, recall, false);
@@ -445,7 +425,8 @@ TEST_CASE_METHOD(fixtures::TestIndex,
     SECTION("Invalid radius value for range search") {
         float radius = GENERATE(-1, -100);
         for (auto& dim : dims) {
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(
+                dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto dataset_key = KeyGen(dim, dataset_base_count);
             auto [index, status] = LoadIndex(key);
             TestRangeSearch(
@@ -456,7 +437,8 @@ TEST_CASE_METHOD(fixtures::TestIndex,
     SECTION("Invalid query dataset for search (Invalid query dim)") {
         auto incorrect_dim = GENERATE(-1, 20, 32131);
         for (auto& dim : dims) {
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(
+                dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto dataset_key = KeyGen(dim, dataset_base_count);
             auto [index, status] = LoadIndex(key);
 
@@ -483,7 +465,7 @@ TEST_CASE_METHOD(fixtures::TestIndex,
     /*
     SECTION("Invalid query dataset for search (Invalid query=nullptr)") {
         for (auto& dim : dims) {
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto [index, status] = LoadIndex(key);
             std::vector<int64_t> ids(1);
             auto dataset = vsag::Dataset::Make();
@@ -503,7 +485,7 @@ TEST_CASE_METHOD(fixtures::TestIndex,
     /*
     SECTION("Invalid query dataset for search (query is shorter than dim)") {
         for (auto& dim : dims) {
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto [index, status] = LoadIndex(key);
             std::vector<float> query(dim - 1);
             auto dataset = vsag::Dataset::Make();
@@ -523,7 +505,8 @@ TEST_CASE_METHOD(fixtures::TestIndex,
     SECTION("Invalid query dataset for search (query counts != 1)") {
         auto elements = GENERATE(3, 10, -1, 0);
         for (auto& dim : dims) {
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(
+                dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto [index, status] = LoadIndex(key);
             std::vector<float> query(dim);
             auto dataset = vsag::Dataset::Make();
@@ -543,7 +526,8 @@ TEST_CASE_METHOD(fixtures::TestIndex,
         float new_range = 1000;
         auto limited_size = GENERATE(3, 10, -1, -1000);
         for (auto& dim : dims) {
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(
+                dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto dataset_key = KeyGen(dim, dataset_base_count);
             auto [index, status] = LoadIndex(key);
             TestRangeSearch(index,
@@ -559,7 +543,8 @@ TEST_CASE_METHOD(fixtures::TestIndex,
     SECTION("Invalid limited_size for range search") {
         auto limited_size = GENERATE(0);
         for (auto& dim : dims) {
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto key = KeyGenIndex(
+                dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto dataset_key = KeyGen(dim, dataset_base_count);
             auto [index, status] = LoadIndex(key);
             TestRangeSearch(index,
@@ -574,12 +559,13 @@ TEST_CASE_METHOD(fixtures::TestIndex,
 }
 
 TEST_CASE_METHOD(fixtures::TestIndex,
-                 "HNSW Serialize & Deserialize Test With Exceptions",
-                 "[ft][hnsw]") {
+                 "HGraph Serialize & Deserialize Test With Exceptions",
+                 "[ft][hgraph]") {
     vsag::Options::Instance().logger()->SetLevel(vsag::Logger::Level::kINFO);
-    auto dims = fixtures::get_common_used_dims(3);
+    auto dims = fixtures::get_common_used_dims(2);
     auto metric_type = GENERATE("l2", "ip", "cosine");
-    const std::string name = "hnsw";
+    std::string base_quantization_str = GENERATE("sq8", "fp32");
+    const std::string name = "hgraph";
     std::string metric = metric_type;
     auto search_parameters = R"(
     {
@@ -589,10 +575,12 @@ TEST_CASE_METHOD(fixtures::TestIndex,
     })";
 
     for (auto& dim : dims) {
-        auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+        auto key =
+            KeyGenIndex(dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
         auto [index, status] = LoadIndex(key);
         if (index == nullptr || status != IndexStatus::Build) {
-            auto build_param = fixtures::generate_hnsw_build_parameters_string(metric_type, dim);
+            auto build_param = fixtures::generate_hgraph_build_parameters_string(
+                metric_type, dim, base_quantization_str);
             index = FastGeneralTest(
                 name, build_param, search_parameters, metric_type, dim, IndexStatus::Build);
             SaveIndex(key, index, IndexStatus::Build);
@@ -603,8 +591,8 @@ TEST_CASE_METHOD(fixtures::TestIndex,
     SECTION("Invalid file for Serialize & Deserialize (shorter file)") {
         fixtures::TempDir dir("hnsw");
         for (auto& dim : dims) {
-            auto build_param = fixtures::generate_hnsw_build_parameters_string(metric_type, dim);
-            auto key = KeyGenIndex(dim, dataset_base_count, "hnsw_" + metric);
+            auto build_param = fixtures::generate_hgraph_build_parameters_string(metric_type, dim);
+            auto key = KeyGenIndex(dim, dataset_base_count, "hgraph_" + metric + "_" + base_quantization_str);
             auto dataset_key = KeyGen(dim, dataset_base_count);
             auto [index, status] = LoadIndex(key);
             auto filename = dir.GenerateRandomFile();
@@ -619,7 +607,7 @@ TEST_CASE_METHOD(fixtures::TestIndex,
 }
 /*
 
-TEST_CASE("HNSW Filtering Test", "[ft][hnsw]") {
+TEST_CASE("HGraph Filtering Test", "[ft][hgraph]") {
     spdlog::set_level(spdlog::level::debug);
 
     int dim = 17;
@@ -758,7 +746,7 @@ TEST_CASE("HNSW Filtering Test", "[ft][hnsw]") {
     REQUIRE(recall_knn == 1);
 }
 
-TEST_CASE("HNSW small dimension", "[ft][hnsw]") {
+TEST_CASE("HGraph small dimension", "[ft][hgraph]") {
     spdlog::set_level(spdlog::level::debug);
 
     int dim = 3;
@@ -821,7 +809,7 @@ TEST_CASE("HNSW small dimension", "[ft][hnsw]") {
     REQUIRE(recall == 1);
 }
 
-TEST_CASE("HNSW Random Id", "[ft][hnsw]") {
+TEST_CASE("HGraph Random Id", "[ft][hgraph]") {
     spdlog::set_level(spdlog::level::debug);
 
     int dim = 128;
@@ -904,7 +892,7 @@ TEST_CASE("HNSW Random Id", "[ft][hnsw]") {
     REQUIRE(recall == 1);
 }
 
-TEST_CASE("pq infer knn search time recall", "[ft][hnsw]") {
+TEST_CASE("pq infer knn search time recall", "[ft][hgraph]") {
     spdlog::set_level(spdlog::level::debug);
 
     int dim = 128;
@@ -966,7 +954,7 @@ TEST_CASE("pq infer knn search time recall", "[ft][hnsw]") {
     REQUIRE(recall == 1);
 }
 
-TEST_CASE("hnsw serialize", "[ft][hnsw]") {
+TEST_CASE("hnsw serialize", "[ft][hgraph]") {
     spdlog::set_level(spdlog::level::debug);
 
     int dim = 128;
@@ -1090,7 +1078,7 @@ TEST_CASE("hnsw serialize", "[ft][hnsw]") {
             index.has_value()) {
             hnsw = index.value();
         } else {
-            std::cout << "Build HNSW Error" << std::endl;
+            std::cout << "Build HGraph Error" << std::endl;
             return;
         }
         hnsw->Deserialize(bs);
@@ -1143,7 +1131,7 @@ TEST_CASE("hnsw serialize", "[ft][hnsw]") {
             index.has_value()) {
             hnsw = index.value();
         } else {
-            std::cout << "Build HNSW Error" << std::endl;
+            std::cout << "Build HGraph Error" << std::endl;
             return;
         }
         hnsw->Deserialize(rs);

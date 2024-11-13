@@ -44,7 +44,7 @@ public:
         Init = 0,
         Factory = 1,
         Build = 2,
-        DeSerialize = 3,
+        Deserialize = 3,
     };
 
     TestIndex() {
@@ -58,7 +58,7 @@ protected:
                     const std::string& search_parameters,
                     const std::string& metric_type,
                     int64_t dim,
-                    IndexStatus end_status = IndexStatus::DeSerialize);
+                    IndexStatus end_status = IndexStatus::Deserialize);
 
     static IndexPtr
     TestFactory(const std::string& name,

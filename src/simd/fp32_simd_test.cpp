@@ -44,7 +44,7 @@ namespace avx512 = avx2;
         REQUIRE(fixtures::dist_t(gt) == fixtures::dist_t(avx512));                     \
     };
 
-TEST_CASE("FP32 SIMD Compute", "[FP32SIMD]") {
+TEST_CASE("FP32 SIMD Compute", "[ut][simd][FP32SIMD]") {
     const std::vector<int64_t> dims = {1, 8, 16, 32, 256};
     int64_t count = 100;
     for (const auto& dim : dims) {
@@ -65,7 +65,7 @@ TEST_CASE("FP32 SIMD Compute", "[FP32SIMD]") {
         return;                                                            \
     }
 
-TEST_CASE("FP32 benchmark", "[simd][!benchmark]") {
+TEST_CASE("FP32 benchmark", "[ut][simd][!benchmark]") {
     int64_t count = 500;
     int64_t dim = 128;
     auto vec1 = fixtures::generate_vectors(count * 2, dim);

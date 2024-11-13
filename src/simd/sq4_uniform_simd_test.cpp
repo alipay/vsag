@@ -48,7 +48,7 @@ namespace avx512 = avx2;
         REQUIRE(fixtures::dist_t(gt) == fixtures::dist_t(avx512));                                 \
     }
 
-TEST_CASE("SQ4 Uniform SIMD Compute Codes", "[SQ4 Uniform SIMD]") {
+TEST_CASE("SQ4 Uniform SIMD Compute Codes", "[ut][simd][SQ4Uniform]") {
     auto dims = fixtures::get_common_used_dims();
     int64_t count = 100;
     for (const auto& dim : dims) {
@@ -69,7 +69,7 @@ TEST_CASE("SQ4 Uniform SIMD Compute Codes", "[SQ4 Uniform SIMD]") {
         return;                                                                            \
     }
 
-TEST_CASE("SQ4 Uniform SIMD Compute Benchmark", "[simd][!benchmark]") {
+TEST_CASE("SQ4 Uniform SIMD Compute Benchmark", "[ut][simd][SQ4Uniform]") {
     int64_t count = 100;
     int64_t dim = 256;
     uint32_t code_size = (dim + 1) / 2;

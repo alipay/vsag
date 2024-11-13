@@ -70,4 +70,6 @@ private:
     std::shared_ptr<Allocator> owned_allocator_ = nullptr;
 };
 
+using SafeAllocatorPtr = std::shared_ptr<SafeAllocator>;
+
 }  // namespace vsag

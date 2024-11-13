@@ -31,6 +31,8 @@ protected:
     ComputerInterface() = default;
 };
 
+using ComputerInterfacePtr = std::shared_ptr<ComputerInterface>;
+
 template <typename T>
 class Computer : public ComputerInterface {
 public:

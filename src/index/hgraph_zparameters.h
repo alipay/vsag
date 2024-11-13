@@ -29,7 +29,7 @@ public:
     ParseStringParam(const std::string& str);
 
     void
-    CheckAndSetKeyValue(const std::string& key, nlohmann::json& value);
+    CheckAndSetKeyValue(const std::string& key, JsonType& value);
 
     std::string
     GetString() {
@@ -37,7 +37,7 @@ public:
         return this->str_;
     }
 
-    nlohmann::json
+    JsonType
     GetJson() {
         this->refresh_json_by_string();
         return this->json_;
@@ -46,7 +46,7 @@ public:
 private:
     inline void
     refresh_json_by_string() {
-        this->json_ = nlohmann::json::parse(str_);
+        this->json_ = JsonType::parse(str_);
     }
 
     inline void
@@ -54,8 +54,11 @@ private:
         this->str_ = this->json_.dump();
     }
 
+    void
+    check_common_param() const;
+
 private:
-    nlohmann::json json_;
+    JsonType json_;
 
     std::string str_{DEFAULT_HGRAPH_PARAMS};
 

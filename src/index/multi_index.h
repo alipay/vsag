@@ -20,6 +20,7 @@
 #include "safe_allocator.h"
 #include "vsag/factory.h"
 #include "vsag/index.h"
+#include "dataset_impl.h"
 
 namespace vsag {
 
@@ -70,6 +71,7 @@ public:
     tl::expected<std::vector<int64_t>, Error>
     Build(const DatasetPtr& base) override {
         std::vector<int64_t> failed_ids;
+        auto all_tags = std::reinterpret_pointer_cast<DatasetImpl*>(base.get())->G();
         auto tags = base->GetTags();
         int64_t data_num = base->GetNumElements();
         int64_t data_dim = base->GetDim();

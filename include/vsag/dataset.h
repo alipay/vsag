@@ -76,10 +76,10 @@ public:
     GetFloat32Vectors() const = 0;
 
     virtual DatasetPtr
-    Tags(const int64_t* tags) = 0;
+    Tags(std::string tag_name, const int64_t* tags) = 0;
 
-    virtual const int64_t*
-    GetTags() const = 0;
+    virtual DatasetPtr
+    Tags(std::string tag_name, const std::string* tags) = 0;
 };
 
 };  // namespace vsag

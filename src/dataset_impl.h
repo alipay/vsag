@@ -30,7 +30,7 @@
 namespace vsag {
 
 class DatasetImpl : public Dataset {
-    using var = std::variant<int64_t, const float*, const int8_t*, const int64_t*>;
+    using var = std::variant<int64_t, const float*, const int8_t*, const int64_t*, const std::string*>;
 
 public:
     DatasetImpl() = default;
@@ -45,13 +45,28 @@ public:
             allocator_->Deallocate((void*)this->GetDistances());
             allocator_->Deallocate((void*)this->GetInt8Vectors());
             allocator_->Deallocate((void*)this->GetFloat32Vectors());
-            allocator_->Deallocate((void*)this->GetTags());
         } else {
             delete[] this->GetIds();
             delete[] this->GetDistances();
             delete[] this->GetInt8Vectors();
             delete[] this->GetFloat32Vectors();
-            delete[] this->GetTags();
+        }
+
+        for (auto& [key, value] : tags_) {
+            std::visit([&](auto&& arg) {
+                using T = std::decay_t<decltype(arg)>;
+                if constexpr (std::is_same_v<T, const float*> ||
+                              std::is_same_v<T, const int8_t*> ||
+                              std::is_same_v<T, const int64_t*> ||
+                              std::is_same_v<T, const std::string*>) {
+                    delete[] arg; // 假设这些是动态分配的数组
+                    if (this->allocator_) {
+                        allocator_->Deallocate((void *)arg);
+                    } else {
+                        delete[] arg;
+                    }
+                }
+            }, value);
         }
     }
 
@@ -165,22 +180,27 @@ public:
     }
 
     DatasetPtr
-    Tags(const int64_t* tags) override {
-        this->data_[DATAKEY_TAGS] = tags;
+    Tags(std::string tag_name, const int64_t* tags) override {
+        tags_[tag_name] = tags;
         return shared_from_this();
     }
 
-    const int64_t*
-    GetTags() const override {
-        if (auto iter = this->data_.find(DATAKEY_TAGS); iter != this->data_.end()) {
-            return std::get<const int64_t*>(iter->second);
-        }
-        return nullptr;
+    DatasetPtr
+    Tags(std::string tag_name, const std::string* tags) override {
+        tags_[tag_name] = tags;
+        return shared_from_this();
+    }
+
+    const std::unordered_map<std::string, var> &
+    GetTags() const {
+        return tags_;
     }
 
 private:
+
     bool owner_ = true;
     std::unordered_map<std::string, var> data_;
+    std::unordered_map<std::string, var> tags_;
     Allocator* allocator_ = nullptr;
 };
 

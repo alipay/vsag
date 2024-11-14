@@ -61,8 +61,6 @@ HierarchicalNSW::HierarchicalNSW(SpaceInterface* s,
 
     cur_element_count_ = 0;
 
-    visited_list_pool_ = std::make_shared<VisitedListPool>(1, max_elements, allocator_);
-
     // initializations for special treatment of the first node
     enterpoint_node_ = -1;
     max_level_ = -1;
@@ -73,6 +71,11 @@ HierarchicalNSW::HierarchicalNSW(SpaceInterface* s,
 
 void
 HierarchicalNSW::reset() {
+    if (visited_list_pool_) {
+        visited_list_pool_->~VisitedListPool();
+        allocator_->Deallocate(visited_list_pool_);
+        visited_list_pool_ = nullptr;
+    }
     allocator_->Deallocate(element_levels_);
     element_levels_ = nullptr;
     allocator_->Deallocate(reversed_level0_link_list_);
@@ -89,6 +92,12 @@ bool
 HierarchicalNSW::init_memory_space() {
     // release the memory allocated by the init_memory_space function that was called earlier
     reset();
+    auto visited_list_mem = allocator_->Allocate(sizeof(VisitedListPool));
+    if (not visited_list_mem) {
+        throw std::runtime_error("allocate visited_list_mem error");
+    }
+    visited_list_pool_ = new(visited_list_mem) VisitedListPool(1, max_elements_, allocator_);
+
     element_levels_ = (int*)allocator_->Allocate(max_elements_ * sizeof(int));
     if (not data_level0_memory_->Resize(max_elements_)) {
         throw std::runtime_error("allocate data_level0_memory_ error");
@@ -704,8 +713,8 @@ HierarchicalNSW::resizeIndex(size_t new_max_elements) {
     if (new_max_elements < cur_element_count_)
         throw std::runtime_error(
             "Cannot Resize, max element is less than the current number of elements");
-
-    visited_list_pool_.reset(new VisitedListPool(1, new_max_elements, allocator_));
+    visited_list_pool_->~VisitedListPool();
+    visited_list_pool_ = new (visited_list_pool_)VisitedListPool(1, new_max_elements, allocator_);
 
     auto element_levels_new =
         (int*)allocator_->Reallocate(element_levels_, new_max_elements * sizeof(int));

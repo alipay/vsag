@@ -20,7 +20,7 @@ jobs:
   pull-request-check:
     docker:
       - image: vsaglib/vsag:ubuntu
-    resource_class: medium
+    resource_class: medium+
     steps:
       - checkout
       - run: ./scripts/check_format.sh
@@ -32,20 +32,21 @@ jobs:
           key: fork-cache-{{ checksum "CMakeLists.txt" }}
           paths:
             - ./build
-      - run: make test_asan
+      - run: make test_asan_parallel
 
   main-branch-check:
     docker:
       - image: vsaglib/vsag:ubuntu
-    resource_class: medium
+    resource_class: medium+
     steps:
       - checkout
       - run: ./scripts/check_format.sh
       - restore_cache:
           keys:
             - main-ccache-{{ checksum "CMakeLists.txt" }}
-      - run: make test_asan
+      - run: make asan
       - save_cache:
           key: main-ccache-{{ checksum "CMakeLists.txt" }}
           paths:
             - ./build
+      - run: make test_asan_parallel

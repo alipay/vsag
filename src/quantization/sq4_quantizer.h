@@ -19,8 +19,11 @@
 #include <limits>
 #include <vector>
 
+#include "index/index_common_param.h"
 #include "quantizer.h"
+#include "simd/normalize.h"
 #include "simd/sq4_simd.h"
+#include "typing.h"
 
 namespace vsag {
 
@@ -28,6 +31,9 @@ template <MetricType metric = MetricType::METRIC_TYPE_L2SQR>
 class SQ4Quantizer : public Quantizer<SQ4Quantizer<metric>> {
 public:
     explicit SQ4Quantizer(int dim, Allocator* allocator);
+
+    explicit SQ4Quantizer(const nlohmann::json& quantization_param,
+                          const IndexCommonParam& common_param);
 
     bool
     TrainImpl(const DataType* data, uint64_t count);
@@ -56,6 +62,12 @@ public:
     inline void
     ReleaseComputerImpl(Computer<SQ4Quantizer<metric>>& computer) const;
 
+    inline void
+    SerializeImpl(StreamWriter& writer);
+
+    inline void
+    DeserializeImpl(StreamReader& reader);
+
 private:
     std::vector<DataType> lower_bound_{};
     std::vector<DataType> diff_{};
@@ -70,6 +82,11 @@ SQ4Quantizer<metric>::SQ4Quantizer(int dim, Allocator* allocator)
 }
 
 template <MetricType metric>
+SQ4Quantizer<metric>::SQ4Quantizer(const nlohmann::json& quantization_param,
+                                   const IndexCommonParam& common_param)
+    : SQ4Quantizer<metric>(common_param.dim_, common_param.allocator_){};
+
+template <MetricType metric>
 bool
 SQ4Quantizer<metric>::TrainImpl(const DataType* data, uint64_t count) {
     if (data == nullptr) {
@@ -79,9 +96,23 @@ SQ4Quantizer<metric>::TrainImpl(const DataType* data, uint64_t count) {
     std::fill(lower_bound_.begin(), lower_bound_.end(), std::numeric_limits<DataType>::max());
     std::fill(diff_.begin(), diff_.end(), std::numeric_limits<DataType>::lowest());
 
-    for (uint64_t i = 0; i < count; i++) {
-        for (uint64_t d = 0; d < this->dim_; d++) {
+    Vector<float> norms(this->allocator_);
+    if constexpr (metric == MetricType::METRIC_TYPE_COSINE) {
+        norms.resize(count);
+        Vector<float> tmp(this->dim_, this->allocator_);
+        for (uint64_t i = 0; i < count; ++i) {
+            norms[i] = Normalize(data + i * this->dim_, tmp.data(), this->dim_);
+        }
+    }
+
+    for (uint64_t d = 0; d < this->dim_; d++) {
+        for (uint64_t i = 0; i < count; i++) {
             auto val = data[i * this->dim_ + d];
+            if constexpr (metric == MetricType::METRIC_TYPE_COSINE) {
+                if (norms[i] != 0) {
+                    val /= norms[i];
+                }
+            }
             if (val > diff_[d]) {
                 diff_[d] = val;
             }
@@ -107,9 +138,15 @@ bool
 SQ4Quantizer<metric>::EncodeOneImpl(const DataType* data, uint8_t* codes) const {
     float delta = 0;
     uint8_t scaled = 0;
-
+    const DataType* cur = data;
+    Vector<float> tmp(this->allocator_);
+    if constexpr (metric == MetricType::METRIC_TYPE_COSINE) {
+        tmp.resize(this->dim_);
+        Normalize(data, tmp.data(), this->dim_);
+        cur = tmp.data();
+    }
     for (uint64_t d = 0; d < this->dim_; d++) {
-        delta = 1.0f * (data[d] - lower_bound_[d]) / diff_[d];
+        delta = 1.0f * (cur[d] - lower_bound_[d]) / diff_[d];
         if (delta < 0.0) {
             delta = 0;
         } else if (delta > 0.999) {
@@ -179,12 +216,18 @@ void
 SQ4Quantizer<metric>::ProcessQueryImpl(const DataType* query,
                                        Computer<SQ4Quantizer>& computer) const {
     try {
-        computer.buf_ = reinterpret_cast<uint8_t*>(this->allocator_->Allocate(this->code_size_));
-        this->EncodeOneImpl(query, computer.buf_);
+        computer.buf_ =
+            reinterpret_cast<uint8_t*>(this->allocator_->Allocate(this->dim_ * sizeof(float)));
+
     } catch (const std::bad_alloc& e) {
         computer.buf_ = nullptr;
         logger::error("bad alloc when init computer buf");
         throw std::bad_alloc();
+    }
+    if constexpr (metric == MetricType::METRIC_TYPE_COSINE) {
+        Normalize(query, reinterpret_cast<float*>(computer.buf_), this->dim_);
+    } else {
+        memcpy(computer.buf_, query, this->dim_ * sizeof(float));
     }
 }
 
@@ -193,15 +236,13 @@ void
 SQ4Quantizer<metric>::ComputeDistImpl(Computer<SQ4Quantizer>& computer,
                                       const uint8_t* codes,
                                       float* dists) const {
+    auto* buf = reinterpret_cast<float*>(computer.buf_);
     if constexpr (metric == MetricType::METRIC_TYPE_L2SQR) {
-        dists[0] = SQ4ComputeCodesL2Sqr(
-            computer.buf_, codes, lower_bound_.data(), diff_.data(), this->dim_);
+        dists[0] = SQ4ComputeL2Sqr(buf, codes, lower_bound_.data(), diff_.data(), this->dim_);
     } else if constexpr (metric == MetricType::METRIC_TYPE_IP) {
-        dists[0] = 1 - SQ4ComputeCodesIP(
-                           computer.buf_, codes, lower_bound_.data(), diff_.data(), this->dim_);
+        dists[0] = 1 - SQ4ComputeIP(buf, codes, lower_bound_.data(), diff_.data(), this->dim_);
     } else if constexpr (metric == MetricType::METRIC_TYPE_COSINE) {
-        dists[0] = 1 - SQ4ComputeCodesIP(
-                           computer.buf_, codes, lower_bound_.data(), diff_.data(), this->dim_);
+        dists[0] = 1 - SQ4ComputeIP(buf, codes, lower_bound_.data(), diff_.data(), this->dim_);
     } else {
         logger::error("unsupported metric type");
         dists[0] = 0;
@@ -212,6 +253,20 @@ template <MetricType metric>
 void
 SQ4Quantizer<metric>::ReleaseComputerImpl(Computer<SQ4Quantizer<metric>>& computer) const {
     this->allocator_->Deallocate(computer.buf_);
+}
+
+template <MetricType metric>
+void
+SQ4Quantizer<metric>::SerializeImpl(StreamWriter& writer) {
+    StreamWriter::WriteVector(writer, this->diff_);
+    StreamWriter::WriteVector(writer, this->lower_bound_);
+}
+
+template <MetricType metric>
+void
+SQ4Quantizer<metric>::DeserializeImpl(StreamReader& reader) {
+    StreamReader::ReadVector(reader, this->diff_);
+    StreamReader::ReadVector(reader, this->lower_bound_);
 }
 
 }  // namespace vsag

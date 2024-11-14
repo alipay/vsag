@@ -28,8 +28,8 @@
 #include "basic_io.h"
 #include "common.h"
 #include "index/index_common_param.h"
+#include "inner_string_params.h"
 #include "vsag/allocator.h"
-#include "vsag/constants.h"
 
 namespace vsag {
 
@@ -39,11 +39,11 @@ public:
         : block_size_(block_size), allocator_(allocator), blocks_(0, allocator) {
     }
 
-    MemoryBlockIO(const nlohmann::json& io_obj, const IndexCommonParam& common_param)
+    MemoryBlockIO(const nlohmann::json& io_param, const IndexCommonParam& common_param)
         : allocator_(common_param.allocator_), blocks_(0, common_param.allocator_) {
-        if (io_obj.contains(BLOCK_IO_BLOCK_SIZE_KEY)) {
+        if (io_param.contains(BLOCK_IO_BLOCK_SIZE_KEY)) {
             this->block_size_ =
-                io_obj[BLOCK_IO_BLOCK_SIZE_KEY];  // TODO(LHT): trans str to uint64_t
+                io_param[BLOCK_IO_BLOCK_SIZE_KEY];  // TODO(LHT): trans str to uint64_t
         }
     }
 

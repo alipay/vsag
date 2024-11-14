@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <random>
 #include <tuple>
 #include <vector>
@@ -25,7 +26,7 @@
 namespace fixtures {
 
 std::vector<int>
-get_common_used_dims();
+get_common_used_dims(uint64_t count = -1, int seed = 369);
 
 std::vector<float>
 generate_vectors(int64_t num_vectors, int64_t dim, bool need_normalize = true, int seed = 47);
@@ -73,25 +74,65 @@ brute_force(const vsag::DatasetPtr& query,
             int64_t k,
             const std::string& metric_type);
 
-struct temp_dir {
-    explicit temp_dir(const std::string& name) {
-        auto epoch_time = std::chrono::system_clock::now().time_since_epoch();
-        auto seconds = std::chrono::duration_cast<std::chrono::seconds>(epoch_time).count();
+template <typename T>
+typename std::enable_if<std::is_floating_point<T>::value, T>::type
+RandomValue(const T& min, const T& max) {
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    std::uniform_real_distribution<T> dis(min, max);
+    return dis(gen);
+}
 
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<int> dist(1000, 9999);
-        int random_number = dist(gen);
+template <typename T>
+typename std::enable_if<std::is_integral<T>::value, T>::type
+RandomValue(const T& min, const T& max) {
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    std::uniform_int_distribution<T> dis(min, max);
+    return dis(gen);
+}
 
+class TempDir {
+public:
+    explicit TempDir(const std::string& prefix) {
+        namespace fs = std::filesystem;
         std::stringstream dirname;
-        dirname << "vsagtest_" << std::setfill('0') << std::setw(14) << seconds << "_"
-                << std::to_string(random_number);
-        path = "/tmp/" + dirname.str() + "/";
+        do {
+            auto epoch_time = std::chrono::system_clock::now().time_since_epoch();
+            auto seconds = std::chrono::duration_cast<std::chrono::seconds>(epoch_time).count();
+
+            int random_number = RandomValue<int>(1000, 9999);
+
+            dirname << "vsagtest_" << prefix << "_" << std::setfill('0') << std::setw(14) << seconds
+                    << "_" << std::to_string(random_number);
+            path = "/tmp/" + dirname.str() + "/";
+            dirname.clear();
+        } while (fs::exists(path));
+
         std::filesystem::create_directory(path);
     }
 
-    ~temp_dir() {
+    ~TempDir() {
         std::filesystem::remove_all(path);
+    }
+
+    std::string
+    GenerateRandomFile() const {
+        namespace fs = std::filesystem;
+        const std::string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        std::string fileName;
+        do {
+            fileName = "";
+            for (int i = 0; i < 10; i++) {
+                fileName += chars[RandomValue<int>(0, chars.length() - 1)];
+            }
+        } while (fs::exists(path + fileName));
+
+        std::ofstream file(path + fileName);
+        if (file.is_open()) {
+            file.close();
+        }
+        return path + fileName;
     }
 
     std::string path;
@@ -104,7 +145,11 @@ struct comparable_float_t {
 
     bool
     operator==(const comparable_float_t& d) const {
-        return std::fabs(this->value - d.value) < epsilon;
+        double a = this->value;
+        double b = d.value;
+        double max_value = std::max(std::abs(a), std::abs(b));
+        int power = std::max(0, int(log10(max_value) + 1));
+        return std::abs(a - b) <= epsilon * pow(10.0, power);
     }
 
     friend std::ostream&
@@ -114,7 +159,7 @@ struct comparable_float_t {
     }
 
     float value;
-    const float epsilon = 2e-6;
+    const double epsilon = 2e-6;
 };
 using dist_t = comparable_float_t;
 // The error epsilon between time_t and recall_t should be 1e-6; however, the error does not fall
@@ -136,4 +181,9 @@ struct IOItem {
 std::vector<IOItem>
 GenTestItems(uint64_t count, uint64_t max_length, uint64_t max_index = 100000);
 
+vsag::DatasetPtr
+generate_one_dataset(int64_t dim, uint64_t count);
+
+uint64_t
+GetFileSize(const std::string& filename);
 }  // Namespace fixtures

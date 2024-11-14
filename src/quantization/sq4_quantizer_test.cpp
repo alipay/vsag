@@ -38,15 +38,13 @@ TestQuantizerEncodeDecodeMetricSQ4(uint64_t dim,
 }
 
 TEST_CASE("Encode and Decode", "[ut][SQ4Quantizer]") {
-    constexpr MetricType metrics[3] = {
-        MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
+    constexpr MetricType metrics[2] = {MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_IP};
     float error = 2 * 1.0f / 15.0f;
     for (auto dim : dims) {
         for (auto count : counts) {
             auto error_same = (float)(dim * 15 * 0.01);
             TestQuantizerEncodeDecodeMetricSQ4<metrics[0]>(dim, count, error, error_same);
             TestQuantizerEncodeDecodeMetricSQ4<metrics[1]>(dim, count, error, error_same);
-            TestQuantizerEncodeDecodeMetricSQ4<metrics[2]>(dim, count, error, error_same);
         }
     }
 }
@@ -70,6 +68,29 @@ TEST_CASE("compute [ut][sq4_quantizer]") {
             TestComputeMetricSQ4<metrics[0]>(dim, count, error);
             TestComputeMetricSQ4<metrics[1]>(dim, count, error);
             TestComputeMetricSQ4<metrics[2]>(dim, count, error);
+        }
+    }
+}
+
+template <MetricType metric>
+void
+TestSerializeAndDeserializeMetricSQ4(uint64_t dim, int count, float error = 1e-5) {
+    auto allocator = std::make_shared<DefaultAllocator>();
+    SQ4Quantizer<metric> quantizer1(dim, allocator.get());
+    SQ4Quantizer<metric> quantizer2(0, allocator.get());
+    TestSerializeAndDeserialize<SQ4Quantizer<metric>, metric>(
+        quantizer1, quantizer2, dim, count, error);
+}
+
+TEST_CASE("serialize&deserialize [ut][sq4_quantizer]") {
+    constexpr MetricType metrics[3] = {
+        MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
+    for (auto dim : dims) {
+        float error = 0.1f * dim;
+        for (auto count : counts) {
+            TestSerializeAndDeserializeMetricSQ4<metrics[0]>(dim, count, error);
+            TestSerializeAndDeserializeMetricSQ4<metrics[1]>(dim, count, error);
+            TestSerializeAndDeserializeMetricSQ4<metrics[2]>(dim, count, error);
         }
     }
 }

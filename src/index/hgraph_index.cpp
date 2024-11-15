@@ -39,7 +39,7 @@ empty_binaryset() {
     return bs;
 }
 
-HGraphIndex::HGraphIndex(const nlohmann::json& index_param,
+HGraphIndex::HGraphIndex(const JsonType& index_param,
                          const vsag::IndexCommonParam& common_param) noexcept
     : index_param_(index_param),
       common_param_(common_param),
@@ -300,7 +300,7 @@ HGraphIndex::generate_one_route_graph() {
 HGraphIndex::MaxHeap
 HGraphIndex::search_one_graph(const float* query,
                               const GraphInterfacePtr& graph,
-                              const std::shared_ptr<FlattenInterface>& flatten,
+                              const FlattenInterfacePtr& flatten,
                               InnerIdType ep,
                               uint64_t ef,
                               BaseFilterFunctor* is_id_allowed) const {
@@ -392,7 +392,7 @@ HGraphIndex::search_one_graph(const float* query,
 void
 HGraphIndex::select_edges_by_heuristic(HGraphIndex::MaxHeap& edges,
                                        uint64_t max_size,
-                                       const std::shared_ptr<FlattenInterface>& flatten) {
+                                       const FlattenInterfacePtr& flatten) {
     if (edges.size() < max_size) {
         return;
     }
@@ -433,7 +433,7 @@ InnerIdType
 HGraphIndex::mutually_connect_new_element(InnerIdType cur_c,
                                           MaxHeap& top_candidates,
                                           GraphInterfacePtr graph,
-                                          std::shared_ptr<FlattenInterface> flatten,
+                                          FlattenInterfacePtr flatten,
                                           bool is_update) {
     const size_t max_size = graph->MaximumDegree();
     this->select_edges_by_heuristic(top_candidates, max_size, flatten);

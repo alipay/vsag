@@ -267,7 +267,7 @@ DiskANN::build(const DatasetPtr& base) {
                                                graph_stream_,
                                                disk_layout_stream_,
                                                sector_len_,
-                                               "");
+                                               metric_);
         }
 
         std::vector<int64_t> failed_ids;
@@ -933,7 +933,7 @@ DiskANN::continue_build(const DatasetPtr& base, const BinarySet& binary_set) {
                                                    graph_stream_,
                                                    disk_layout_stream_,
                                                    sector_len_,
-                                                   "");
+                                                   metric_);
                 load_disk_index(binary_set);
                 build_status = BuildStatus::FINISH;
                 status_ = IndexStatus::MEMORY;

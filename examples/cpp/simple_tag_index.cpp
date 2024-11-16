@@ -21,7 +21,7 @@ int
 main(int argc, char** argv) {
     vsag::init();
 
-    int64_t num_vectors = 10000;
+    int64_t num_vectors = 1000;
     int64_t dim = 128;
     int64_t tag_num = 10;
 
@@ -35,7 +35,7 @@ main(int argc, char** argv) {
     std::mt19937 rng;
     rng.seed(47);
     std::uniform_real_distribution<> distrib_real;
-    std::uniform_int_distribution<> distrib_int(1, tag_num);
+    std::uniform_int_distribution<> distrib_int(0, tag_num);
     for (int64_t i = 0; i < num_vectors; ++i) {
         ids[i] = i;
     }
@@ -47,18 +47,21 @@ main(int argc, char** argv) {
     }
 
     // create index
-    auto hnsw_build_paramesters = R"(
+    auto tag_build_paramesters = R"(
     {
         "dtype": "float32",
         "metric_type": "l2",
         "dim": 128,
+        "index_param": {
+             "sub_index_type": "hnsw"
+        },
         "hnsw": {
             "max_degree": 16,
             "ef_construction": 100
         }
     }
     )";
-    auto index = vsag::Factory::CreateIndex("hnsw", hnsw_build_paramesters).value();
+    auto index = vsag::Factory::CreateIndex("tag_index", tag_build_paramesters).value();
     auto base = vsag::Dataset::Make();
     base->NumElements(num_vectors)->Dim(dim)->Ids(ids)->Float32Vectors(vectors)->Tags(tag_name, tags)->Owner(false);
     index->Build(base);
@@ -73,17 +76,20 @@ main(int argc, char** argv) {
     query_tag[0] = 1;
 
     // search on the index
-    auto hnsw_search_parameters = R"(
+    auto tag_search_parameters = R"(
     {
-        "hnsw": {
-            "ef_search": 100
+        "tag_index": {
+            "sub_index_type": "hnsw",
+            "index_param": {
+                "ef_search": 100
+            }
         }
     }
     )";
     int64_t topk = 10;
     auto query = vsag::Dataset::Make();
     query->NumElements(1)->Dim(dim)->Float32Vectors(query_vector)->Tags(tag_name, query_tag)->Owner(true);
-    auto result = index->KnnSearch(query, topk, hnsw_search_parameters).value();
+    auto result = index->KnnSearch(query, topk, tag_search_parameters).value();
 
     // print the results
     std::cout << "results: " << std::endl;

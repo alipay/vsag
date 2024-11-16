@@ -22,7 +22,7 @@ help:                   ## Show the help.
 
 .PHONY: debug
 debug:                  ## Build vsag with debug options.
-	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Debug -DENABLE_CCACHE=ON
+	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Debug -DENABLE_CCACHE=ON -DENABLE_EXAMPLES=ON
 	cmake --build build --parallel ${COMPILE_JOBS}
 
 .PHONY: release
@@ -59,7 +59,7 @@ test:                   ## Build and run unit tests.
 
 .PHONY: asan
 asan:                   ## Build with AddressSanitizer option.
-	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON -DENABLE_CCACHE=ON
+	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON -DENABLE_CCACHE=ON -DENABLE_EXAMPLES=ON
 	cmake --build build --parallel ${COMPILE_JOBS}
 
 .PHONY: test_asan_parallel 		## Run unit tests parallel with AddressSanitizer option.

@@ -64,15 +64,16 @@ public:
     MultiIndex(std::string sub_index_type, std::string build_params, Allocator* allocator = nullptr)
         : sub_index_type_(sub_index_type),
           build_params_(build_params),
-          safe_allocator_(new SafeAllocator(allocator ? allocator : DefaultAllocator::Instance())),
+          safe_allocator_(new SafeAllocator(allocator ? allocator : DefaultAllocator::Instance().get())),
           sub_indexes_(safe_allocator_.get()) {
     }
 
     tl::expected<std::vector<int64_t>, Error>
     Build(const DatasetPtr& base) override {
         std::vector<int64_t> failed_ids;
-        auto all_tags = std::reinterpret_pointer_cast<DatasetImpl*>(base.get())->G();
-        auto tags = base->GetTags();
+        auto dataset_impl = std::dynamic_pointer_cast<DatasetImpl>(base);
+        auto all_tags = dataset_impl->GetTags();
+        auto tags = std::get<const int64_t*>(all_tags["tag"]);
         int64_t data_num = base->GetNumElements();
         int64_t data_dim = base->GetDim();
         auto datas = base->GetFloat32Vectors();
@@ -116,7 +117,9 @@ public:
               int64_t k,
               const std::string& parameters,
               BitsetPtr invalid = nullptr) const override {
-        auto tags = query->GetTags();
+        auto dataset_impl = std::dynamic_pointer_cast<DatasetImpl>(query);
+        auto all_tags = dataset_impl->GetTags();
+        auto tags = std::get<const int64_t*>(all_tags["tag"]);
         int64_t cur_tag = tags[0];
         if (sub_indexes_.find(cur_tag) != sub_indexes_.end()) {
             auto result = sub_indexes_[cur_tag]->KnnSearch(query, k, parameters, invalid);
@@ -136,7 +139,9 @@ public:
               int64_t k,
               const std::string& parameters,
               const std::function<bool(int64_t)>& filter) const override {
-        auto tags = query->GetTags();
+        auto dataset_impl = std::dynamic_pointer_cast<DatasetImpl>(query);
+        auto all_tags = dataset_impl->GetTags();
+        auto tags = std::get<const int64_t*>(all_tags["tag"]);
         int64_t cur_tag = tags[0];
         if (sub_indexes_.find(cur_tag) != sub_indexes_.end()) {
             auto result = sub_indexes_[cur_tag]->KnnSearch(query, k, parameters, filter);

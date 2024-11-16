@@ -26,7 +26,7 @@
 
 #include "vsag/allocator.h"
 #include "vsag/dataset.h"
-
+#include <iostream>
 namespace vsag {
 
 class DatasetImpl : public Dataset {
@@ -59,7 +59,6 @@ public:
                               std::is_same_v<T, const int8_t*> ||
                               std::is_same_v<T, const int64_t*> ||
                               std::is_same_v<T, const std::string*>) {
-                    delete[] arg; // 假设这些是动态分配的数组
                     if (this->allocator_) {
                         allocator_->Deallocate((void *)arg);
                     } else {

@@ -29,16 +29,20 @@ CreateMultiIndexParameters
 CreateMultiIndexParameters::FromJson(const std::string& json_string) {
     nlohmann::json params = nlohmann::json::parse(json_string);
 
-    CHECK_ARGUMENT(params.contains(PARAMETER_INDEX_TYPE),
-                   fmt::format("parameters must contains {}", PARAMETER_INDEX_TYPE));
+    CHECK_ARGUMENT(params.contains("index_param"),
+                   fmt::format("parameters must contains {}", "index_param"));
 
     CreateMultiIndexParameters obj;
-    obj.subindex_type = params[PARAMETER_INDEX_TYPE];
+    obj.subindex_type = params["index_param"][PARAMETER_INDEX_TYPE];
     obj.parameters = json_string;
     if (auto result = Factory::CreateIndex(obj.subindex_type, obj.parameters);
         not result.has_value()) {
         throw std::invalid_argument(result.error().message);
     }
+//
+//    obj.index_constructor_ = [=]() {
+//        return Factory::CreateIndex(obj.subindex_type, obj.parameters).value();
+//    };
     return obj;
 }
 

@@ -50,7 +50,7 @@ const char* const BLANK_INDEX = "blank_index";
 const char* const PARAMETER_DTYPE = "dtype";
 const char* const PARAMETER_DIM = "dim";
 const char* const PARAMETER_METRIC_TYPE = "metric_type";
-const char* const PARAMETER_INDEX_TYPE = "index_type";
+const char* const PARAMETER_INDEX_TYPE = "sub_index_type";
 const char* const PARAMETER_USE_CONJUGATE_GRAPH = "use_conjugate_graph";
 const char* const PARAMETER_USE_CONJUGATE_GRAPH_SEARCH = "use_conjugate_graph_search";
 

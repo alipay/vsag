@@ -332,7 +332,7 @@ public:
         base->NumElements(total_base)
             ->Dim(test_dataset->GetDim())
             ->Ids(ids.get())
-            ->Tags(test_dataset->GetTrainLabels())
+            ->Tags("tag", test_dataset->GetTrainLabels())
             ->Owner(false);
         if (test_dataset->GetTrainDataType() == vsag::DATATYPE_FLOAT32) {
             base->Float32Vectors((const float*)test_dataset->GetTrain());
@@ -438,7 +438,7 @@ public:
             auto query = Dataset::Make();
             query->NumElements(1)
                 ->Dim(test_dataset->GetDim())
-                ->Tags(test_dataset->GetTestLabels() + i)
+                ->Tags("tag", test_dataset->GetTestLabels() + i)
                 ->Owner(false);
             if (test_dataset->GetTestDataType() == vsag::DATATYPE_FLOAT32) {
                 query->Float32Vectors((const float*)test_dataset->GetOneTest(i));

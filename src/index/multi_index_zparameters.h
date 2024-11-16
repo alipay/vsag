@@ -17,6 +17,8 @@
 
 #include <memory>
 #include <string>
+#include <functional>
+#include "vsag/index.h"
 
 namespace vsag {
 
@@ -28,6 +30,7 @@ public:
 public:
     std::string subindex_type;
     std::string parameters;
+    std::function<std::shared_ptr<Index>()> index_constructor_{nullptr};
 
 protected:
     CreateMultiIndexParameters() = default;

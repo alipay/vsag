@@ -21,3 +21,6 @@ target_link_libraries(custom_logger vsag)
 
 add_executable (vsag_ext_example vsag_ext_example.cpp)
 target_link_libraries(vsag_ext_example vsag)
+
+add_executable (simple_tag_index simple_tag_index.cpp)
+target_link_libraries(simple_tag_index vsag)

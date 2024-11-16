@@ -23,7 +23,7 @@
 namespace vsag {
 
 IndexCommonParam
-IndexCommonParam::CheckAndCreate(nlohmann::json& params, Allocator* allocator) {
+IndexCommonParam::CheckAndCreate(JsonType& params, Allocator* allocator) {
     IndexCommonParam result;
     result.allocator_ = allocator;
     // Check DataType

@@ -42,7 +42,7 @@ Factory::CreateIndex(const std::string& origin_name,
     try {
         std::string name = origin_name;
         transform(name.begin(), name.end(), name.begin(), ::tolower);
-        nlohmann::json parsed_params = nlohmann::json::parse(parameters);
+        JsonType parsed_params = JsonType::parse(parameters);
         auto index_common_params = IndexCommonParam::CheckAndCreate(parsed_params, allocator);
         if (name == INDEX_HNSW) {
             // read parameters from json, throw exception if not exists

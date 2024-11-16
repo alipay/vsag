@@ -24,7 +24,7 @@
 namespace vsag {
 
 HnswParameters
-HnswParameters::FromJson(IndexCommonParam index_common_param, nlohmann::json& hnsw_param_obj) {
+HnswParameters::FromJson(IndexCommonParam index_common_param, JsonType& hnsw_param_obj) {
     HnswParameters obj;
 
     if (index_common_param.data_type_ == DataTypes::DATA_TYPE_FLOAT) {
@@ -83,7 +83,7 @@ HnswParameters::FromJson(IndexCommonParam index_common_param, nlohmann::json& hn
 
 HnswSearchParameters
 HnswSearchParameters::FromJson(const std::string& json_string) {
-    nlohmann::json params = nlohmann::json::parse(json_string);
+    JsonType params = JsonType::parse(json_string);
 
     HnswSearchParameters obj;
 

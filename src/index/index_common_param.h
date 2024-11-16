@@ -20,6 +20,7 @@
 
 #include "data_type.h"
 #include "metric_type.h"
+#include "typing.h"
 #include "vsag/allocator.h"
 
 namespace vsag {

@@ -40,11 +40,14 @@ DiskannParameters::FromJson(IndexCommonParam index_common_param,
         obj.metric = diskann::Metric::L2;
     } else if (index_common_param.metric_ == MetricType::METRIC_TYPE_IP) {
         obj.metric = diskann::Metric::INNER_PRODUCT;
+    } else if (index_common_param.metric_ == MetricType::METRIC_TYPE_COSINE) {
+        obj.metric = diskann::Metric::COSINE;
     } else {
-        throw std::invalid_argument(fmt::format("parameters[{}] must in [{}, {}], now is {}",
+        throw std::invalid_argument(fmt::format("parameters[{}] must in [{}, {}, {}], now is {}",
                                                 PARAMETER_METRIC_TYPE,
                                                 METRIC_L2,
                                                 METRIC_IP,
+                                                METRIC_COSINE,
                                                 (int)obj.metric));
     }
 

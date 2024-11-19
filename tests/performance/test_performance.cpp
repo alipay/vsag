@@ -21,6 +21,7 @@
 #include <memory>
 #include <string>
 #include <unordered_set>
+#include <omp.h>
 
 #include "H5Cpp.h"
 #include "nlohmann/json.hpp"
@@ -72,6 +73,21 @@ main(int argc, char* argv[]) {
     std::cout << result.dump(4) << std::endl;
 
     return 0;
+}
+
+std::unordered_set<int64_t>
+getIntersection(const int64_t* neighbors,
+                const int64_t* ground_truth,
+                size_t recall_num,
+                size_t top_k) {
+    std::unordered_set<int64_t> neighbors_set(neighbors, neighbors + recall_num);
+    std::unordered_set<int64_t> intersection;
+    for (size_t i = 0; i < top_k; ++i) {
+        if (i < top_k && neighbors_set.count(ground_truth[i])) {
+            intersection.insert(ground_truth[i]);
+        }
+    }
+    return intersection;
 }
 
 class TestDataset;
@@ -153,6 +169,11 @@ public:
     int64_t
     GetNearestNeighbor(int64_t i) const {
         return neighbors_[i * neighbors_shape_.second];
+    }
+
+    int64_t*
+    GetNeighbors(int64_t i) const {
+        return neighbors_.get() + i * neighbors_shape_.second;
     }
 
     int64_t
@@ -243,30 +264,29 @@ public:
         }
         auto build_finish = std::chrono::steady_clock::now();
 
-        // serialize
-        auto serialize_result = index->Serialize();
-        if (not serialize_result.has_value()) {
-            throw std::runtime_error("serialize error: " + serialize_result.error().message);
-        }
-        vsag::BinarySet& binary_set = serialize_result.value();
+//        if (not serialize_result.has_value()) {
+//            throw std::runtime_error("serialize error: " + serialize_result.error().message);
+//        }
+//        vsag::BinarySet& binary_set = serialize_result.value();
         std::filesystem::path dir(DIR_NAME);
-        std::map<std::string, size_t> file_sizes;
-        for (const auto& key : binary_set.GetKeys()) {
-            std::filesystem::path file_path(key);
-            std::filesystem::path full_path = dir / file_path;
-            vsag::Binary binary = binary_set.Get(key);
-            std::ofstream file(full_path.string(), std::ios::binary);
-            file.write(reinterpret_cast<char*>(binary.data.get()), binary.size);
-            file_sizes[key] = binary.size;
-            file.close();
-        }
+//        std::map<std::string, size_t> file_sizes;
+//        for (const auto& key : binary_set.GetKeys()) {
+//            std::filesystem::path file_path(key);
+//            std::filesystem::path full_path = dir / file_path;
+//            vsag::Binary binary = binary_set.Get(key);
+//            std::ofstream file(full_path.string(), std::ios::binary);
+//            file.write(reinterpret_cast<char*>(binary.data.get()), binary.size);
+//            file_sizes[key] = binary.size;
+//            file.close();
+//        }
 
-        std::ofstream outfile(dir / META_DATA_FILE);
-        for (const auto& pair : file_sizes) {
-            outfile << pair.first << " " << pair.second << std::endl;
-        }
+        std::ofstream outfile(dir / "hnsw", std::ios::binary);
+//        for (const auto& pair : file_sizes) {
+//            outfile << pair.first << " " << pair.second << std::endl;
+//        }
+        index->Serialize(outfile);
         outfile.close();
-        index = nullptr;
+        //        index = nullptr;
 
         json output;
         output["build_parameters"] = build_parameters;
@@ -286,27 +306,12 @@ public:
            const std::string& search_parameters) {
         // deserialize
         std::filesystem::path dir(DIR_NAME);
-        std::map<std::string, size_t> file_sizes;
-        std::ifstream infile(dir / META_DATA_FILE);
-        std::string filename;
-        size_t size;
-        while (infile >> filename >> size) {
-            file_sizes[filename] = size;
-        }
-        infile.close();
+        std::ifstream infile(dir / "hnsw", std::ios::binary);
 
         auto index = Factory::CreateIndex(index_name, build_parameters).value();
-        vsag::ReaderSet reader_set;
-        for (const auto& single_file : file_sizes) {
-            const std::string& key = single_file.first;
-            size_t size = single_file.second;
-            std::filesystem::path file_path(key);
-            std::filesystem::path full_path = dir / file_path;
-            auto reader = vsag::Factory::CreateLocalFileReader(full_path.string(), 0, size);
-            reader_set.Set(key, reader);
-        }
+        index->Deserialize(infile);
+        infile.close();
 
-        index->Deserialize(reader_set);
         unsigned long long memoryUsage = 0;
         std::ifstream statFileAfter("/proc/self/status");
         if (statFileAfter.is_open()) {
@@ -329,6 +334,29 @@ public:
         int64_t total = test_dataset->GetNumberOfQuery();
         spdlog::debug("total: " + std::to_string(total));
         std::vector<DatasetPtr> results;
+        int num_threads = 10;
+        omp_set_num_threads(num_threads);
+#pragma omp parallel for schedule(dynamic, 1)
+        for (int j = 0; j < num_threads; ++j) {
+            for (int64_t s = 0; s < total * 10; ++s) {
+                auto i = s % total;
+                auto query = Dataset::Make();
+                query->NumElements(1)
+                    ->Dim(test_dataset->GetDim())
+                    ->Float32Vectors(test_dataset->GetTest().get() + i * test_dataset->GetDim())
+                    ->Owner(false);
+
+                auto result = index->KnnSearch(query, 10, search_parameters);
+                if (not result.has_value()) {
+                    std::cerr << "query error: " << result.error().message << std::endl;
+                    exit(-1);
+                }
+//                results.emplace_back(result.value());
+            }
+        }
+        auto search_finish = std::chrono::steady_clock::now();
+        std::cout << "cal recall\n" << std::endl;
+        // calculate recall
         for (int64_t i = 0; i < total; ++i) {
             auto query = Dataset::Make();
             query->NumElements(1)
@@ -343,20 +371,16 @@ public:
             }
             results.emplace_back(result.value());
         }
-        auto search_finish = std::chrono::steady_clock::now();
 
-        // calculate recall
         for (int64_t i = 0; i < total; ++i) {
-            for (int64_t j = 0; j < results[i]->GetDim(); ++j) {
-                // 1@10
-                if (results[i]->GetIds()[j] == test_dataset->GetNearestNeighbor(i)) {
-                    ++correct;
-                    break;
-                }
-            }
+            // k@k
+            int64_t* neighbors = test_dataset->GetNeighbors(i);
+            const int64_t* ground_truth = results[i]->GetIds();
+            auto hit_result = getIntersection(neighbors, ground_truth, 10, 10);
+            correct += hit_result.size();
         }
         spdlog::debug("correct: " + std::to_string(correct));
-        float recall = 1.0 * correct / total;
+        float recall = 1.0 * correct / 10.0 / total;
 
         json output;
         // input
@@ -368,10 +392,10 @@ public:
             std::chrono::duration<double>(search_finish - search_start).count();
         output["search_time_in_second"] = search_time_in_second;
         output["correct"] = correct;
-        output["num_query"] = total;
+        output["num_query"] = total * 10;
         // key results
         output["recall"] = recall;
-        output["qps"] = total / search_time_in_second;
+        output["qps"] = total * 10 * num_threads / search_time_in_second;
         output["estimate_used_memory"] = index->GetMemoryUsage();
         output["memory"] = memoryUsage;
         return output;

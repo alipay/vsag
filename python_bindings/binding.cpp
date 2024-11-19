@@ -122,6 +122,36 @@ public:
     }
 
     py::object
+    BatchKnnSearch(py::array_t<float> vector, size_t k, std::string& parameters) {
+        auto count = vector.shape()[0];
+        auto labels = py::array_t<int64_t>(k * count);
+        auto dists = py::array_t<float>(k * count);
+        auto dim = vector.shape()[1];
+#pragma omp parallel for
+        for (uint64_t j = 0; j < count; ++j) {
+            auto query = vsag::Dataset::Make();
+            size_t data_num = 1;
+            query->NumElements(data_num)
+                ->Dim(dim)
+                ->Float32Vectors(vector.mutable_data() + j * dim)
+                ->Owner(false);
+
+            if (auto result = index_->KnnSearch(query, k, parameters); result.has_value()) {
+                auto labels_data = labels.mutable_data();
+                auto dists_data = dists.mutable_data();
+                auto ids = result.value()->GetIds();
+                auto distances = result.value()->GetDistances();
+                for (int i = 0; i < data_num * k; ++i) {
+                    labels_data[j * k + i] = ids[i];
+                    dists_data[j * k + i] = distances[i];
+                }
+            }
+        }
+
+        return py::make_tuple(labels, dists);
+    }
+
+    py::object
     RangeSearch(py::array_t<float> point, float threshold, std::string& parameters) {
         auto query = vsag::Dataset::Make();
         size_t data_num = 1;
@@ -185,39 +215,10 @@ public:
 
     void
     Load(const std::string& filename) {
-        std::ifstream file(filename, std::ios::in);
-        file.seekg(-sizeof(uint64_t) * 2, std::ios::end);
-        uint64_t num_keys, footer_offset;
-        readBinaryPOD(file, num_keys);
-        readBinaryPOD(file, footer_offset);
-        file.seekg(footer_offset, std::ios::beg);
+        std::ifstream file(filename, std::ios::binary);
 
-        std::vector<std::string> keys;  // todo: mem peak here
-        std::vector<uint64_t> offsets;
-        for (uint64_t i = 0; i < num_keys; ++i) {
-            int64_t key_len;
-            readBinaryPOD(file, key_len);
-            char key_buf[key_len + 1];
-            memset(key_buf, 0, key_len + 1);
-            file.read(key_buf, key_len);
-            keys.push_back(key_buf);
-
-            uint64_t offset;
-            readBinaryPOD(file, offset);
-            offsets.push_back(offset);
-        }
-
-        vsag::BinarySet bs;
-        for (uint64_t i = 0; i < num_keys; ++i) {
-            file.seekg(offsets[i], std::ios::beg);
-            vsag::Binary b;
-            readBinaryPOD(file, b.size);
-            b.data.reset(new int8_t[b.size]);
-            file.read((char*)b.data.get(), b.size);
-            bs.Set(keys[i], b);
-        }
-
-        index_->Deserialize(bs);
+        index_->Deserialize(file);
+        file.close();
     }
 
 private:
@@ -245,5 +246,10 @@ PYBIND11_MODULE(_pyvsag, m) {
              py::arg("threshold"),
              py::arg("parameters"))
         .def("save", &Index::Save, py::arg("filename"))
-        .def("load", &Index::Load, py::arg("filename"));
+        .def("load", &Index::Load, py::arg("filename"))
+        .def("batch_knn_search",
+             &Index::BatchKnnSearch,
+             py::arg("vector"),
+             py::arg("k"),
+             py::arg("parameters"));
 }

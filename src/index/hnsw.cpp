@@ -575,6 +575,13 @@ HNSW::deserialize(std::istream& in_stream) {
         if (use_conjugate_graph_ and not conjugate_graph_->Deserialize(in_stream).has_value()) {
             throw std::runtime_error("error in deserialize conjugate graph");
         }
+        if (sq_num_bits_ != -1) {
+            SlowTaskTimer t1("sq transform", 1000);
+            if (sq_num_bits_ == 8 or sq_num_bits_ == 4) {
+                alg_hnsw->transform_base_int4();
+            }
+            alg_hnsw->optimize();
+        }
     } catch (const std::runtime_error& e) {
         LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to deserialize: ", e.what());
     }

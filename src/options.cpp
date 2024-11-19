@@ -15,7 +15,11 @@
 
 #include "vsag/options.h"
 
+#include <utility>
+
+#include "default_allocator.h"
 #include "default_logger.h"
+#include "logger.h"
 
 namespace vsag {
 

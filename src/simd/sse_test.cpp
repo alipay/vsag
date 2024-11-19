@@ -1,4 +1,5 @@
 
+
 // Copyright 2024-present the vsag project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +15,7 @@
 // limitations under the License.
 
 #include <catch2/catch_test_macros.hpp>
+#include <cstdint>
 
 #include "./simd.h"
 #include "catch2/catch_approx.hpp"

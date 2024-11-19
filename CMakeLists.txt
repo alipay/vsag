@@ -39,23 +39,22 @@ option (ENABLE_FRAME_POINTER "Whether to build with -fno-omit-frame-pointer" ON)
 option (ENABLE_THIN_LTO "Whether to build with thin lto -flto=thin" OFF)
 option (ENABLE_CCACHE "Whether to open ccache" OFF)
 option (ENABLE_COVERAGE "Enable gcov (debug, Linux builds only)" OFF)
-option (ENABLE_INTEL_MKL "Enable intel-mkl (x86 platform only)" ON)
-option (ENABLE_CXX11_ABI "Use CXX11 ABI" ON)
-option (ENABLE_LIBCXX "Use libc++ instead of libstdc++" OFF) # only support in clang
+option (ENABLE_INTEL_MKL "Enable intel-mkl (x86 platform only)" OFF)
+option (ENABLE_CXX11_ABI "Use CXX11 ABI" OFF)
+option (ENABLE_LIBCXX "Use libc++ instead of libstdc++" ON)
 option (ENABLE_TOOLS "Whether compile vsag tools" ON)
-option (ENABLE_EXAMPLES "Whether compile examples" OFF)
 option (DISABLE_SSE_FORCE "Force disable sse and higher instructions" OFF)
 option (DISABLE_AVX_FORCE "Force disable avx and higher instructions" OFF)
 option (DISABLE_AVX2_FORCE "Force disable avx2 and higher instructions" OFF)
 option (DISABLE_AVX512_FORCE "Force disable avx512 instructions" OFF)
 
+set (ROARING_DISABLE_AVX512 ON)
+set (ENABLE_PYBINDS ON)
 
 if (ENABLE_CXX11_ABI)
-    add_definitions (-D_GLIBCXX_USE_CXX11_ABI=1)
-    message(STATUS "Using libstdc++ with C++11 ABI")
+  add_definitions (-D_GLIBCXX_USE_CXX11_ABI=1)
 else ()
-    add_definitions (-D_GLIBCXX_USE_CXX11_ABI=0)
-    message(STATUS "Using libstdc++ with pre-C++11 ABI")
+  add_definitions (-D_GLIBCXX_USE_CXX11_ABI=0)
 endif ()
 
 if (ENABLE_WERROR)
@@ -67,16 +66,18 @@ vsag_add_shared_linker_flag(-static-libstdc++)
 vsag_add_shared_linker_flag(-fvisibility=hidden)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -gdwarf-4")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -gdwarf-4 -Wno-deprecated-builtins")
-else()
-    if (ENABLE_LIBCXX)
-        message(FATAL_ERROR "gcc does not support using libc++")
+    if (CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL 17 OR CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 17)
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -gdwarf-4")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -gdwarf-4 -Wno-deprecated-builtins")
+    else()
+        set(ENABLE_LIBCXX OFF)
     endif()
+else()
+    set(ENABLE_LIBCXX OFF)
 endif()
 
 if (ENABLE_LIBCXX)
-    message(STATUS "Using libc++ with C++11 ABI")
+    message(STATUS "Using libc++")
 
     set(LIBCXX_SEARCH_PATH /opt/alibaba-cloud-compiler/lib64)
     find_library(LIBCXX_STATIC libc++.a PATHS ${LIBCXX_SEARCH_PATH})
@@ -96,6 +97,7 @@ if (ENABLE_LIBCXX)
         message(FATAL_ERROR "libc++ or libc++abi not found")
     endif()
 else()
+    message(STATUS "Using libstdc++")
     if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libstdc++")
     endif()
@@ -190,7 +192,6 @@ endif ()
 
 include_directories (${CMAKE_CURRENT_BINARY_DIR}/spdlog/install/include)
 include_directories (include)
-include_directories (src)
 
 set (CMAKE_CXX_STANDARD 17)
 
@@ -248,10 +249,7 @@ endif ()
 # sources
 add_subdirectory (src)
 add_subdirectory (mockimpl)
-if (ENABLE_EXAMPLES)
-    add_subdirectory (examples/cpp)
-endif ()
-
+#add_subdirectory (examples/cpp)
 
 # tests
 if (ENABLE_TESTS)
@@ -263,15 +261,15 @@ if (ENABLE_PYBINDS)
     find_package (Python3 REQUIRED COMPONENTS Interpreter Development)
     include (extern/pybind11/pybind11.cmake)
     pybind11_add_module (pyvsag python_bindings/binding.cpp)
-    target_link_libraries (pyvsag PRIVATE pybind11::module vsag)
+    target_link_libraries (pyvsag PRIVATE pybind11::module vsag_test)
 endif ()
 
 # install
 install (DIRECTORY include/
 	DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
-install (TARGETS vsag
+install (TARGETS vsag_test
 	LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}")
-install (TARGETS vsag_static
+install (TARGETS vsag_static_test
 	LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 if (ENABLE_TESTS AND USE_CXX11_ABI)
     install (TARGETS test_performance
@@ -286,4 +284,33 @@ add_custom_target (version
                    -D GIT_EXECUTABLE=${GIT_EXECUTABLE}
                    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateVersionHeader.cmake
   )
-add_dependencies (vsag version)
+add_dependencies (vsag_test version)
+
+# set path
+set(VSAG_BASE_DIR ${CMAKE_BINARY_DIR})
+set(VSAG_LIB_DIR ${VSAG_BASE_DIR}/_deps)
+
+# Create shared library
+add_library(ob_vsag_test SHARED ob_vsag_lib.cpp)
+target_compile_options(ob_vsag_test PRIVATE -std=c++17)
+target_include_directories(ob_vsag_test PRIVATE
+                           ${VSAG_BASE_DIR}/include
+                           ${VSAG_LIB_DIR}/nlohmann_json-src/include
+                           ${VSAG_LIB_DIR}/roaringbitmap-src/include
+                           ${VSAG_LIB_DIR}/fmt-src/include)
+target_compile_definitions(ob_vsag_test PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
+target_link_libraries(ob_vsag_test PUBLIC vsag_static_test -static-libstdc++ -static-libgcc)
+add_dependencies(ob_vsag_test vsag_static_test)
+
+# Create static library
+add_library(ob_vsag_static_test STATIC ob_vsag_lib.cpp)
+target_compile_options(ob_vsag_static_test PRIVATE -std=c++17)
+target_compile_definitions(ob_vsag_static_test PUBLIC _GLIBCXX_USE_CXX11_ABI=0)
+target_include_directories(ob_vsag_static_test PUBLIC
+                           ${VSAG_BASE_DIR}/include
+                           ${VSAG_LIB_DIR}/nlohmann_json-src/include
+                           ${VSAG_LIB_DIR}/roaringbitmap-src/include
+                           ${VSAG_LIB_DIR}/fmt-src/include)
+add_dependencies(ob_vsag_static_test vsag_static_test)
+
+add_subdirectory (example)

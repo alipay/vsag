@@ -1,4 +1,5 @@
 
+
 // Copyright 2024-present the vsag project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,10 +16,8 @@
 
 #include "vsag/constants.h"
 
-#include "inner_string_params.h"
 namespace vsag {
 
-const char* const INDEX_HGRAPH = "hgraph";
 const char* const INDEX_DISKANN = "diskann";
 const char* const INDEX_HNSW = "hnsw";
 const char* const INDEX_FRESH_HNSW = "fresh_hnsw";
@@ -41,7 +40,6 @@ const char* const METRIC_L2 = "l2";
 const char* const METRIC_COSINE = "cosine";
 const char* const METRIC_IP = "ip";
 const char* const DATATYPE_FLOAT32 = "float32";
-const char* const DATATYPE_INT8 = "int8";
 const char* const BLANK_INDEX = "blank_index";
 
 // parameters
@@ -94,9 +92,5 @@ const char* const MESSAGE_PARAMETER = "invalid parameter";
 // Serialize key
 const char* const SERIALIZE_MAGIC_NUM = "MAGIC_NUM";
 const char* const SERIALIZE_VERSION = "VERSION";
-
-const char* const HGRAPH_USE_REORDER = HGRAPH_USE_REORDER_KEY;
-const char* const HGRAPH_BASE_QUANTIZATION_TYPE = "base_quantization_type";
-const char* const HGRAPH_GRAPH_MAX_DEGREE = "max_degree";
 
 };  // namespace vsag

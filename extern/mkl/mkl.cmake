@@ -49,6 +49,7 @@ if (CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64" AND ENABLE_INTEL_MKL)
         ${MKL_PATH}/libmkl_avx2.so
         ${MKL_PATH}/libmkl_mc3.so
         ${MKL_PATH}/libmkl_gf_lp64.so
+        ${MKL_PATH}/libmkl_core.so
         ${MKL_PATH}/libmkl_intel_thread.so
         ${OMP_PATH}/libiomp5.so
     )
@@ -58,10 +59,10 @@ if (CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64" AND ENABLE_INTEL_MKL)
     endforeach()
     message ("enable intel-mkl as blas backend")
 else ()
-    set(BLAS_LIBRARIES libopenblas.a gfortran)
-    if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set(BLAS_LIBRARIES libopenblas.a)
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang") 
         list(PREPEND BLAS_LIBRARIES omp)
-    else()
+    else() 
         list(PREPEND BLAS_LIBRARIES gomp)
     endif()
     message ("enable openblas as blas backend")

@@ -1,27 +1,23 @@
-set (SIMD_SRCS generic.cpp simd.cpp fp32_simd.cpp sq8_simd.cpp sq4_simd.cpp
-        sq4_uniform_simd.cpp)
+
+set (SIMD_SRCS generic.cpp simd.cpp)
 if (DIST_CONTAINS_SSE)
-    set (SIMD_SRCS ${SIMD_SRCS} sse.cpp)
-    set_source_files_properties (
-            sse.cpp
-            PROPERTIES COMPILE_FLAGS
-            "-msse -msse2 -msse3 -mssse3 -msse4 -msse4a -msse4.1 -msse4.2")
+  set (SIMD_SRCS ${SIMD_SRCS} sse.cpp)
+  set_source_files_properties (sse.cpp PROPERTIES COMPILE_FLAGS "-msse -msse2 -msse3 -mssse3 -msse4 -msse4a -msse4.1 -msse4.2")
+  add_definitions (-DENABLE_SSE=1)
 endif ()
 if (DIST_CONTAINS_AVX)
-    set (SIMD_SRCS ${SIMD_SRCS} avx.cpp)
-    set_source_files_properties (avx.cpp PROPERTIES COMPILE_FLAGS "-mavx")
+  set (SIMD_SRCS ${SIMD_SRCS} avx.cpp)
+  set_source_files_properties (avx.cpp PROPERTIES COMPILE_FLAGS "-mavx")
+  add_definitions (-DENABLE_AVX=1)
 endif ()
 if (DIST_CONTAINS_AVX2)
-    set_source_files_properties (avx.cpp PROPERTIES COMPILE_FLAGS "-mavx2 -mfma")
+  set_source_files_properties (avx.cpp PROPERTIES COMPILE_FLAGS "-mavx2 -mfma")
+  add_definitions (-DENABLE_AVX2=1)
 endif ()
 if (DIST_CONTAINS_AVX512)
-    set (SIMD_SRCS ${SIMD_SRCS} avx512.cpp)
-    set_source_files_properties (
-            avx512.cpp
-            PROPERTIES
-            COMPILE_FLAGS
-            "-mavx512f -mavx512pf -mavx512er -mavx512cd -mavx512vl -mavx512bw -mavx512dq -mavx512ifma -mavx512vbmi"
-    )
+  set (SIMD_SRCS ${SIMD_SRCS} avx512.cpp)
+  set_source_files_properties (avx512.cpp PROPERTIES COMPILE_FLAGS "-mavx512f -mavx512pf -mavx512er -mavx512cd -mavx512vl -mavx512bw -mavx512dq -mavx512ifma -mavx512vbmi")
+  add_definitions (-DENABLE_AVX512=1)
 endif ()
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
@@ -35,16 +31,9 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -funroll-loops")
 
 add_library (simd ${SIMD_SRCS})
 
-macro (simd_add_definitions flag1 flag2)
-    if (${flag1})
-        target_compile_definitions (simd PUBLIC ${flag2})
-    endif ()
-endmacro ()
-
-simd_add_definitions (DIST_CONTAINS_SSE -DENABLE_SSE=1)
-simd_add_definitions (DIST_CONTAINS_AVX -DENABLE_AVX=1)
-simd_add_definitions (DIST_CONTAINS_AVX2 -DENABLE_AVX2=1)
-simd_add_definitions (DIST_CONTAINS_AVX512 -DENABLE_AVX512=1)
-
 target_link_libraries (simd PRIVATE cpuinfo)
-install (TARGETS simd ARCHIVE DESTINATION lib)
+
+install (
+  TARGETS simd
+  ARCHIVE DESTINATION lib
+  )

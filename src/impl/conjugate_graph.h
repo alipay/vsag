@@ -22,7 +22,6 @@
 
 #include "../footer.h"
 #include "../logger.h"
-#include "typing.h"
 #include "vsag/index.h"
 
 namespace vsag {

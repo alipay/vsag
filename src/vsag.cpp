@@ -41,7 +41,7 @@ init() {
     std::stringstream ss;
 
     ss << std::boolalpha;
-    ss << "\n====vsag start init====";
+    ss << "\n====vsag start init test====";
     ss << "\nrunning on " << cpuinfo_get_package(0)->name;
     ss << "\ncores count: " << cpuinfo_get_cores_count();
     auto simd_status = setup_simd();

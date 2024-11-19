@@ -32,7 +32,6 @@
 #include "../common.h"
 #include "../logger.h"
 #include "../utils.h"
-#include "typing.h"
 #include "vsag/index.h"
 #include "vsag/options.h"
 

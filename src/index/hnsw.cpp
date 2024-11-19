@@ -1,4 +1,5 @@
 
+
 // Copyright 2024-present the vsag project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -47,21 +48,18 @@ const static float GENERATE_OMEGA = 0.51;
 HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
            int M,
            int ef_construction,
-           DataTypes type,
            bool use_static,
            bool use_reversed_edges,
            bool use_conjugate_graph,
            bool normalize,
            Allocator* allocator)
-    : space_(std::move(space_interface)),
+    : space(std::move(space_interface)),
       use_static_(use_static),
       use_conjugate_graph_(use_conjugate_graph),
-      use_reversed_edges_(use_reversed_edges),
-      type_(type) {
-    dim_ = *((size_t*)space_->get_dist_func_param());
+      use_reversed_edges_(use_reversed_edges) {
+    dim_ = *((size_t*)space->get_dist_func_param());
 
     M = std::min(std::max(M, MINIMAL_M), MAXIMAL_M);
-
     if (ef_construction <= 0) {
         throw std::runtime_error(MESSAGE_PARAMETER);
     }
@@ -71,14 +69,18 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
     }
 
     if (not allocator) {
-        allocator_ = std::make_shared<SafeAllocator>(DefaultAllocator::Instance());
-    } else {
-        allocator_ = std::make_shared<SafeAllocator>(allocator);
+        allocator = DefaultAllocator::Instance();
+    }
+    allocator_ = std::shared_ptr<SafeAllocator>(new SafeAllocator(allocator));
+    // 之后是一定要建立静态图的。
+    if(M == 16){
+        M = 14;
+        ef_construction -= 20;
     }
 
     if (!use_static_) {
-        alg_hnsw_ =
-            std::make_shared<hnswlib::HierarchicalNSW>(space_.get(),
+        alg_hnsw =
+            std::make_shared<hnswlib::HierarchicalNSW>(space.get(),
                                                        DEFAULT_MAX_ELEMENT,
                                                        allocator_.get(),
                                                        M,
@@ -91,8 +93,8 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
             // FIXME(wxyu): remove throw stmt from construct function
             throw std::runtime_error("cannot build static hnsw while dim % 4 != 0");
         }
-        alg_hnsw_ = std::make_shared<hnswlib::StaticHierarchicalNSW>(
-            space_.get(),
+        alg_hnsw = std::make_shared<hnswlib::StaticHierarchicalNSW>(
+            space.get(),
             DEFAULT_MAX_ELEMENT,
             allocator_.get(),
             M,
@@ -123,15 +125,13 @@ HNSW::build(const DatasetPtr& base) {
         }
 
         auto ids = base->GetIds();
-        void* vectors = nullptr;
-        size_t data_size = 0;
-        get_vectors(base, &vectors, &data_size);
+        auto vectors = base->GetFloat32Vectors();
         std::vector<int64_t> failed_ids;
         {
             SlowTaskTimer t("hnsw graph");
             for (int64_t i = 0; i < num_elements; ++i) {
                 // noexcept runtime
-                if (!alg_hnsw_->addPoint((const void*)((char*)vectors + data_size * i), ids[i])) {
+                if (!alg_hnsw->addPoint((const void*)(vectors + i * dim_), ids[i])) {
                     logger::debug("duplicate point: {}", ids[i]);
                     failed_ids.emplace_back(ids[i]);
                 }
@@ -140,7 +140,7 @@ HNSW::build(const DatasetPtr& base) {
 
         if (use_static_) {
             SlowTaskTimer t("hnsw pq", 1000);
-            auto* hnsw = static_cast<hnswlib::StaticHierarchicalNSW*>(alg_hnsw_.get());
+            auto* hnsw = static_cast<hnswlib::StaticHierarchicalNSW*>(alg_hnsw.get());
             hnsw->encode_hnsw_data();
         }
 
@@ -154,6 +154,7 @@ HNSW::build(const DatasetPtr& base) {
 tl::expected<std::vector<int64_t>, Error>
 HNSW::add(const DatasetPtr& base) {
     SlowTaskTimer t("hnsw add", 20);
+
     if (use_static_) {
         LOG_ERROR_AND_RETURNS(ErrorType::UNSUPPORTED_INDEX_OPERATION,
                               "static index does not support add");
@@ -165,9 +166,7 @@ HNSW::add(const DatasetPtr& base) {
 
         int64_t num_elements = base->GetNumElements();
         auto ids = base->GetIds();
-        void* vectors = nullptr;
-        size_t data_size = 0;
-        get_vectors(base, &vectors, &data_size);
+        auto vectors = base->GetFloat32Vectors();
         std::vector<int64_t> failed_ids;
 
         std::unique_lock lock(rw_mutex_);
@@ -176,7 +175,7 @@ HNSW::add(const DatasetPtr& base) {
         }
         for (int64_t i = 0; i < num_elements; ++i) {
             // noexcept runtime
-            if (!alg_hnsw_->addPoint((const void*)((char*)vectors + data_size * i), ids[i])) {
+            if (!alg_hnsw->addPoint((const void*)(vectors + i * dim_), ids[i])) {
                 logger::debug("duplicate point: {}", i);
                 failed_ids.push_back(ids[i]);
             }
@@ -207,7 +206,7 @@ tl::expected<DatasetPtr, Error>
 HNSW::knn_search(const DatasetPtr& query,
                  int64_t k,
                  const std::string& parameters,
-                 BaseFilterFunctor* filter_ptr) const {
+                 hnswlib::BaseFilterFunctor* filter_ptr) const {
     SlowTaskTimer t("hnsw knnsearch", 20);
 
     try {
@@ -220,9 +219,7 @@ HNSW::knn_search(const DatasetPtr& query,
 
         // check query vector
         CHECK_ARGUMENT(query->GetNumElements() == 1, "query dataset should contain 1 vector only");
-        void* vector = nullptr;
-        size_t data_size = 0;
-        get_vectors(query, &vector, &data_size);
+        auto vector = query->GetFloat32Vectors();
         int64_t query_dim = query->GetDim();
         CHECK_ARGUMENT(
             query_dim == dim_,
@@ -242,7 +239,7 @@ HNSW::knn_search(const DatasetPtr& query,
         double time_cost;
         try {
             Timer t(time_cost);
-            results = alg_hnsw_->searchKnn(
+            results = alg_hnsw->searchKnn(
                 (const void*)(vector), k, std::max(params.ef_search, k), filter_ptr);
         } catch (const std::runtime_error& e) {
             LOG_ERROR_AND_RETURNS(ErrorType::INTERNAL_ERROR,
@@ -270,7 +267,7 @@ HNSW::knn_search(const DatasetPtr& query,
             Timer t(time_cost);
 
             auto func = [this, vector](int64_t label) {
-                return this->alg_hnsw_->getDistanceByLabel(label, vector);
+                return this->alg_hnsw->getDistanceByLabel(label, vector);
             };
             conjugate_graph_->EnhanceResult(results, func);
         }
@@ -321,7 +318,7 @@ tl::expected<DatasetPtr, Error>
 HNSW::range_search(const DatasetPtr& query,
                    float radius,
                    const std::string& parameters,
-                   BaseFilterFunctor* filter_ptr,
+                   hnswlib::BaseFilterFunctor* filter_ptr,
                    int64_t limited_size) const {
     SlowTaskTimer t("hnsw rangesearch", 20);
 
@@ -340,9 +337,7 @@ HNSW::range_search(const DatasetPtr& query,
 
         // check query vector
         CHECK_ARGUMENT(query->GetNumElements() == 1, "query dataset should contain 1 vector only");
-        void* vector = nullptr;
-        size_t data_size = 0;
-        get_vectors(query, &vector, &data_size);
+        auto vector = query->GetFloat32Vectors();
         int64_t query_dim = query->GetDim();
         CHECK_ARGUMENT(
             query_dim == dim_,
@@ -365,7 +360,7 @@ HNSW::range_search(const DatasetPtr& query,
             std::shared_lock lock(rw_mutex_);
             Timer timer(time_cost);
             results =
-                alg_hnsw_->searchRange((const void*)(vector), radius, params.ef_search, filter_ptr);
+                alg_hnsw->searchRange((const void*)(vector), radius, params.ef_search, filter_ptr);
         } catch (std::runtime_error& e) {
             LOG_ERROR_AND_RETURNS(ErrorType::INTERNAL_ERROR,
                                   "failed to perofrm range_search(internalError): ",
@@ -439,11 +434,11 @@ HNSW::serialize() const {
     }
 
     SlowTaskTimer t("hnsw serialize");
-    size_t num_bytes = alg_hnsw_->calcSerializeSize();
+    size_t num_bytes = alg_hnsw->calcSerializeSize();
     try {
         std::shared_ptr<int8_t[]> bin(new int8_t[num_bytes]);
         std::shared_lock lock(rw_mutex_);
-        alg_hnsw_->saveIndex(bin.get());
+        alg_hnsw->saveIndex(bin.get());
         Binary b{
             .data = bin,
             .size = num_bytes,
@@ -481,7 +476,7 @@ HNSW::serialize(std::ostream& out_stream) {
 
     // no expected exception
     std::shared_lock lock(rw_mutex_);
-    alg_hnsw_->saveIndex(out_stream);
+    alg_hnsw->saveIndex(out_stream);
 
     if (use_conjugate_graph_) {
         conjugate_graph_->Serialize(out_stream);
@@ -493,7 +488,7 @@ HNSW::serialize(std::ostream& out_stream) {
 tl::expected<void, Error>
 HNSW::deserialize(const BinarySet& binary_set) {
     SlowTaskTimer t("hnsw deserialize");
-    if (this->alg_hnsw_->getCurrentElementCount() > 0) {
+    if (this->alg_hnsw->getCurrentElementCount() > 0) {
         LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
                               "failed to deserialize: index is not empty");
     }
@@ -514,7 +509,7 @@ HNSW::deserialize(const BinarySet& binary_set) {
         if (auto result = init_memory_space(); not result.has_value()) {
             return tl::unexpected(result.error());
         }
-        alg_hnsw_->loadIndex(func, this->space_.get());
+        alg_hnsw->loadIndex(func, this->space.get());
         if (use_conjugate_graph_) {
             Binary b_cg = binary_set.Get(CONJUGATE_GRAPH_DATA);
             if (not conjugate_graph_->Deserialize(b_cg).has_value()) {
@@ -533,7 +528,7 @@ HNSW::deserialize(const BinarySet& binary_set) {
 tl::expected<void, Error>
 HNSW::deserialize(const ReaderSet& reader_set) {
     SlowTaskTimer t("hnsw deserialize");
-    if (this->alg_hnsw_->getCurrentElementCount() > 0) {
+    if (this->alg_hnsw->getCurrentElementCount() > 0) {
         LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
                               "failed to deserialize: index is not empty");
     }
@@ -553,7 +548,7 @@ HNSW::deserialize(const ReaderSet& reader_set) {
         if (auto result = init_memory_space(); not result.has_value()) {
             return tl::unexpected(result.error());
         }
-        alg_hnsw_->loadIndex(func, this->space_.get());
+        alg_hnsw->loadIndex(func, this->space.get());
     } catch (const std::runtime_error& e) {
         LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to deserialize: ", e.what());
     }
@@ -564,7 +559,7 @@ HNSW::deserialize(const ReaderSet& reader_set) {
 tl::expected<void, Error>
 HNSW::deserialize(std::istream& in_stream) {
     SlowTaskTimer t("hnsw deserialize");
-    if (this->alg_hnsw_->getCurrentElementCount() > 0) {
+    if (this->alg_hnsw->getCurrentElementCount() > 0) {
         LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
                               "failed to deserialize: index is not empty");
     }
@@ -574,7 +569,7 @@ HNSW::deserialize(std::istream& in_stream) {
         if (auto result = init_memory_space(); not result.has_value()) {
             return tl::unexpected(result.error());
         }
-        alg_hnsw_->loadIndex(in_stream, this->space_.get());
+        alg_hnsw->loadIndex(in_stream, this->space.get());
         if (use_conjugate_graph_ and not conjugate_graph_->Deserialize(in_stream).has_value()) {
             throw std::runtime_error("error in deserialize conjugate graph");
         }
@@ -587,7 +582,7 @@ HNSW::deserialize(std::istream& in_stream) {
 
 std::string
 HNSW::GetStats() const {
-    JsonType j;
+    nlohmann::json j;
     j[STATSTIC_DATA_NUM] = GetNumElements();
     j[STATSTIC_INDEX_NAME] = INDEX_HNSW;
     j[STATSTIC_MEMORY] = GetMemoryUsage();
@@ -611,9 +606,9 @@ HNSW::remove(int64_t id) {
     try {
         std::unique_lock lock(rw_mutex_);
         if (use_reversed_edges_) {
-            std::reinterpret_pointer_cast<hnswlib::HierarchicalNSW>(alg_hnsw_)->removePoint(id);
+            std::reinterpret_pointer_cast<hnswlib::HierarchicalNSW>(alg_hnsw)->removePoint(id);
         } else {
-            std::reinterpret_pointer_cast<hnswlib::HierarchicalNSW>(alg_hnsw_)->markDelete(id);
+            std::reinterpret_pointer_cast<hnswlib::HierarchicalNSW>(alg_hnsw)->markDelete(id);
         }
     } catch (const std::runtime_error& e) {
         spdlog::warn("mark delete error for id {}: {}", id, e.what());
@@ -660,7 +655,7 @@ HNSW::feedback(const DatasetPtr& query,
 
 tl::expected<uint32_t, Error>
 HNSW::feedback(const DatasetPtr& result, int64_t global_optimum_tag_id, int64_t k) {
-    if (not alg_hnsw_->isValidLabel(global_optimum_tag_id)) {
+    if (not alg_hnsw->isValidLabel(global_optimum_tag_id)) {
         LOG_ERROR_AND_RETURNS(
             ErrorType::INVALID_ARGUMENT,
             "failed to feedback(invalid argument): global optimum tag id doesn't belong to index");
@@ -671,7 +666,7 @@ HNSW::feedback(const DatasetPtr& result, int64_t global_optimum_tag_id, int64_t 
     uint32_t successfully_feedback = 0;
 
     for (int i = 0; i < k; i++) {
-        if (not alg_hnsw_->isValidLabel(tag_ids[i])) {
+        if (not alg_hnsw->isValidLabel(tag_ids[i])) {
             LOG_ERROR_AND_RETURNS(
                 ErrorType::INVALID_ARGUMENT,
                 "failed to feedback(invalid argument): input result don't belong to index");
@@ -703,8 +698,8 @@ HNSW::brute_force(const DatasetPtr& query, int64_t k) {
 
         auto vector = query->GetFloat32Vectors();
         std::shared_lock lock(rw_mutex_);
-        std::priority_queue<std::pair<float, LabelType>> bf_result =
-            alg_hnsw_->bruteForce((const void*)vector, k);
+        std::priority_queue<std::pair<float, hnswlib::labeltype>> bf_result =
+            alg_hnsw->bruteForce((const void*)vector, k);
         result->Dim(std::min(k, (int64_t)bf_result.size()));
 
         for (int i = result->GetDim() - 1; i >= 0; i--) {
@@ -723,7 +718,7 @@ HNSW::brute_force(const DatasetPtr& query, int64_t k) {
 
 bool
 HNSW::CheckGraphIntegrity() const {
-    auto* hnsw = static_cast<hnswlib::HierarchicalNSW*>(alg_hnsw_.get());
+    auto* hnsw = static_cast<hnswlib::HierarchicalNSW*>(alg_hnsw.get());
     return hnsw->checkReverseConnection();
 }
 
@@ -750,7 +745,7 @@ HNSW::pretrain(const std::vector<int64_t>& base_tag_ids,
 
     for (const int64_t& base_tag_id : base_tag_ids) {
         try {
-            base->Float32Vectors(this->alg_hnsw_->getDataByLabel(base_tag_id));
+            base->Float32Vectors(this->alg_hnsw->getDataByLabel(base_tag_id));
         } catch (const std::runtime_error& e) {
             LOG_ERROR_AND_RETURNS(
                 ErrorType::INVALID_ARGUMENT,
@@ -776,7 +771,7 @@ HNSW::pretrain(const std::vector<int64_t>& base_tag_ids,
             if (topk_neighbor_tag_id == base_tag_id) {
                 continue;
             }
-            topk_data = this->alg_hnsw_->getDataByLabel(topk_neighbor_tag_id);
+            topk_data = this->alg_hnsw->getDataByLabel(topk_neighbor_tag_id);
 
             for (int d = 0; d < dim_; d++) {
                 generated_data.get()[d] = vsag::GENERATE_OMEGA * base->GetFloat32Vectors()[d] +
@@ -803,25 +798,12 @@ HNSW::init_memory_space() {
         return true;
     }
     try {
-        alg_hnsw_->init_memory_space();
+        alg_hnsw->init_memory_space();
     } catch (std::runtime_error& r) {
         LOG_ERROR_AND_RETURNS(ErrorType::NO_ENOUGH_MEMORY, "allocate memory failed:", r.what());
     }
     is_init_memory_ = true;
     return true;
-}
-
-void
-HNSW::get_vectors(const vsag::DatasetPtr& base, void** vectors_ptr, size_t* data_size_ptr) const {
-    if (type_ == DataTypes::DATA_TYPE_FLOAT) {
-        *vectors_ptr = (void*)base->GetFloat32Vectors();
-        *data_size_ptr = dim_ * sizeof(float);
-    } else if (type_ == DataTypes::DATA_TYPE_INT8) {
-        *vectors_ptr = (void*)base->GetInt8Vectors();
-        *data_size_ptr = dim_ * sizeof(int8_t);
-    } else {
-        throw std::invalid_argument(fmt::format("no support for this metric: {}", (int)type_));
-    }
 }
 
 }  // namespace vsag

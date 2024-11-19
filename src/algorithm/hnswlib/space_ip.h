@@ -14,29 +14,26 @@
 // limitations under the License.
 
 #pragma once
-#include "data_type.h"
-#include "simd/simd.h"
-#include "space_interface.h"
+#include "hnswlib.h"
+
+namespace vsag {
+
+extern hnswlib::DISTFUNC
+GetInnerProductDistanceFunc(size_t dim);
+
+}  // namespace vsag
 
 namespace hnswlib {
-
 class InnerProductSpace : public SpaceInterface {
     DISTFUNC fstdistfunc_;
     size_t data_size_;
     size_t dim_;
 
 public:
-    explicit InnerProductSpace(size_t dim, vsag::DataTypes type) {
+    InnerProductSpace(size_t dim) {
+        fstdistfunc_ = vsag::GetInnerProductDistanceFunc(dim);
         dim_ = dim;
-        if (type == vsag::DataTypes::DATA_TYPE_FLOAT) {
-            fstdistfunc_ = vsag::GetInnerProductDistanceFunc(dim);
-            data_size_ = dim * sizeof(float);
-        } else if (type == vsag::DataTypes::DATA_TYPE_INT8) {
-            fstdistfunc_ = vsag::GetINT8InnerProductDistanceFunc(dim);
-            data_size_ = dim * sizeof(int8_t);
-        } else {
-            throw std::invalid_argument(fmt::format("no support for this metric: {}", (int)type));
-        }
+        data_size_ = dim * sizeof(float);
     }
 
     size_t

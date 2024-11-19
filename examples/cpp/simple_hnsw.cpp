@@ -56,8 +56,7 @@ main(int argc, char** argv) {
     index->Build(base);
 
     // prepare a query vector
-    // memory will be released by query the dataset since owner is set to true when creating the query.
-    auto query_vector = new float[dim];
+    auto query_vector = new float[dim];  // memory will be released by query the dataset
     for (int64_t i = 0; i < dim; ++i) {
         query_vector[i] = distrib_real(rng);
     }

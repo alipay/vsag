@@ -28,27 +28,48 @@
 
 #include "../algorithm/hnswlib/hnswlib.h"
 #include "../common.h"
-#include "../data_type.h"
 #include "../default_allocator.h"
 #include "../impl/conjugate_graph.h"
 #include "../logger.h"
 #include "../safe_allocator.h"
 #include "../utils.h"
-#include "base_filter_functor.h"
-#include "typing.h"
 #include "vsag/binaryset.h"
 #include "vsag/errors.h"
 #include "vsag/index.h"
 #include "vsag/readerset.h"
 
 namespace vsag {
+class BitsetOrCallbackFilter : public hnswlib::BaseFilterFunctor {
+public:
+    BitsetOrCallbackFilter(const std::function<bool(int64_t)>& func) : func_(func) {
+        is_bitset_filter_ = false;
+    }
+
+    BitsetOrCallbackFilter(const BitsetPtr& bitset) : bitset_(bitset) {
+        is_bitset_filter_ = true;
+    }
+
+    bool
+    operator()(hnswlib::labeltype id) override {
+        if (is_bitset_filter_) {
+            int64_t bit_index = id & ROW_ID_MASK;
+            return not bitset_->Test(bit_index);
+        } else {
+            return not func_(id);
+        }
+    }
+
+private:
+    std::function<bool(int64_t)> func_;
+    BitsetPtr bitset_;
+    bool is_bitset_filter_ = false;
+};
 
 class HNSW : public Index {
 public:
     HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
          int M,
          int ef_construction,
-         DataTypes type,
          bool use_static = false,
          bool use_reversed_edges = false,
          bool use_conjugate_graph = false,
@@ -56,7 +77,7 @@ public:
          Allocator* allocator = nullptr);
 
     virtual ~HNSW() {
-        alg_hnsw_ = nullptr;
+        alg_hnsw = nullptr;
         allocator_.reset();
     }
 
@@ -138,7 +159,7 @@ public:
 
     virtual tl::expected<float, Error>
     CalcDistanceById(const float* vector, int64_t id) const override {
-        SAFE_CALL(return alg_hnsw_->getDistanceByLabel(id, vector));
+        SAFE_CALL(return alg_hnsw->getDistanceByLabel(id, vector));
     };
 
 public:
@@ -170,15 +191,15 @@ public:
 public:
     int64_t
     GetNumElements() const override {
-        return alg_hnsw_->getCurrentElementCount() - alg_hnsw_->getDeletedCount();
+        return alg_hnsw->getCurrentElementCount() - alg_hnsw->getDeletedCount();
     }
 
     int64_t
     GetMemoryUsage() const override {
         if (use_conjugate_graph_)
-            return alg_hnsw_->calcSerializeSize() + conjugate_graph_->GetMemoryUsage();
+            return alg_hnsw->calcSerializeSize() + conjugate_graph_->GetMemoryUsage();
         else
-            return alg_hnsw_->calcSerializeSize();
+            return alg_hnsw->calcSerializeSize();
     }
 
     std::string
@@ -209,7 +230,7 @@ private:
     knn_search(const DatasetPtr& query,
                int64_t k,
                const std::string& parameters,
-               BaseFilterFunctor* filter_ptr) const;
+               hnswlib::BaseFilterFunctor* filter_ptr) const;
 
     template <typename FilterType>
     tl::expected<DatasetPtr, Error>
@@ -223,7 +244,7 @@ private:
     range_search(const DatasetPtr& query,
                  float radius,
                  const std::string& parameters,
-                 BaseFilterFunctor* filter_ptr,
+                 hnswlib::BaseFilterFunctor* filter_ptr,
                  int64_t limited_size) const;
 
     tl::expected<uint32_t, Error>
@@ -259,15 +280,12 @@ private:
     tl::expected<bool, Error>
     init_memory_space();
 
-    void
-    get_vectors(const DatasetPtr& base, void** vectors_ptr, size_t* data_size_ptr) const;
-
     BinarySet
     empty_binaryset() const;
 
 private:
-    std::shared_ptr<hnswlib::AlgorithmInterface<float>> alg_hnsw_;
-    std::shared_ptr<hnswlib::SpaceInterface> space_;
+    std::shared_ptr<hnswlib::AlgorithmInterface<float>> alg_hnsw;
+    std::shared_ptr<hnswlib::SpaceInterface> space;
 
     bool use_conjugate_graph_;
     std::shared_ptr<ConjugateGraph> conjugate_graph_;
@@ -277,7 +295,6 @@ private:
     bool empty_index_ = false;
     bool use_reversed_edges_ = false;
     bool is_init_memory_ = false;
-    DataTypes type_;
 
     std::shared_ptr<SafeAllocator> allocator_;
 

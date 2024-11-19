@@ -14,8 +14,14 @@
 // limitations under the License.
 
 #pragma once
-#include "simd/simd.h"
-#include "space_interface.h"
+#include "hnswlib.h"
+
+namespace vsag {
+
+extern hnswlib::DISTFUNC
+GetL2DistanceFunc(size_t dim);
+
+}  // namespace vsag
 
 namespace hnswlib {
 
@@ -25,7 +31,7 @@ class L2Space : public SpaceInterface {
     size_t dim_;
 
 public:
-    explicit L2Space(size_t dim) {
+    L2Space(size_t dim) {
         fstdistfunc_ = vsag::GetL2DistanceFunc(dim);
         dim_ = dim;
         data_size_ = dim * sizeof(float);

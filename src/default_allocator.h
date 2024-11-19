@@ -1,4 +1,5 @@
 
+
 // Copyright 2024-present the vsag project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,13 +28,10 @@ namespace vsag {
 
 class DefaultAllocator : public Allocator {
 public:
-    static std::shared_ptr<Allocator>
+    static DefaultAllocator*
     Instance() {
-        static std::shared_ptr<Allocator> s_instance;
-        if (s_instance == nullptr) {
-            s_instance = std::make_shared<DefaultAllocator>();
-        }
-        return s_instance;
+        static DefaultAllocator s_instance;
+        return &s_instance;
     }
 
 public:

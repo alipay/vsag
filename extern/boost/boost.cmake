@@ -46,8 +46,7 @@ ExternalProject_Add(
     LOG_INSTALL TRUE
     DOWNLOAD_NO_PROGRESS 0
     INACTIVITY_TIMEOUT 5
-    # filesize ~= 90MiB
-    TIMEOUT 90
+    TIMEOUT 150
 )
 
 ExternalProject_Add_Step(${name} setup-compiler

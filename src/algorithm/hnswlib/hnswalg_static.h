@@ -35,7 +35,7 @@
 #include "visited_list_pool.h"
 
 namespace hnswlib {
-using tableint = vsag::InnerIdType;
+typedef unsigned int tableint;
 typedef unsigned int linklistsizeint;
 class StaticHierarchicalNSW : public AlgorithmInterface<float> {
 private:
@@ -81,7 +81,7 @@ private:
     void* dist_func_param_{nullptr};
 
     mutable std::mutex label_lookup_lock;  // lock for label_lookup_
-    std::unordered_map<LabelType, tableint> label_lookup_;
+    std::unordered_map<labeltype, tableint> label_lookup_;
 
     std::default_random_engine level_generator_;
     std::default_random_engine update_probability_generator_;
@@ -149,7 +149,7 @@ public:
         update_probability_generator_.seed(random_seed + 1);
 
         size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
-        size_data_per_element_ = size_links_level0_ + data_size_ + sizeof(LabelType);
+        size_data_per_element_ = size_links_level0_ + data_size_ + sizeof(labeltype);
         offsetData_ = size_links_level0_;
         label_offset_ = size_links_level0_ + data_size_;
         offsetLevel0_ = 0;
@@ -202,31 +202,31 @@ public:
     };
 
     inline std::mutex&
-    getLabelOpMutex(LabelType label) const {
+    getLabelOpMutex(labeltype label) const {
         // calculate hash
         size_t lock_id = label & (MAX_LABEL_OPERATION_LOCKS - 1);
         return label_op_locks_[lock_id];
     }
 
-    inline LabelType
+    inline labeltype
     getExternalLabel(tableint internal_id) const {
-        LabelType return_label;
+        labeltype return_label;
         memcpy(&return_label,
                (data_level0_memory_->GetElementPtr(internal_id, label_offset_)),
-               sizeof(LabelType));
+               sizeof(labeltype));
         return return_label;
     }
 
     inline void
-    setExternalLabel(tableint internal_id, LabelType label) const {
+    setExternalLabel(tableint internal_id, labeltype label) const {
         memcpy((data_level0_memory_->GetElementPtr(internal_id, label_offset_)),
                &label,
-               sizeof(LabelType));
+               sizeof(labeltype));
     }
 
-    inline LabelType*
+    inline labeltype*
     getExternalLabeLp(tableint internal_id) const {
-        return (LabelType*)(data_level0_memory_->GetElementPtr(internal_id, label_offset_));
+        return (labeltype*)(data_level0_memory_->GetElementPtr(internal_id, label_offset_));
     }
 
     inline char*
@@ -257,7 +257,7 @@ public:
     }
 
     float
-    getDistanceByLabel(LabelType label, const void* data_point) override {
+    getDistanceByLabel(labeltype label, const void* data_point) override {
         std::unique_lock<std::mutex> lock_table(label_lookup_lock);
 
         auto search = label_lookup_.find(label);
@@ -272,7 +272,7 @@ public:
     }
 
     bool
-    isValidLabel(LabelType label) override {
+    isValidLabel(labeltype label) override {
         std::unique_lock<std::mutex> lock_table(label_lookup_lock);
         bool is_valid = (label_lookup_.find(label) != label_lookup_.end());
         lock_table.unlock();
@@ -283,7 +283,7 @@ public:
                         std::vector<std::pair<float, tableint>>,
                         CompareByFirst>
     searchBaseLayer(tableint ep_id, const void* data_point, int layer) {
-        VisitedListPtr vl = visited_list_pool_->getFreeVisitedList();
+        std::shared_ptr<VisitedList> vl = visited_list_pool_->getFreeVisitedList();
         vl_type* visited_array = vl->mass;
         vl_type visited_array_tag = vl->curV;
 
@@ -384,8 +384,8 @@ public:
                                float*& dist_map,
                                size_t ef,
                                size_t k,
-                               vsag::BaseFilterFunctor* isIdAllowed = nullptr) const {
-        VisitedListPtr vl = visited_list_pool_->getFreeVisitedList();
+                               BaseFilterFunctor* isIdAllowed = nullptr) const {
+        std::shared_ptr<VisitedList> vl = visited_list_pool_->getFreeVisitedList();
         vl_type* visited_array = vl->mass;
         vl_type visited_array_tag = vl->curV;
 
@@ -520,8 +520,8 @@ public:
                            float*& dist_map,
                            size_t ef,
                            size_t k,
-                           vsag::BaseFilterFunctor* isIdAllowed = nullptr) const {
-        VisitedListPtr vl = visited_list_pool_->getFreeVisitedList();
+                           BaseFilterFunctor* isIdAllowed = nullptr) const {
+        std::shared_ptr<VisitedList> vl = visited_list_pool_->getFreeVisitedList();
         vl_type* visited_array = vl->mass;
         vl_type visited_array_tag = vl->curV;
 
@@ -644,7 +644,7 @@ public:
     //    searchBaseLayerST(tableint ep_id,
     //                      const void* data_point,
     //                      float radius,
-    //                      vsag::BaseFilterFunctor* isIdAllowed = nullptr) const {
+    //                      BaseFilterFunctor* isIdAllowed = nullptr) const {
     //        VisitedList* vl = visited_list_pool_->getFreeVisitedList();
     //        vl_type* visited_array = vl->mass;
     //        vl_type visited_array_tag = vl->curV;
@@ -680,7 +680,7 @@ public:
     //            candidate_set.pop();
     //
     //            tableint current_node_id = current_node_pair.second;
-    //            int* data = (int*)getLinklist0(current_node_id);
+    //            int* data = (int*)get_linklist0(current_node_id);
     //            size_t size = getListCount((linklistsizeint*)data);
     //            //                bool cur_node_deleted = isMarkedDeleted(current_node_id);
     //            if (collect_metrics) {
@@ -1096,22 +1096,6 @@ public:
         size += max_elements_ * sizeof(float);
         // output.close();
         return size;
-    }
-
-    template <typename T>
-    static void
-    writeBinaryPOD(std::ostream& out, const T& podRef) {
-        out.write((char*)&podRef, sizeof(T));
-    }
-
-    template <typename T>
-    static void
-    readBinaryPOD(std::istream& in, T& podRef) {
-        in.read((char*)&podRef, sizeof(T));
-
-        if (in.fail()) {
-            throw std::runtime_error("Failed to read from stream.");
-        }
     }
 
     // save index to a file stream
@@ -1567,7 +1551,7 @@ public:
     }
 
     const float*
-    getDataByLabel(LabelType label) const override {
+    getDataByLabel(labeltype label) const override {
         std::lock_guard<std::mutex> lock_label(getLabelOpMutex(label));
 
         std::unique_lock<std::mutex> lock_table(label_lookup_lock);
@@ -1607,7 +1591,7 @@ public:
     * Adds point.
     */
     bool
-    addPoint(const void* data_point, LabelType label) override {
+    addPoint(const void* data_point, labeltype label) override {
         if (addPoint(data_point, label, -1) == -1) {
             return false;
         }
@@ -1615,7 +1599,7 @@ public:
     }
 
     tableint
-    addPoint(const void* data_point, LabelType label, int level) {
+    addPoint(const void* data_point, labeltype label, int level) {
         tableint cur_c = 0;
         {
             // Checking if the element with the same label already exists
@@ -1652,7 +1636,7 @@ public:
         memset(data_level0_memory_->GetElementPtr(cur_c, offsetLevel0_), 0, size_data_per_element_);
 
         // Initialisation of the data and label
-        memcpy(getExternalLabeLp(cur_c), &label, sizeof(LabelType));
+        memcpy(getExternalLabeLp(cur_c), &label, sizeof(labeltype));
         memcpy(getDataByInternalId(cur_c), data_point, data_size_);
 
         if (curlevel) {
@@ -1726,12 +1710,12 @@ public:
         return cur_c;
     }
 
-    std::priority_queue<std::pair<float, LabelType>>
+    std::priority_queue<std::pair<float, labeltype>>
     searchKnn(const void* query_data,
               size_t k,
               uint64_t ef,
-              vsag::BaseFilterFunctor* isIdAllowed = nullptr) const override {
-        std::priority_queue<std::pair<float, LabelType>> result;
+              BaseFilterFunctor* isIdAllowed = nullptr) const override {
+        std::priority_queue<std::pair<float, labeltype>> result;
         if (cur_element_count_ == 0)
             return result;
         float* dist_map = nullptr;
@@ -1795,20 +1779,20 @@ public:
         }
         while (top_candidates.size() > 0) {
             std::pair<float, tableint> rez = top_candidates.top();
-            result.push(std::pair<float, LabelType>(rez.first, getExternalLabel(rez.second)));
+            result.push(std::pair<float, labeltype>(rez.first, getExternalLabel(rez.second)));
             top_candidates.pop();
         }
         delete[] dist_map;
         return result;
     }
 
-    std::priority_queue<std::pair<float, LabelType>>
+    std::priority_queue<std::pair<float, labeltype>>
     searchRange(const void* query_data,
                 float radius,
                 uint64_t ef,
-                vsag::BaseFilterFunctor* isIdAllowed = nullptr) const override {
+                BaseFilterFunctor* isIdAllowed = nullptr) const override {
         std::runtime_error("static hnsw does not support range search");
-        //        std::priority_queue<std::pair<float, LabelType>> result;
+        //        std::priority_queue<std::pair<float, labeltype>> result;
         //        if (cur_element_count_ == 0)
         //            return result;
         //
@@ -1822,7 +1806,7 @@ public:
         //                changed = false;
         //                unsigned int* data;
         //
-        //                data = (unsigned int*)getLinklist(currObj, level);
+        //                data = (unsigned int*)get_linklist(currObj, level);
         //                int size = getListCount(data);
         //                metric_hops_++;
         //                metric_distance_computations_ += size;
@@ -1861,7 +1845,7 @@ public:
         //        // }
         //        while (top_candidates.size() > 0) {
         //            std::pair<float, tableint> rez = top_candidates.top();
-        //            result.push(std::pair<float, LabelType>(rez.first, getExternalLabel(rez.second)));
+        //            result.push(std::pair<float, labeltype>(rez.first, getExternalLabel(rez.second)));
         //            top_candidates.pop();
         //        }
         //
@@ -1870,9 +1854,9 @@ public:
         return {};
     }
 
-    std::priority_queue<std::pair<float, LabelType>>
+    std::priority_queue<std::pair<float, labeltype>>
     bruteForce(const void* data_point, int64_t k) override {
-        std::priority_queue<std::pair<float, LabelType>> results;
+        std::priority_queue<std::pair<float, labeltype>> results;
         for (uint32_t i = 0; i < cur_element_count_; i++) {
             float dist = fstdistfunc_(data_point, getDataByInternalId(i), dist_func_param_);
             if (results.size() < k) {
@@ -1916,9 +1900,9 @@ public:
                 min1 = std::min(inbound_connections_num[i], min1);
                 max1 = std::max(inbound_connections_num[i], max1);
             }
-            std::cout << "Min inbound: " << min1 << ", Max inbound:" << max1 << "\n";
+            // std::cout << "Min inbound: " << min1 << ", Max inbound:" << max1 << "\n";
         }
-        std::cout << "integrity ok, checked " << connections_checked << " connections\n";
+        // std::cout << "integrity ok, checked " << connections_checked << " connections\n";
     }
 
     void
@@ -1932,7 +1916,7 @@ public:
             exit(-1);
         }
         in.read((char*)&dim, 4);
-        std::cout << "data dimension: " << dim << std::endl;
+        // std::cout << "data dimension: " << dim << std::endl;
         in.seekg(0, std::ios::end);
         std::ios::pos_type ss = in.tellg();
         size_t fsize = (size_t)ss;
@@ -1998,8 +1982,8 @@ public:
     get_knn_error_quantile(
         float* train_data, size_t dim, size_t num, size_t k = 20, float quantile = 0.995) {
         error_quantile = quantile;
-        std::cout << "get: " << k << " NN  quantile: " << quantile << " dim: " << dim
-                  << " num: " << num << std::endl;
+        // std::cout << "get: " << k << " NN  quantile: " << quantile << " dim: " << dim
+        //           << " num: " << num << std::endl;
         std::vector<std::pair<float, tableint>> train_knn(num * k);
         std::vector<float> error_distribution(num * k);
 #pragma omp parallel for
@@ -2032,7 +2016,7 @@ public:
         }
         std::sort(error_distribution.begin(), error_distribution.end());
         err_quantile_value = error_distribution[num * k * error_quantile];
-        std::cout << k << " NN error quantile:: " << err_quantile_value << std::endl;
+        // std::cout << k << " NN error quantile:: " << err_quantile_value << std::endl;
     }
 
     void
@@ -2069,8 +2053,8 @@ public:
             if (use_node_centroid)
                 node_cluster_dist_[i] = dist_to_centroid;
         }
-        std::cout << "encode HNSW finished with ave encode loss:: "
-                  << ave_encode_loss / (float)(right_range - left_range) << std::endl;
+        // std::cout << "encode HNSW finished with ave encode loss:: "
+        //           << ave_encode_loss / (float)(right_range - left_range) << std::endl;
     }
 
     void

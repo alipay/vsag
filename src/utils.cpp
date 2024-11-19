@@ -18,6 +18,8 @@
 #include <cstdint>
 #include <unordered_set>
 
+#include "./logger.h"
+
 namespace vsag {
 
 const static int64_t DEFAULT_WATCH_WINDOW_SIZE = 20;
@@ -81,20 +83,6 @@ WindowResultQueue::GetAvgResult() const {
         result += queue_[i];
     }
     return result / statstic_num;
-}
-
-std::string
-format_map(const std::string& str, const std::unordered_map<std::string, std::string>& mappings) {
-    std::string result = str;
-
-    for (const auto& [key, value] : mappings) {
-        size_t pos = result.find("{" + key + "}");
-        while (pos != std::string::npos) {
-            result.replace(pos, key.length() + 2, value);
-            pos = result.find("{" + key + "}");
-        }
-    }
-    return result;
 }
 
 }  // namespace vsag

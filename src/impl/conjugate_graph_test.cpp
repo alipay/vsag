@@ -20,7 +20,7 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 
-#include "fixtures.h"
+#include "../../tests/fixtures/fixtures.h"
 
 TEST_CASE("build, add and memory usage", "[ut][conjugate_graph]") {
     std::shared_ptr<vsag::ConjugateGraph> conjugate_graph =
@@ -97,7 +97,7 @@ TEST_CASE("serialize and deserialize with binary", "[ut][conjugate_graph]") {
     SECTION("deserialize with invalid magic_num") {
         vsag::Binary binary = *conjugate_graph->Serialize();
 
-        vsag::JsonType json;
+        nlohmann::json json;
         json[vsag::SERIALIZE_MAGIC_NUM] = std::to_string(0xABCD1234);
         json[vsag::SERIALIZE_VERSION] = vsag::VERSION;
         std::string json_str = json.dump();
@@ -121,7 +121,7 @@ TEST_CASE("serialize and deserialize with binary", "[ut][conjugate_graph]") {
     SECTION("deserialize with invalid version") {
         vsag::Binary binary = *conjugate_graph->Serialize();
 
-        vsag::JsonType json;
+        nlohmann::json json;
         json[vsag::SERIALIZE_MAGIC_NUM] = vsag::MAGIC_NUM;
         json[vsag::SERIALIZE_VERSION] = std::to_string(2);
         std::string json_str = json.dump();
@@ -152,7 +152,7 @@ TEST_CASE("serialize and deserialize with stream", "[ut][conjugate_graph]") {
     conjugate_graph->AddNeighbor(1, 0);
 
     SECTION("successful case") {
-        fixtures::TempDir dir("conjugate_graph_test_deserialize_on_not_empty_index");
+        fixtures::temp_dir dir("conjugate_graph_test_deserialize_on_not_empty_index");
         std::fstream out_stream(dir.path + "conjugate_graph.bin", std::ios::out | std::ios::binary);
         auto serialize_result = conjugate_graph->Serialize(out_stream);
         REQUIRE(serialize_result.has_value());
@@ -172,13 +172,13 @@ TEST_CASE("serialize and deserialize with stream", "[ut][conjugate_graph]") {
     }
 
     SECTION("invalid magic_num") {
-        fixtures::TempDir dir("conjugate_graph_test_deserialize_on_not_empty_index");
+        fixtures::temp_dir dir("conjugate_graph_test_deserialize_on_not_empty_index");
         std::fstream out_stream(dir.path + "conjugate_graph.bin", std::ios::out | std::ios::binary);
         auto serialize_result = conjugate_graph->Serialize(out_stream);
         REQUIRE(serialize_result.has_value());
         out_stream.seekg(conjugate_graph->GetMemoryUsage() - vsag::FOOTER_SIZE, std::ios::beg);
 
-        vsag::JsonType json;
+        nlohmann::json json;
         json[vsag::SERIALIZE_MAGIC_NUM] = std::to_string(0xABCD1234);
         json[vsag::SERIALIZE_VERSION] = vsag::VERSION;
         std::string json_str = json.dump();
@@ -195,13 +195,13 @@ TEST_CASE("serialize and deserialize with stream", "[ut][conjugate_graph]") {
     }
 
     SECTION("invalid version") {
-        fixtures::TempDir dir("conjugate_graph_test_deserialize_on_not_empty_index");
+        fixtures::temp_dir dir("conjugate_graph_test_deserialize_on_not_empty_index");
         std::fstream out_stream(dir.path + "conjugate_graph.bin", std::ios::out | std::ios::binary);
         auto serialize_result = conjugate_graph->Serialize(out_stream);
         REQUIRE(serialize_result.has_value());
         out_stream.seekg(conjugate_graph->GetMemoryUsage() - vsag::FOOTER_SIZE, std::ios::beg);
 
-        vsag::JsonType json;
+        nlohmann::json json;
         json[vsag::SERIALIZE_MAGIC_NUM] = vsag::MAGIC_NUM;
         json[vsag::SERIALIZE_VERSION] = std::to_string(2);
         std::string json_str = json.dump();
@@ -218,7 +218,7 @@ TEST_CASE("serialize and deserialize with stream", "[ut][conjugate_graph]") {
     }
 
     SECTION("less bits") {
-        fixtures::TempDir dir("conjugate_graph_test_deserialize_on_not_empty_index");
+        fixtures::temp_dir dir("conjugate_graph_test_deserialize_on_not_empty_index");
         std::fstream out_stream(dir.path + "conjugate_graph.bin", std::ios::out | std::ios::binary);
         auto serialize_result = conjugate_graph->Serialize(out_stream);
         REQUIRE(serialize_result.has_value());
@@ -234,7 +234,7 @@ TEST_CASE("serialize and deserialize with stream", "[ut][conjugate_graph]") {
 
     SECTION("invalid header") {
         uint32_t invalid_memory_usage = 0;
-        fixtures::TempDir dir("conjugate_graph_test_deserialize_on_not_empty_index");
+        fixtures::temp_dir dir("conjugate_graph_test_deserialize_on_not_empty_index");
         std::fstream out_stream(dir.path + "conjugate_graph.bin", std::ios::out | std::ios::binary);
         auto serialize_result = conjugate_graph->Serialize(out_stream);
         REQUIRE(serialize_result.has_value());
@@ -249,7 +249,7 @@ TEST_CASE("serialize and deserialize with stream", "[ut][conjugate_graph]") {
     }
 
     SECTION("failed deserialize and re-serialize") {
-        fixtures::TempDir dir("conjugate_graph_test_deserialize_on_not_empty_index");
+        fixtures::temp_dir dir("conjugate_graph_test_deserialize_on_not_empty_index");
         std::fstream out_stream(dir.path + "conjugate_graph.bin", std::ios::out | std::ios::binary);
         auto serialize_result = conjugate_graph->Serialize(out_stream);
         REQUIRE(serialize_result.has_value());

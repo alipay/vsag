@@ -1,4 +1,5 @@
 
+
 // Copyright 2024-present the vsag project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,9 +14,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "bitset_impl.h"
+#include "./bitset_impl.h"
 
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <mutex>
 #include <random>

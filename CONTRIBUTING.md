@@ -1,4 +1,4 @@
-# Contributing to VSAG
+# Contributing to vsag
 
 First of all, thanks for taking the time to contribute to vsag! It's people like you that help vsag come to fruition. :tada:
 
@@ -102,6 +102,6 @@ Install lcov
 $ sudo apt-get install lcov
 ```
 Run tests and generate code coverage report
-```shell
+```shell 
 $ make test_cov
 ```

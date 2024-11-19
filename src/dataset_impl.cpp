@@ -1,4 +1,5 @@
 
+
 // Copyright 2024-present the vsag project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "dataset_impl.h"
+#include "./dataset_impl.h"
+
+#include <cstdint>
+#include <string>
+#include <unordered_map>
+#include <variant>
 
 namespace vsag {
 

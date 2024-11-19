@@ -15,64 +15,57 @@
 
 #include "diskann_zparameters.h"
 
-#include "index_common_param.h"
-
 namespace vsag {
 
 CreateDiskannParameters
 CreateDiskannParameters::FromJson(const std::string& json_string) {
-    JsonType params = JsonType::parse(json_string);
+    nlohmann::json params = nlohmann::json::parse(json_string);
+
+    CHECK_ARGUMENT(params.contains(PARAMETER_DTYPE),
+                   fmt::format("parameters must contains {}", PARAMETER_DTYPE));
+    CHECK_ARGUMENT(
+        params[PARAMETER_DTYPE] == DATATYPE_FLOAT32,
+        fmt::format("parameters[{}] supports {} only now", PARAMETER_DTYPE, DATATYPE_FLOAT32));
+    CHECK_ARGUMENT(params.contains(PARAMETER_METRIC_TYPE),
+                   fmt::format("parameters must contains {}", PARAMETER_METRIC_TYPE));
+    CHECK_ARGUMENT(params.contains(PARAMETER_DIM),
+                   fmt::format("parameters must contains {}", PARAMETER_DIM));
+
     CreateDiskannParameters obj;
 
-    auto index_common_param = IndexCommonParam::CheckAndCreate(json_string);
+    // set ojb.dim
+    obj.dim = params[PARAMETER_DIM];
 
-    CHECK_ARGUMENT(
-        index_common_param.data_type_ == DataTypes::DATA_TYPE_FLOAT,
-        fmt::format("parameters[{}] supports {} only now", PARAMETER_DTYPE, DATATYPE_FLOAT32));
-
-    // set obj.dim
-    obj.dim = index_common_param.dim_;
-
-    // set obj.dtype
+    // set ojb.dtype
     obj.dtype = params[PARAMETER_DTYPE];
 
     // set obj.metric
-    if (index_common_param.metric_ == MetricType::METRIC_TYPE_L2SQR) {
+    CHECK_ARGUMENT(params.contains(INDEX_DISKANN),
+                   fmt::format("parameters must contains {}", INDEX_DISKANN));
+    if (params[PARAMETER_METRIC_TYPE] == METRIC_L2) {
         obj.metric = diskann::Metric::L2;
-    } else if (index_common_param.metric_ == MetricType::METRIC_TYPE_IP) {
+    } else if (params[PARAMETER_METRIC_TYPE] == METRIC_IP) {
         obj.metric = diskann::Metric::INNER_PRODUCT;
-    } else if (params[PARAMETER_METRIC_TYPE] == METRIC_COSINE) {
-        obj.metric = diskann::Metric::COSINE;
     } else {
         std::string metric = params[PARAMETER_METRIC_TYPE];
-        throw std::invalid_argument(fmt::format("parameters[{}] must in [{}, {}, {}], now is {}",
+        throw std::invalid_argument(fmt::format("parameters[{}] must in [{}, {}], now is {}",
                                                 PARAMETER_METRIC_TYPE,
                                                 METRIC_L2,
                                                 METRIC_IP,
-                                                METRIC_COSINE,
                                                 metric));
     }
-
-    CHECK_ARGUMENT(params.contains(INDEX_DISKANN),
-                   fmt::format("parameters must contains {}", INDEX_DISKANN));
 
     // set obj.max_degree
     CHECK_ARGUMENT(
         params[INDEX_DISKANN].contains(DISKANN_PARAMETER_R),
         fmt::format("parameters[{}] must contains {}", INDEX_DISKANN, DISKANN_PARAMETER_R));
     obj.max_degree = params[INDEX_DISKANN][DISKANN_PARAMETER_R];
-    CHECK_ARGUMENT((5 <= obj.max_degree) and (obj.max_degree <= 128),
-                   fmt::format("max_degree({}) must in range[5, 128]", obj.max_degree));
 
     // set obj.ef_construction
     CHECK_ARGUMENT(
         params[INDEX_DISKANN].contains(DISKANN_PARAMETER_L),
         fmt::format("parameters[{}] must contains {}", INDEX_DISKANN, DISKANN_PARAMETER_L));
     obj.ef_construction = params[INDEX_DISKANN][DISKANN_PARAMETER_L];
-    CHECK_ARGUMENT((obj.max_degree <= obj.ef_construction) and (obj.ef_construction <= 1000),
-                   fmt::format("ef_construction({}) must in range[$max_degree({}), 64]",
-                               obj.ef_construction,
-                               obj.max_degree));
 
     // set obj.pq_dims
     CHECK_ARGUMENT(
@@ -116,7 +109,7 @@ CreateDiskannParameters::FromJson(const std::string& json_string) {
 
 DiskannSearchParameters
 DiskannSearchParameters::FromJson(const std::string& json_string) {
-    JsonType params = JsonType::parse(json_string);
+    nlohmann::json params = nlohmann::json::parse(json_string);
 
     DiskannSearchParameters obj;
 

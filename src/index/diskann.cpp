@@ -1,4 +1,5 @@
 
+
 // Copyright 2024-present the vsag project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -266,7 +267,7 @@ DiskANN::build(const DatasetPtr& base) {
                                                graph_stream_,
                                                disk_layout_stream_,
                                                sector_len_,
-                                               metric_);
+                                               "");
         }
 
         std::vector<int64_t> failed_ids;
@@ -316,7 +317,8 @@ DiskANN::knn_search(const DatasetPtr& query,
                     int64_t k,
                     const std::string& parameters,
                     const std::function<bool(int64_t)>& filter) const {
-    SlowTaskTimer t("diskann knnsearch", 200);
+    // 取消timer，可能会提升效率。
+    // SlowTaskTimer t("diskann knnsearch", 200);
 
     // cannot perform search on empty index
     if (empty_index_) {
@@ -742,7 +744,7 @@ DiskANN::deserialize(const ReaderSet& reader_set) {
 
 std::string
 DiskANN::GetStats() const {
-    JsonType j;
+    nlohmann::json j;
     j[STATSTIC_DATA_NUM] = GetNumElements();
     j[STATSTIC_INDEX_NAME] = INDEX_DISKANN;
     j[STATSTIC_MEMORY] = GetMemoryUsage();
@@ -932,7 +934,7 @@ DiskANN::continue_build(const DatasetPtr& base, const BinarySet& binary_set) {
                                                    graph_stream_,
                                                    disk_layout_stream_,
                                                    sector_len_,
-                                                   metric_);
+                                                   "");
                 load_disk_index(binary_set);
                 build_status = BuildStatus::FINISH;
                 status_ = IndexStatus::MEMORY;

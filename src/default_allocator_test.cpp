@@ -1,4 +1,5 @@
 
+
 // Copyright 2024-present the vsag project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,7 +33,7 @@ TEST_CASE("default allocator", "[ut]") {
 }
 
 TEST_CASE("match of malloc and free", "[ut]") {
-#ifndef NDEBUG
+#ifndef NDBUG
     vsag::DefaultAllocator allocator;
     size_t alloc_size = 1024;
     auto p = malloc(alloc_size);

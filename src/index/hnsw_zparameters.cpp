@@ -19,70 +19,71 @@
 
 #include <nlohmann/json.hpp>
 
-#include "index_common_param.h"
+#include "../common.h"
 #include "vsag/constants.h"
 
 namespace vsag {
 
 CreateHnswParameters
 CreateHnswParameters::FromJson(const std::string& json_string) {
-    JsonType params = JsonType::parse(json_string);
+    nlohmann::json params = nlohmann::json::parse(json_string);
+
+    CHECK_ARGUMENT(params.contains(PARAMETER_DTYPE),
+                   fmt::format("parameters must contains {}", PARAMETER_DTYPE));
+    CHECK_ARGUMENT(
+        params[PARAMETER_DTYPE] == DATATYPE_FLOAT32,
+        fmt::format("parameters[{}] supports {} only now", PARAMETER_DTYPE, DATATYPE_FLOAT32));
+    CHECK_ARGUMENT(params.contains(PARAMETER_METRIC_TYPE),
+                   fmt::format("parameters must contains {}", PARAMETER_METRIC_TYPE));
+    CHECK_ARGUMENT(params.contains(PARAMETER_DIM),
+                   fmt::format("parameters must contains {}", PARAMETER_DIM));
+
     CreateHnswParameters obj;
-
-    auto index_common_param = IndexCommonParam::CheckAndCreate(json_string);
-
-    if (index_common_param.data_type_ == DataTypes::DATA_TYPE_FLOAT) {
-        obj.type = DataTypes::DATA_TYPE_FLOAT;
-    } else if (index_common_param.data_type_ == DataTypes::DATA_TYPE_INT8) {
-        obj.type = DataTypes::DATA_TYPE_INT8;
-        if (index_common_param.metric_ != MetricType::METRIC_TYPE_IP) {
-            throw std::invalid_argument(fmt::format(
-                "no support for INT8 when using {}, {} as metric", METRIC_L2, METRIC_COSINE));
-        }
-    }
-
-    if (index_common_param.metric_ == MetricType::METRIC_TYPE_L2SQR) {
-        obj.space = std::make_shared<hnswlib::L2Space>(index_common_param.dim_);
-    } else if (index_common_param.metric_ == MetricType::METRIC_TYPE_IP) {
-        obj.space = std::make_shared<hnswlib::InnerProductSpace>(index_common_param.dim_, obj.type);
-    } else if (index_common_param.metric_ == MetricType::METRIC_TYPE_COSINE) {
-        obj.normalize = true;
-        obj.space = std::make_shared<hnswlib::InnerProductSpace>(index_common_param.dim_, obj.type);
-    }
 
     // set obj.space
     CHECK_ARGUMENT(params.contains(INDEX_HNSW),
                    fmt::format("parameters must contains {}", INDEX_HNSW));
-    const auto& hnsw_param_obj = params[INDEX_HNSW];
+    if (params[PARAMETER_METRIC_TYPE] == METRIC_L2) {
+        obj.space = std::make_shared<hnswlib::L2Space>(params[PARAMETER_DIM]);
+    } else if (params[PARAMETER_METRIC_TYPE] == METRIC_IP) {
+        obj.space = std::make_shared<hnswlib::InnerProductSpace>(params[PARAMETER_DIM]);
+    } else if (params[PARAMETER_METRIC_TYPE] == METRIC_COSINE) {
+        obj.normalize = true;
+        obj.space = std::make_shared<hnswlib::InnerProductSpace>(params[PARAMETER_DIM]);
+    } else {
+        std::string metric = params[PARAMETER_METRIC_TYPE];
+        throw std::invalid_argument(fmt::format("parameters[{}] must in [{}, {}, {}], now is {}",
+                                                PARAMETER_METRIC_TYPE,
+                                                METRIC_L2,
+                                                METRIC_IP,
+                                                METRIC_COSINE,
+                                                metric));
+    }
 
     // set obj.max_degree
-    CHECK_ARGUMENT(hnsw_param_obj.contains(HNSW_PARAMETER_M),
+    CHECK_ARGUMENT(params[INDEX_HNSW].contains(HNSW_PARAMETER_M),
                    fmt::format("parameters[{}] must contains {}", INDEX_HNSW, HNSW_PARAMETER_M));
-    CHECK_ARGUMENT(hnsw_param_obj[HNSW_PARAMETER_M].is_number_integer(),
-                   fmt::format("parameters[{}] must be integer type", HNSW_PARAMETER_M));
-    obj.max_degree = hnsw_param_obj[HNSW_PARAMETER_M];
-    CHECK_ARGUMENT((5 <= obj.max_degree) and (obj.max_degree <= 128),
-                   fmt::format("max_degree({}) must in range[5, 128]", obj.max_degree));
+    obj.max_degree = params[INDEX_HNSW][HNSW_PARAMETER_M];
+    CHECK_ARGUMENT((5 <= obj.max_degree) and (obj.max_degree <= 64),
+                   fmt::format("max_degree({}) must in range[5, 64]", obj.max_degree));
 
     // set obj.ef_construction
     CHECK_ARGUMENT(
-        hnsw_param_obj.contains(HNSW_PARAMETER_CONSTRUCTION),
+        params[INDEX_HNSW].contains(HNSW_PARAMETER_CONSTRUCTION),
         fmt::format("parameters[{}] must contains {}", INDEX_HNSW, HNSW_PARAMETER_CONSTRUCTION));
-    CHECK_ARGUMENT(hnsw_param_obj[HNSW_PARAMETER_CONSTRUCTION].is_number_integer(),
-                   fmt::format("parameters[{}] must be integer type", HNSW_PARAMETER_CONSTRUCTION));
-    obj.ef_construction = hnsw_param_obj[HNSW_PARAMETER_CONSTRUCTION];
+    obj.ef_construction = params[INDEX_HNSW][HNSW_PARAMETER_CONSTRUCTION];
     CHECK_ARGUMENT((obj.max_degree <= obj.ef_construction) and (obj.ef_construction <= 1000),
                    fmt::format("ef_construction({}) must in range[$max_degree({}), 64]",
                                obj.ef_construction,
                                obj.max_degree));
 
     // set obj.use_static
-    obj.use_static = hnsw_param_obj.contains(HNSW_PARAMETER_USE_STATIC) &&
-                     hnsw_param_obj[HNSW_PARAMETER_USE_STATIC];
+    obj.use_static = params[INDEX_HNSW].contains(HNSW_PARAMETER_USE_STATIC) &&
+                     params[INDEX_HNSW][HNSW_PARAMETER_USE_STATIC];
 
     // set obj.use_conjugate_graph
-    if (hnsw_param_obj.contains(PARAMETER_USE_CONJUGATE_GRAPH)) {
-        obj.use_conjugate_graph = hnsw_param_obj[PARAMETER_USE_CONJUGATE_GRAPH];
+    if (params[INDEX_HNSW].contains(PARAMETER_USE_CONJUGATE_GRAPH)) {
+        obj.use_conjugate_graph = params[INDEX_HNSW][PARAMETER_USE_CONJUGATE_GRAPH];
     } else {
         obj.use_conjugate_graph = false;
     }
@@ -91,7 +92,7 @@ CreateHnswParameters::FromJson(const std::string& json_string) {
 
 HnswSearchParameters
 HnswSearchParameters::FromJson(const std::string& json_string) {
-    JsonType params = JsonType::parse(json_string);
+    nlohmann::json params = nlohmann::json::parse(json_string);
 
     HnswSearchParameters obj;
 
@@ -126,7 +127,6 @@ CreateFreshHnswParameters::FromJson(const std::string& json_string) {
     obj.space = parrent_obj.space;
     obj.use_static = false;
     obj.normalize = parrent_obj.normalize;
-    obj.type = parrent_obj.type;
 
     // set obj.use_reversed_edges
     obj.use_reversed_edges = true;

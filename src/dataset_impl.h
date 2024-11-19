@@ -35,7 +35,7 @@ class DatasetImpl : public Dataset {
 public:
     DatasetImpl() = default;
 
-    ~DatasetImpl() override {
+    ~DatasetImpl() {
         if (not owner_) {
             return;
         }

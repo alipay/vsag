@@ -16,7 +16,6 @@
 
 namespace vsag {
 
-extern const char* const INDEX_HGRAPH;
 extern const char* const INDEX_DISKANN;
 extern const char* const INDEX_HNSW;
 extern const char* const INDEX_FRESH_HNSW;
@@ -39,7 +38,6 @@ extern const char* const METRIC_L2;
 extern const char* const METRIC_COSINE;
 extern const char* const METRIC_IP;
 extern const char* const DATATYPE_FLOAT32;
-extern const char* const DATATYPE_INT8;
 extern const char* const BLANK_INDEX;
 
 // parameters
@@ -92,10 +90,5 @@ extern const char* const MESSAGE_PARAMETER;
 // Serialize key
 extern const char* const SERIALIZE_MAGIC_NUM;
 extern const char* const SERIALIZE_VERSION;
-
-// hgraph params
-extern const char* const HGRAPH_USE_REORDER;
-extern const char* const HGRAPH_BASE_QUANTIZATION_TYPE;
-extern const char* const HGRAPH_GRAPH_MAX_DEGREE;
 
 }  // namespace vsag

@@ -23,6 +23,7 @@
 #include "../../default_allocator.h"
 #include "stream_writer.h"
 
+#include <iostream>
 namespace vsag {
 
 extern void*
@@ -41,18 +42,20 @@ typedef unsigned short int vl_type;
 
 class VisitedList {
 public:
-    vl_type curV;
-    vl_type* mass;
-    uint64_t numelements;
+    vl_type curV{0};
+    vl_type* mass{nullptr};
+    uint64_t numelements{0};
 
     VisitedList(uint64_t numelements1, vsag::Allocator* allocator) : allocator_(allocator) {
         curV = -1;
         numelements = numelements1;
-        mass = (vl_type*)allocator_->Allocate(numelements * sizeof(vl_type));
     }
 
     void
     reset() {
+        if (not mass) {
+            mass = (vl_type*)allocator_->Allocate(numelements * sizeof(vl_type));
+        }
         curV++;
         if (curV == 0) {
             memset(mass, 0, sizeof(vl_type) * numelements);
@@ -77,11 +80,9 @@ using VisitedListPtr = std::shared_ptr<VisitedList>;
 
 class VisitedListPool {
 public:
-    VisitedListPool(int initmaxpools, uint64_t numelements1, vsag::Allocator* allocator)
+    VisitedListPool(uint64_t numelements1, vsag::Allocator* allocator)
         : allocator_(allocator), pool(allocator) {
         numelements = numelements1;
-        for (int i = 0; i < initmaxpools; i++)
-            pool.push_front(std::make_shared<VisitedList>(numelements, allocator_));
     }
 
     void*
@@ -101,7 +102,7 @@ public:
             std::unique_lock<std::mutex> lock(poolguard);
             if (not pool.empty()) {
                 rez = pool.front();
-                pool.pop_front();
+                pool.pop_back();
             } else {
                 rez = std::make_shared<VisitedList>(numelements, allocator_);
             }
@@ -113,11 +114,11 @@ public:
     void
     releaseVisitedList(VisitedListPtr vl) {
         std::unique_lock<std::mutex> lock(poolguard);
-        pool.push_front(vl);
+        pool.push_back(vl);
     }
 
 private:
-    std::deque<VisitedListPtr, vsag::AllocatorWrapper<VisitedListPtr>> pool;
+    vsag::Vector<VisitedListPtr> pool;
     std::mutex poolguard;
     uint64_t numelements;
     vsag::Allocator* allocator_;

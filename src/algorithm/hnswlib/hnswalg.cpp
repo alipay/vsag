@@ -91,7 +91,7 @@ bool
 HierarchicalNSW::init_memory_space() {
     // release the memory allocated by the init_memory_space function that was called earlier
     reset();
-    visited_list_pool_ = new (allocator_) VisitedListPool(1, max_elements_, allocator_);
+    visited_list_pool_ = new (allocator_) VisitedListPool(max_elements_, allocator_);
 
     element_levels_ = (int*)allocator_->Allocate(max_elements_ * sizeof(int));
     if (not data_level0_memory_->Resize(max_elements_)) {
@@ -709,7 +709,7 @@ HierarchicalNSW::resizeIndex(size_t new_max_elements) {
         throw std::runtime_error(
             "Cannot Resize, max element is less than the current number of elements");
 
-    auto new_visited_list_pool = new (allocator_) VisitedListPool(1, new_max_elements, allocator_);
+    auto new_visited_list_pool = new (allocator_) VisitedListPool(new_max_elements, allocator_);
     VisitedListPool::operator delete(visited_list_pool_, allocator_);
     visited_list_pool_ = new_visited_list_pool;
 

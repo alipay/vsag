@@ -78,7 +78,7 @@ using VisitedListPtr = std::shared_ptr<VisitedList>;
 class VisitedListPool {
 public:
     VisitedListPool(int initmaxpools, uint64_t numelements1, vsag::Allocator* allocator)
-        : allocator_(allocator) {
+        : allocator_(allocator), pool(allocator) {
         numelements = numelements1;
         for (int i = 0; i < initmaxpools; i++)
             pool.push_front(std::make_shared<VisitedList>(numelements, allocator_));
@@ -117,7 +117,7 @@ public:
     }
 
 private:
-    std::deque<VisitedListPtr> pool;
+    std::deque<VisitedListPtr, vsag::AllocatorWrapper<VisitedListPtr>> pool;
     std::mutex poolguard;
     uint64_t numelements;
     vsag::Allocator* allocator_;

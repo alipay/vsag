@@ -86,13 +86,12 @@ public:
 
     void*
     operator new(size_t size, vsag::Allocator* alloc) {
-        return alloc->Allocate(size);  // 使用自定义的分配器
+        return alloc->Allocate(size);
     }
 
-    // 自定义的 delete 操作符
     void
     operator delete(void* p, vsag::Allocator* alloc) noexcept {
-        alloc->Deallocate(p);  // 使用自定义的分配器释放内存
+        alloc->Deallocate(p);
     }
 
     VisitedListPtr

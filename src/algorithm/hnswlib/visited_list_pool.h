@@ -84,13 +84,15 @@ public:
             pool.push_front(std::make_shared<VisitedList>(numelements, allocator_));
     }
 
-    void* operator new(size_t size, vsag::Allocator* alloc) {
-        return alloc->Allocate(size); // 使用自定义的分配器
+    void*
+    operator new(size_t size, vsag::Allocator* alloc) {
+        return alloc->Allocate(size);  // 使用自定义的分配器
     }
 
     // 自定义的 delete 操作符
-    void operator delete(void* p, vsag::Allocator* alloc) noexcept {
-        alloc->Deallocate(p); // 使用自定义的分配器释放内存
+    void
+    operator delete(void* p, vsag::Allocator* alloc) noexcept {
+        alloc->Deallocate(p);  // 使用自定义的分配器释放内存
     }
 
     VisitedListPtr

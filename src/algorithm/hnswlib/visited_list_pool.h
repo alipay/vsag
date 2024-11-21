@@ -18,12 +18,11 @@
 #include <cstring>
 #include <deque>
 #include <functional>
+#include <iostream>
 #include <mutex>
 
 #include "../../default_allocator.h"
 #include "stream_writer.h"
-
-#include <iostream>
 namespace vsag {
 
 extern void*
@@ -92,7 +91,7 @@ public:
 
     void
     operator delete(void* p, vsag::Allocator* alloc) noexcept {
-        ((VisitedListPool *) p)->~VisitedListPool();
+        ((VisitedListPool*)p)->~VisitedListPool();
         alloc->Deallocate(p);
     }
 

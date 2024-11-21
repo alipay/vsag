@@ -92,6 +92,7 @@ public:
 
     void
     operator delete(void* p, vsag::Allocator* alloc) noexcept {
+        ((VisitedListPool *) p)->~VisitedListPool();
         alloc->Deallocate(p);
     }
 

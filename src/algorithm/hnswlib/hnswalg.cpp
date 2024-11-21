@@ -873,6 +873,7 @@ cache_read_from_block(char* src,
                       StreamReader& reader,
                       size_t& current_cursor,
                       size_t max_size,
+                      size_t& remaining_size,
                       char* dest) {
     // Total bytes copied to dest
     size_t total_copied = 0;
@@ -897,8 +898,9 @@ cache_read_from_block(char* src,
 
         // If src is full, reset cursor and read new data from reader
         current_cursor = 0;  // Reset cursor to overwrite src's content
-        reader.Read(src, max_size);
+        reader.Read(src, std::min(remaining_size, max_size));
     }
+    remaining_size -= read_size;
 }
 
 void
@@ -937,7 +939,7 @@ HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t
     vsag::Vector<std::mutex>(MAX_LABEL_OPERATION_LOCKS, allocator_).swap(label_op_locks_);
 
     size_t remaining_size = reader.Size() - cursor;
-    auto block_size = vsag::Options::Instance().block_size_limit();
+    auto block_size = std::min(vsag::Options::Instance().block_size_limit(), remaining_size);
     vsag::Vector<char> cache(block_size, allocator_);
     size_t cache_index = block_size;
     rev_size_ = 1.0 / mult_;
@@ -949,6 +951,7 @@ HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t
                               reader,
                               cache_index,
                               block_size,
+                              remaining_size,
                               (char*)&link_list_size);
         if (link_list_size == 0) {
             element_levels_[i] = 0;
@@ -964,6 +967,7 @@ HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t
                                   reader,
                                   cache_index,
                                   block_size,
+                                  remaining_size,
                                   (char*)link_lists_[i]);
         }
     }
@@ -974,9 +978,9 @@ HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t
                               reader,
                               cache_index,
                               block_size,
+                              remaining_size,
                               (char*)molds_);
     }
-
     if (use_reversed_edges_) {
         for (int internal_id = 0; internal_id < cur_element_count_; ++internal_id) {
             for (int level = 0; level <= element_levels_[internal_id]; ++level) {

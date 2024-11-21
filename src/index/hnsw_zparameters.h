@@ -27,17 +27,17 @@ namespace vsag {
 struct HnswParameters {
 public:
     static HnswParameters
-    FromJson(IndexCommonParam index_common_param, nlohmann::json& params);
+    FromJson(IndexCommonParam index_common_param, JsonType& params);
 
 public:
     // required vars
     std::shared_ptr<hnswlib::SpaceInterface> space;
     int64_t max_degree;
     int64_t ef_construction;
-    bool use_conjugate_graph = false;
-    bool use_static = false;
-    bool normalize = false;
-    bool use_reversed_edges = false;
+    bool use_conjugate_graph{false};
+    bool use_static{false};
+    bool normalize{false};
+    bool use_reversed_edges{false};
     DataTypes type;
 
 protected:
@@ -47,7 +47,7 @@ protected:
 struct FreshHnswParameters : public HnswParameters {
 public:
     static HnswParameters
-    FromJson(IndexCommonParam index_common_param, nlohmann::json& params);
+    FromJson(IndexCommonParam index_common_param, JsonType& params);
 
 private:
     FreshHnswParameters() = default;

@@ -27,7 +27,7 @@ const std::unordered_map<std::string, std::vector<std::string>> HGraphParameters
      {HGRAPH_BASE_QUANTIZATION_TYPE, {HGRAPH_BASE_CODES_KEY, QUANTIZATION_TYPE_KEY}},
      {HGRAPH_GRAPH_MAX_DEGREE, {HGRAPH_GRAPH_KEY, GRAPH_PARAMS_KEY, GRAPH_PARAM_MAX_DEGREE}}};
 
-HGraphParameters::HGraphParameters(const IndexCommonParam& common_param, JsonType& hgraph_param)
+HGraphParameters::HGraphParameters(JsonType& hgraph_param, const IndexCommonParam& common_param)
     : common_param_(common_param) {
     this->check_common_param();
     this->refresh_json_by_string();

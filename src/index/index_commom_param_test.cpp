@@ -17,7 +17,7 @@
 
 #include "index_common_param.h"
 
-TEST_CASE("create common parameter", "[ut][hnsw]") {
+TEST_CASE("create common parameter", "[ut]") {
     SECTION("worng metric type") {
         auto build_parameter_json = R"(
         {

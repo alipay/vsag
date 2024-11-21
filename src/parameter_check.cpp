@@ -26,7 +26,7 @@ namespace vsag {
 
 tl::expected<bool, Error>
 check_diskann_hnsw_build_parameters(const std::string& json_string) {
-    nlohmann::json parsed_params = nlohmann::json::parse(json_string);
+    JsonType parsed_params = JsonType::parse(json_string);
     IndexCommonParam index_common_params;
     try {
         index_common_params = IndexCommonParam::CheckAndCreate(parsed_params, nullptr);

@@ -73,9 +73,11 @@ Factory::CreateIndex(const std::string& origin_name,
                 index_common_params.allocator_ = DefaultAllocator::Instance().get();
             }
             logger::debug("created a hgraph index");
-            CHECK_ARGUMENT(parsed_params.contains(HGRAPH_INDEX_PARAM),
-                           fmt::format("parameters must contains {}", HGRAPH_INDEX_PARAM));
-            HGraphParameters hgraph_param(index_common_params, parsed_params[HGRAPH_INDEX_PARAM]);
+            JsonType param;
+            if (parsed_params.contains(INDEX_PARAM)) {
+                param = std::move(parsed_params[INDEX_PARAM]);
+            }
+            HGraphParameters hgraph_param(index_common_params, param);
             auto hgraph_index =
                 std::make_shared<HGraphIndex>(hgraph_param.GetJson(), index_common_params);
             hgraph_index->Init();

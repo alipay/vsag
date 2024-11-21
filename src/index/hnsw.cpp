@@ -49,9 +49,8 @@ HNSW::HNSW(IndexCommonParam index_common_param, HnswParameters params)
       use_static_(params.use_static),
       use_conjugate_graph_(params.use_conjugate_graph),
       use_reversed_edges_(params.use_reversed_edges),
-      type_(params.type) {
-    dim_ = index_common_param.dim_;
-
+      type_(params.type),
+      dim_(index_common_param.dim_) {
     auto M = std::min(std::max((int)params.max_degree, MINIMAL_M), MAXIMAL_M);
 
     if (params.ef_construction <= 0) {

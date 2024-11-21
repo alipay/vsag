@@ -32,6 +32,6 @@ public:
     Allocator* allocator_{nullptr};
 
     static IndexCommonParam
-    CheckAndCreate(nlohmann::json& params, Allocator* allocator);
+    CheckAndCreate(JsonType& params, Allocator* allocator);
 };
 }  // namespace vsag

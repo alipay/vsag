@@ -77,7 +77,6 @@ HnswParameters::FromJson(IndexCommonParam index_common_param, JsonType& hnsw_par
     } else {
         obj.use_conjugate_graph = false;
     }
-    obj.use_reversed_edges = false;
     return obj;
 }
 
@@ -109,7 +108,7 @@ HnswSearchParameters::FromJson(const std::string& json_string) {
 }
 
 HnswParameters
-FreshHnswParameters::FromJson(IndexCommonParam index_common_param, nlohmann::json& hnsw_param_obj) {
+FreshHnswParameters::FromJson(IndexCommonParam index_common_param, JsonType& hnsw_param_obj) {
     HnswParameters obj = HnswParameters::FromJson(index_common_param, hnsw_param_obj);
     obj.use_static = false;
     // set obj.use_reversed_edges

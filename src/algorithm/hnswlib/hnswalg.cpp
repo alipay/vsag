@@ -938,14 +938,13 @@ HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t
 
     size_t remaining_size = reader.Size() - cursor;
     auto block_size = vsag::Options::Instance().block_size_limit();
-    auto cache =
-        std::allocate_shared<char[]>(vsag::AllocatorWrapper<char[]>(allocator_), block_size);
+    vsag::Vector<char> cache(block_size, allocator_);
     size_t cache_index = block_size;
     rev_size_ = 1.0 / mult_;
     for (size_t i = 0; i < cur_element_count_; i++) {
         label_lookup_[getExternalLabel(i)] = i;
         unsigned int link_list_size;
-        cache_read_from_block(cache.get(),
+        cache_read_from_block(cache.data(),
                               sizeof(link_list_size),
                               reader,
                               cache_index,
@@ -960,7 +959,7 @@ HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t
             if (link_lists_[i] == nullptr)
                 throw std::runtime_error(
                     "Not enough memory: loadIndex failed to allocate linklist");
-            cache_read_from_block(cache.get(),
+            cache_read_from_block(cache.data(),
                                   link_list_size,
                                   reader,
                                   cache_index,
@@ -970,7 +969,7 @@ HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t
     }
 
     if (normalize_) {
-        cache_read_from_block(cache.get(),
+        cache_read_from_block(cache.data(),
                               max_elements_ * sizeof(float),
                               reader,
                               cache_index,

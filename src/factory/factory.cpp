@@ -77,7 +77,7 @@ Factory::CreateIndex(const std::string& origin_name,
             if (parsed_params.contains(INDEX_PARAM)) {
                 param = std::move(parsed_params[INDEX_PARAM]);
             }
-            HGraphParameters hgraph_param(index_common_params, param);
+            HGraphParameters hgraph_param(param, index_common_params);
             auto hgraph_index =
                 std::make_shared<HGraphIndex>(hgraph_param.GetJson(), index_common_params);
             hgraph_index->Init();

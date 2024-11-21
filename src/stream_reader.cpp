@@ -15,8 +15,10 @@
 
 #include "stream_reader.h"
 ReadFuncStreamReader::ReadFuncStreamReader(
-    const std::function<void(uint64_t, uint64_t, void*)>& read_func, uint64_t cursor)
-    : readFunc_(read_func), cursor_(cursor), StreamReader() {
+    const std::function<void(uint64_t, uint64_t, void*)>& read_func,
+    uint64_t cursor,
+    size_t max_size)
+    : readFunc_(read_func), cursor_(cursor), max_size_(max_size), StreamReader() {
 }
 
 void
@@ -25,10 +27,23 @@ ReadFuncStreamReader::Read(char* data, uint64_t size) {
     cursor_ += size;
 }
 
+size_t
+ReadFuncStreamReader::Size() const {
+    return max_size_;
+}
+
 IOStreamReader::IOStreamReader(std::istream& istream) : istream_(istream), StreamReader() {
+    istream_.seekg(0, std::ios::end);
+    std::streamsize length = istream_.tellg();
+    istream_.seekg(0, std::ios::beg);
 }
 
 void
 IOStreamReader::Read(char* data, uint64_t size) {
     this->istream_.read(data, static_cast<int64_t>(size));
+}
+
+size_t
+IOStreamReader::Size() const {
+    return max_size_;
 }

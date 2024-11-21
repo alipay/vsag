@@ -28,6 +28,9 @@ public:
     virtual void
     Read(char* data, uint64_t size) = 0;
 
+    virtual size_t
+    Size() const = 0;
+
     template <typename T>
     static void
     ReadObj(StreamReader& reader, T& val) {
@@ -56,14 +59,19 @@ public:
 class ReadFuncStreamReader : public StreamReader {
 public:
     ReadFuncStreamReader(const std::function<void(uint64_t, uint64_t, void*)>& read_func,
-                         uint64_t cursor);
+                         uint64_t cursor,
+                         size_t max_size);
 
     void
     Read(char* data, uint64_t size) override;
 
+    size_t
+    Size() const override;
+
 private:
     const std::function<void(uint64_t, uint64_t, void*)>& readFunc_;
     uint64_t cursor_;
+    size_t max_size_{};
 };
 
 class IOStreamReader : public StreamReader {
@@ -73,6 +81,10 @@ public:
     void
     Read(char* data, uint64_t size) override;
 
+    size_t
+    Size() const override;
+
 private:
     std::istream& istream_;
+    size_t max_size_;
 };

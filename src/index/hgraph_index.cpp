@@ -194,7 +194,7 @@ HGraphIndex::deserialize(const ReaderSet& reader_set) {
             reader_set.Get(INDEX_HGRAPH)->Read(offset, len, dest);
         };
         uint64_t cursor = 0;
-        auto reader = ReadFuncStreamReader(func, cursor);
+        auto reader = ReadFuncStreamReader(func, cursor, reader_set.Get(INDEX_HGRAPH)->Size());
         this->deserialize(reader);
     } catch (const std::runtime_error& e) {
         LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to deserialize: ", e.what());
@@ -624,7 +624,7 @@ HGraphIndex::deserialize(const BinarySet& binary_set) {
 
     try {
         uint64_t cursor = 0;
-        auto reader = ReadFuncStreamReader(func, cursor);
+        auto reader = ReadFuncStreamReader(func, cursor, binary_set.Get(INDEX_HGRAPH).size);
         this->deserialize(reader);
     } catch (const std::runtime_error& e) {
         LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to deserialize: ", e.what());

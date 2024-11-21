@@ -99,15 +99,15 @@ BlockManager::Serialize(std::ostream& ofs, size_t cur_element_count) {
     return this->SerializeImpl(writer, cur_element_count);
 }
 
-bool
+size_t
 BlockManager::Deserialize(std::function<void(uint64_t, uint64_t, void*)> read_func,
                           uint64_t cursor,
                           size_t cur_element_count) {
-    ReadFuncStreamReader reader(read_func, cursor);
+    ReadFuncStreamReader reader(read_func, cursor, cur_element_count * size_data_per_element_);
     return this->DeserializeImpl(reader, cur_element_count);
 }
 
-bool
+size_t
 BlockManager::Deserialize(std::istream& ifs, size_t cur_element_count) {
     IOStreamReader reader(ifs);
     return this->DeserializeImpl(reader, cur_element_count);
@@ -133,7 +133,7 @@ BlockManager::SerializeImpl(StreamWriter& writer, uint64_t cur_element_count) {
     return true;
 }
 
-bool
+size_t
 BlockManager::DeserializeImpl(StreamReader& reader, uint64_t cur_element_count) {
     try {
         size_t offset = 0;
@@ -147,8 +147,8 @@ BlockManager::DeserializeImpl(StreamReader& reader, uint64_t cur_element_count) 
             }
         }
     } catch (const std::ios_base::failure&) {
-        return false;
+        throw std::runtime_error("fail to deserialize block manager");
     }
-    return true;
+    return cur_element_count * size_data_per_element_;
 }
 }  // namespace hnswlib

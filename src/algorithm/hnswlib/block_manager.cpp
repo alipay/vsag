@@ -103,13 +103,14 @@ size_t
 BlockManager::Deserialize(std::function<void(uint64_t, uint64_t, void*)> read_func,
                           uint64_t cursor,
                           size_t cur_element_count) {
-    ReadFuncStreamReader reader(read_func, cursor, cur_element_count * size_data_per_element_);
+    ReadFuncStreamReader reader(
+        read_func, cursor, cursor + cur_element_count * size_data_per_element_, allocator_);
     return this->DeserializeImpl(reader, cur_element_count);
 }
 
 size_t
 BlockManager::Deserialize(std::istream& ifs, size_t cur_element_count) {
-    IOStreamReader reader(ifs);
+    IOStreamReader reader(ifs, allocator_);
     return this->DeserializeImpl(reader, cur_element_count);
 }
 

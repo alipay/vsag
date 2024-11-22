@@ -840,14 +840,14 @@ HierarchicalNSW::loadIndex(std::function<void(uint64_t, uint64_t, void*)> read_f
                            size_t file_size,
                            size_t max_elements_i) {
     int64_t cursor = 0;
-    ReadFuncStreamReader reader(read_func, cursor, file_size);
+    ReadFuncStreamReader reader(read_func, cursor, cursor + file_size, allocator_, true);
     DeserializeImpl(reader, s, max_elements_i);
 }
 
 // load index from a file stream
 void
 HierarchicalNSW::loadIndex(std::istream& in_stream, SpaceInterface* s, size_t max_elements_i) {
-    IOStreamReader reader(in_stream);
+    IOStreamReader reader(in_stream, allocator_, true);
     this->DeserializeImpl(reader, s, max_elements_i);
 }
 
@@ -855,104 +855,57 @@ HierarchicalNSW::loadIndex(std::istream& in_stream, SpaceInterface* s, size_t ma
 void
 HierarchicalNSW::loadIndex(const std::string& location, SpaceInterface* s, size_t max_elements_i) {
     std::ifstream input(location, std::ios::binary);
-    IOStreamReader reader(input);
+    IOStreamReader reader(input, allocator_, true);
     this->DeserializeImpl(reader, s, max_elements_i);
     input.close();
 }
 
 template <typename T>
 static void
-read_one(StreamReader& reader, T& value, size_t& cursor) {
+ReadOne(StreamReader& reader, T& value) {
     reader.Read(reinterpret_cast<char*>(&value), sizeof(value));
-    cursor += sizeof(value);
-}
-
-void
-cache_read_from_block(char* src,
-                      size_t read_size,
-                      StreamReader& reader,
-                      size_t& current_cursor,
-                      size_t max_size,
-                      size_t& remaining_size,
-                      char* dest) {
-    // Total bytes copied to dest
-    size_t total_copied = 0;
-
-    // Loop to read until read_size is satisfied
-    while (total_copied < read_size) {
-        // Calculate the available data in src
-        size_t available_in_src = max_size - current_cursor;
-
-        // If there is available data in src, copy it to dest
-        if (available_in_src > 0) {
-            size_t bytes_to_copy = std::min(read_size - total_copied, available_in_src);
-            memcpy(dest + total_copied, src + current_cursor, bytes_to_copy);
-            total_copied += bytes_to_copy;
-            current_cursor += bytes_to_copy;
-        }
-
-        // If we have copied enough data, we can exit
-        if (total_copied >= read_size) {
-            break;
-        }
-
-        // If src is full, reset cursor and read new data from reader
-        current_cursor = 0;  // Reset cursor to overwrite src's content
-        reader.Read(src, std::min(remaining_size, max_size));
-    }
-    remaining_size -= read_size;
 }
 
 void
 HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t max_elements_i) {
-    size_t cursor = 0;
-    read_one(reader, offsetLevel0_, cursor);
+    ReadOne(reader, offsetLevel0_);
 
     size_t max_elements;
-    read_one(reader, max_elements, cursor);
+    ReadOne(reader, max_elements);
     max_elements = std::max(max_elements, max_elements_i);
     max_elements = std::max(max_elements, max_elements_);
 
-    read_one(reader, cur_element_count_, cursor);
-    read_one(reader, size_data_per_element_, cursor);
-    read_one(reader, label_offset_, cursor);
-    read_one(reader, offset_data_, cursor);
-    read_one(reader, max_level_, cursor);
-    read_one(reader, enterpoint_node_, cursor);
+    ReadOne(reader, cur_element_count_);
+    ReadOne(reader, size_data_per_element_);
+    ReadOne(reader, label_offset_);
+    ReadOne(reader, offset_data_);
+    ReadOne(reader, max_level_);
+    ReadOne(reader, enterpoint_node_);
 
-    read_one(reader, maxM_, cursor);
-    read_one(reader, maxM0_, cursor);
-    read_one(reader, M_, cursor);
-    read_one(reader, mult_, cursor);
-    read_one(reader, ef_construction_, cursor);
+    ReadOne(reader, maxM_);
+    ReadOne(reader, maxM0_);
+    ReadOne(reader, M_);
+    ReadOne(reader, mult_);
+    ReadOne(reader, ef_construction_);
 
     data_size_ = s->get_data_size();
     fstdistfunc_ = s->get_dist_func();
     dist_func_param_ = s->get_dist_func_param();
 
     resizeIndex(max_elements);
-    cursor += data_level0_memory_->DeserializeImpl(reader, cur_element_count_);
+    data_level0_memory_->DeserializeImpl(reader, cur_element_count_);
+
     size_links_per_element_ = maxM_ * sizeof(InnerIdType) + sizeof(linklistsizeint);
 
     size_links_level0_ = maxM0_ * sizeof(InnerIdType) + sizeof(linklistsizeint);
     vsag::Vector<std::recursive_mutex>(max_elements, allocator_).swap(link_list_locks_);
     vsag::Vector<std::mutex>(MAX_LABEL_OPERATION_LOCKS, allocator_).swap(label_op_locks_);
 
-    size_t remaining_size = reader.Size() - cursor;
-    auto block_size = std::min(vsag::Options::Instance().block_size_limit(), remaining_size);
-    vsag::Vector<char> cache(block_size, allocator_);
-    size_t cache_index = block_size;
     rev_size_ = 1.0 / mult_;
     for (size_t i = 0; i < cur_element_count_; i++) {
         label_lookup_[getExternalLabel(i)] = i;
         unsigned int link_list_size;
-        cache_read_from_block(cache.data(),
-                              sizeof(link_list_size),
-                              reader,
-                              cache_index,
-                              block_size,
-                              remaining_size,
-                              (char*)&link_list_size);
+        ReadOne(reader, link_list_size);
         if (link_list_size == 0) {
             element_levels_[i] = 0;
             link_lists_[i] = nullptr;
@@ -962,25 +915,13 @@ HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t
             if (link_lists_[i] == nullptr)
                 throw std::runtime_error(
                     "Not enough memory: loadIndex failed to allocate linklist");
-            cache_read_from_block(cache.data(),
-                                  link_list_size,
-                                  reader,
-                                  cache_index,
-                                  block_size,
-                                  remaining_size,
-                                  (char*)link_lists_[i]);
+            reader.Read(link_lists_[i], link_list_size);
         }
     }
-
     if (normalize_) {
-        cache_read_from_block(cache.data(),
-                              max_elements_ * sizeof(float),
-                              reader,
-                              cache_index,
-                              block_size,
-                              remaining_size,
-                              (char*)molds_);
+        reader.Read(reinterpret_cast<char*>(molds_), max_elements_ * sizeof(float));
     }
+
     if (use_reversed_edges_) {
         for (int internal_id = 0; internal_id < cur_element_count_; ++internal_id) {
             for (int level = 0; level <= element_levels_[internal_id]; ++level) {

@@ -398,11 +398,7 @@ public:
             reader_set.Set(key, reader);
         }
 
-        auto tt = std::chrono::steady_clock::now();
         index->Deserialize(reader_set);
-        auto ttt = std::chrono::steady_clock::now();
-        auto r = std::chrono::duration<double>(ttt - tt).count();
-        std::cout << r << std::endl;
         unsigned long long memoryUsage = 0;
         std::ifstream statFileAfter("/proc/self/status");
         if (statFileAfter.is_open()) {

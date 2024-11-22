@@ -80,17 +80,17 @@ using VisitedListPtr = std::shared_ptr<VisitedList>;
 class VisitedListPool {
 public:
     VisitedListPool(uint64_t max_element_count, vsag::Allocator* allocator)
-        : allocator_(allocator), pool(allocator), max_element_count_(max_element_count) {
+        : allocator_(allocator), pool_(allocator), max_element_count_(max_element_count) {
     }
 
     VisitedListPtr
     getFreeVisitedList() {
         VisitedListPtr rez;
         {
-            std::unique_lock<std::mutex> lock(poolguard);
-            if (not pool.empty()) {
-                rez = pool.front();
-                pool.pop_back();
+            std::unique_lock<std::mutex> lock(poolguard_);
+            if (not pool_.empty()) {
+                rez = pool_.front();
+                pool_.pop_back();
             } else {
                 rez = std::make_shared<VisitedList>(max_element_count_, allocator_);
             }
@@ -101,13 +101,13 @@ public:
 
     void
     releaseVisitedList(VisitedListPtr vl) {
-        std::unique_lock<std::mutex> lock(poolguard);
-        pool.push_back(vl);
+        std::unique_lock<std::mutex> lock(poolguard_);
+        pool_.push_back(vl);
     }
 
 private:
-    vsag::Vector<VisitedListPtr> pool;
-    std::mutex poolguard;
+    vsag::Vector<VisitedListPtr> pool_;
+    std::mutex poolguard_;
     uint64_t max_element_count_;
     vsag::Allocator* allocator_;
 };

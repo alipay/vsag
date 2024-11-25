@@ -15,7 +15,6 @@
 
 #include "stream_reader.h"
 
-#include <iostream>
 ReadFuncStreamReader::ReadFuncStreamReader(
     const std::function<void(uint64_t, uint64_t, void*)>& read_func, uint64_t cursor)
     : readFunc_(read_func), cursor_(cursor), StreamReader() {
@@ -27,7 +26,7 @@ ReadFuncStreamReader::Read(char* data, uint64_t size) {
     cursor_ += size;
 }
 
-IOStreamReader::IOStreamReader(std::istream& istream) : istream_(istream) {
+IOStreamReader::IOStreamReader(std::istream& istream) : istream_(istream), StreamReader() {
 }
 
 void

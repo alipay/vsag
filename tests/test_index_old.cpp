@@ -285,7 +285,7 @@ TEST_CASE("serialize/deserialize with file stream", "[ft][index]") {
     int64_t dim = 64;
     // auto index_name = GENERATE("hnsw", "diskann");
     auto index_name = GENERATE("hnsw");
-    auto metric_type = GENERATE("l2");
+    auto metric_type = GENERATE("l2", "ip", "cosine");
 
     bool need_normalize = metric_type != std::string("cosine");
     auto [ids, vectors] = fixtures::generate_ids_and_vectors(num_vectors, dim, metric_type);
@@ -330,48 +330,48 @@ TEST_CASE("serialize/deserialize with file stream", "[ft][index]") {
             fixtures::test_knn_recall(new_index, search_parameters, num_vectors, dim, ids, vectors);
         REQUIRE(before_serialize_recall == after_serialize_recall);
     }
-    //
-    //    SECTION("less bits") {
-    //        fixtures::TempDir dir("test_index_serialize_via_stream");
-    //
-    //        // serialize to file stream
-    //        std::fstream out_file(dir.path + "index.bin", std::ios::out | std::ios::binary);
-    //        REQUIRE(index->Serialize(out_file).has_value());
-    //        int size = out_file.tellg();
-    //        out_file.close();
-    //
-    //        // deserialize from file stream
-    //        std::filesystem::resize_file(dir.path + "index.bin", size - 10);
-    //        std::fstream in_file(dir.path + "index.bin", std::ios::in | std::ios::binary);
-    //
-    //        auto new_index =
-    //            vsag::Factory::CreateIndex(
-    //                index_name,
-    //                vsag::generate_build_parameters(metric_type, num_vectors, dim, true).value())
-    //                .value();
-    //        REQUIRE(new_index->Deserialize(in_file).error().type == vsag::ErrorType::READ_ERROR);
-    //    }
-    //
-    //    SECTION("diskann invalid") {
-    //        fixtures::TempDir dir("test_index_serialize_via_stream");
-    //
-    //        // serialize to file stream
-    //        std::fstream out_file(dir.path + "index.bin", std::ios::out | std::ios::binary);
-    //        REQUIRE(index->Serialize(out_file).has_value());
-    //        int size = out_file.tellg();
-    //        out_file.close();
-    //
-    //        // deserialize from file stream
-    //        std::filesystem::resize_file(dir.path + "index.bin", size - 10);
-    //        std::fstream in_file(dir.path + "index.bin", std::ios::in | std::ios::binary);
-    //        auto new_index =
-    //            vsag::Factory::CreateIndex(
-    //                "diskann",
-    //                vsag::generate_build_parameters(metric_type, num_vectors, dim, true).value())
-    //                .value();
-    //        REQUIRE_THROWS(new_index->Deserialize(in_file));
-    //        REQUIRE_THROWS(new_index->Serialize(in_file));
-    //    }
+
+    SECTION("less bits") {
+        fixtures::TempDir dir("test_index_serialize_via_stream");
+
+        // serialize to file stream
+        std::fstream out_file(dir.path + "index.bin", std::ios::out | std::ios::binary);
+        REQUIRE(index->Serialize(out_file).has_value());
+        int size = out_file.tellg();
+        out_file.close();
+
+        // deserialize from file stream
+        std::filesystem::resize_file(dir.path + "index.bin", size - 10);
+        std::fstream in_file(dir.path + "index.bin", std::ios::in | std::ios::binary);
+
+        auto new_index =
+            vsag::Factory::CreateIndex(
+                index_name,
+                vsag::generate_build_parameters(metric_type, num_vectors, dim, true).value())
+                .value();
+        REQUIRE(new_index->Deserialize(in_file).error().type == vsag::ErrorType::READ_ERROR);
+    }
+
+    SECTION("diskann invalid") {
+        fixtures::TempDir dir("test_index_serialize_via_stream");
+
+        // serialize to file stream
+        std::fstream out_file(dir.path + "index.bin", std::ios::out | std::ios::binary);
+        REQUIRE(index->Serialize(out_file).has_value());
+        int size = out_file.tellg();
+        out_file.close();
+
+        // deserialize from file stream
+        std::filesystem::resize_file(dir.path + "index.bin", size - 10);
+        std::fstream in_file(dir.path + "index.bin", std::ios::in | std::ios::binary);
+        auto new_index =
+            vsag::Factory::CreateIndex(
+                "diskann",
+                vsag::generate_build_parameters(metric_type, num_vectors, dim, true).value())
+                .value();
+        REQUIRE_THROWS(new_index->Deserialize(in_file));
+        REQUIRE_THROWS(new_index->Serialize(in_file));
+    }
 }
 
 TEST_CASE("serialize/deserialize hnswstatic with file stream", "[ft][index]") {

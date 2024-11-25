@@ -295,14 +295,14 @@ public:
               size_t max_elements_i) override;
 
     // load index from a file stream
-    void
+    size_t
     loadIndex(std::istream& in_stream, SpaceInterface* s, size_t max_elements_i) override;
 
     // origin load function
-    void
+    size_t
     loadIndex(const std::string& location, SpaceInterface* s, size_t max_elements_i = 0);
 
-    void
+    size_t
     DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t max_elements_i = 0);
 
     const float*

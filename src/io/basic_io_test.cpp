@@ -19,7 +19,6 @@
 #include <fstream>
 #include <memory>
 
-#include "../default_allocator.h"
 #include "fixtures.h"
 
 class WrongIO : public vsag::BasicIO<WrongIO> {};
@@ -36,8 +35,7 @@ TEST_CASE("wrong io", "[ut][basic io]") {
     outfile.close();
 
     std::ifstream infile(filename.c_str(), std::ios::binary);
-    vsag::DefaultAllocator allocator;
-    IOStreamReader reader(infile, &allocator);
+    IOStreamReader reader(infile);
     REQUIRE_THROWS(io->Read(1, 0, data.data()));
     REQUIRE_THROWS(io->Write(data.data(), 1, 0));
     REQUIRE_THROWS(io->Read(1, 0, release));

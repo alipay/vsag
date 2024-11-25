@@ -1347,7 +1347,7 @@ public:
     }
 
     // load index from a file stream
-    void
+    size_t
     loadIndex(std::istream& in_stream, SpaceInterface* s, size_t max_elements_i = 0) override {
         auto beg_pos = in_stream.tellg();
 
@@ -1455,11 +1455,12 @@ public:
         node_cluster_dist_ = (float*)allocator_->Allocate(max_elements_ * sizeof(float));
         in_stream.read((char*)node_cluster_dist_, max_elements_ * sizeof(float));
 
-        return;
+        std::streampos cursor = in_stream.tellg();
+        return cursor;
     }
 
     // origin load function
-    void
+    size_t
     loadIndex(const std::string& location, SpaceInterface* s, size_t max_elements_i = 0) {
         std::ifstream input(location, std::ios::binary);
 
@@ -1562,9 +1563,10 @@ public:
             }
         }
 
+        std::streampos cursor = input.tellg();
         input.close();
 
-        return;
+        return (size_t)cursor;
     }
 
     const float*

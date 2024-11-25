@@ -18,7 +18,6 @@
 #include <fstream>
 
 #include "catch2/catch_template_test_macros.hpp"
-#include "default_allocator.h"
 #include "fixtures.h"
 #include "simd/simd.h"
 
@@ -80,8 +79,7 @@ FlattenInterfaceTest::TestSerializeAndDeserialize(int64_t dim,
     outfile.close();
 
     std::ifstream infile(path.c_str(), std::ios::binary);
-    vsag::DefaultAllocator allocator;
-    IOStreamReader reader(infile, &allocator);
+    IOStreamReader reader(infile);
     other->Deserialize(reader);
 
     int64_t query_count = 100;

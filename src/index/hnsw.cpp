@@ -574,7 +574,8 @@ HNSW::deserialize(std::istream& in_stream) {
         if (auto result = init_memory_space(); not result.has_value()) {
             return tl::unexpected(result.error());
         }
-        alg_hnsw_->loadIndex(in_stream, this->space_.get());
+        auto read_size = alg_hnsw_->loadIndex(in_stream, this->space_.get());
+        in_stream.seekg(read_size, std::ios::beg);
         if (use_conjugate_graph_ and not conjugate_graph_->Deserialize(in_stream).has_value()) {
             throw std::runtime_error("error in deserialize conjugate graph");
         }

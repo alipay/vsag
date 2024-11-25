@@ -218,8 +218,7 @@ TestSerializeAndDeserialize(
     outfile.close();
 
     std::ifstream infile(filename.c_str(), std::ios::binary);
-    vsag::DefaultAllocator allocator;
-    IOStreamReader reader(infile, &allocator);
+    IOStreamReader reader(infile);
     quant2.Deserialize(reader);
 
     REQUIRE(quant1.GetCodeSize() == quant2.GetCodeSize());

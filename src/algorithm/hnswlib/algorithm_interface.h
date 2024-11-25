@@ -86,7 +86,7 @@ public:
               size_t file_size,
               size_t max_elements_i = 0) = 0;
 
-    virtual void
+    virtual size_t
     loadIndex(std::istream& in_stream, SpaceInterface* s, size_t max_elements_i = 0) = 0;
 
     virtual size_t

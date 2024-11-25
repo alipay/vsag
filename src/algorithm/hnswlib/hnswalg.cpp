@@ -933,7 +933,6 @@ HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t
                 deleted_elements_.insert(i);
         }
     }
-    return cursor;
 }
 
 const float*

@@ -77,10 +77,10 @@ BufferStreamReader::Read(char* data, uint64_t size) {
 
     // Loop to read until read_size is satisfied
     while (total_copied < size) {
-        // Calculate the available data in src
+        // Calculate the available data in buffer_
         size_t available_in_src = valid_size_ - buffer_cursor_;
 
-        // If there is available data in src, copy it to dest
+        // If there is available data in buffer_, copy it to dest
         if (available_in_src > 0) {
             size_t bytes_to_copy = std::min(size - total_copied, available_in_src);
             memcpy(data + total_copied, buffer_.data() + buffer_cursor_, bytes_to_copy);
@@ -92,8 +92,8 @@ BufferStreamReader::Read(char* data, uint64_t size) {
             break;
         }
 
-        // If src is full, reset cursor and read new data from reader
-        buffer_cursor_ = 0;  // Reset cursor to overwrite src's content
+        // If buffer_ is full, reset cursor and read new data from reader
+        buffer_cursor_ = 0;  // Reset cursor to overwrite buffer_'s content
         valid_size_ = std::min(max_size_ - cursor_, buffer_size_);
         if (valid_size_ == 0) {
             throw std::runtime_error(
@@ -107,7 +107,7 @@ BufferStreamReader::Read(char* data, uint64_t size) {
 void
 BufferStreamReader::Seek(uint64_t cursor) {
     reader_impl_->Seek(cursor);
-    buffer_cursor_ = buffer_size_;  // record the invalidation of the buffer
+    buffer_cursor_ = valid_size_;  // record the invalidation of the buffer
     cursor_ = cursor;
 }
 

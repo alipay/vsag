@@ -28,6 +28,12 @@ public:
     virtual void
     Read(char* data, uint64_t size) = 0;
 
+    virtual void
+    Seek(uint64_t cursor) = 0;
+
+    virtual uint64_t
+    GetCursor() = 0;
+
     template <typename T>
     static void
     ReadObj(StreamReader& reader, T& val) {
@@ -61,6 +67,12 @@ public:
     void
     Read(char* data, uint64_t size) override;
 
+    void
+    Seek(uint64_t cursor) override;
+
+    uint64_t
+    GetCursor() override;
+
 private:
     const std::function<void(uint64_t, uint64_t, void*)>& readFunc_;
     uint64_t cursor_;
@@ -73,6 +85,12 @@ public:
     void
     Read(char* data, uint64_t size) override;
 
+    void
+    Seek(uint64_t cursor) override;
+
+    uint64_t
+    GetCursor() override;
+
 private:
     std::istream& istream_;
 };
@@ -84,10 +102,17 @@ public:
     void
     Read(char* data, uint64_t size) override;
 
+    void
+    Seek(uint64_t cursor) override;
+
+    uint64_t
+    GetCursor() override;
+
 private:
     StreamReader* reader_impl_{nullptr};
     vsag::Vector<char> buffer_;
     size_t buffer_cursor_{0};
+    size_t valid_size_{0};
     size_t buffer_size_{0};
     size_t max_size_{0};
     size_t cursor_{0};

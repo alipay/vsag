@@ -833,48 +833,10 @@ HierarchicalNSW::SerializeImpl(StreamWriter& writer) {
     }
 }
 
-// load using reader
-void
-HierarchicalNSW::loadIndex(std::function<void(uint64_t, uint64_t, void*)> read_func,
-                           SpaceInterface* s,
-                           size_t file_size,
-                           size_t max_elements_i) {
-    int64_t cursor = 0;
-    ReadFuncStreamReader reader(read_func, cursor);
-    BufferStreamReader buffer_reader(&reader, file_size, allocator_);
-    DeserializeImpl(buffer_reader, s, max_elements_i);
-}
-
 // load index from a file stream
-size_t
-HierarchicalNSW::loadIndex(std::istream& in_stream, SpaceInterface* s, size_t max_elements_i) {
-    std::streampos current_position = in_stream.tellg();
-    in_stream.seekg(0, std::ios::end);
-    std::streamsize size = in_stream.tellg();
-    in_stream.seekg(current_position);
-    auto max_size = size - current_position;
-
-    IOStreamReader reader(in_stream);
-    BufferStreamReader buffer_reader(&reader, max_size, allocator_);
-    return this->DeserializeImpl(buffer_reader, s, max_elements_i);
-}
-
-// origin load function
-size_t
-HierarchicalNSW::loadIndex(const std::string& location, SpaceInterface* s, size_t max_elements_i) {
-    std::ifstream input(location, std::ios::binary);
-
-    std::streampos current_position = input.tellg();
-    input.seekg(0, std::ios::end);
-    std::streamsize size = input.tellg();
-    input.seekg(current_position);
-    auto max_size = size - current_position;
-
-    IOStreamReader reader(input);
-    BufferStreamReader buffer_reader(&reader, max_size, allocator_);
-    auto read_size = this->DeserializeImpl(buffer_reader, s, max_elements_i);
-    input.close();
-    return read_size;
+void
+HierarchicalNSW::loadIndex(StreamReader& buffer_reader, SpaceInterface* s, size_t max_elements_i) {
+    this->DeserializeImpl(buffer_reader, s, max_elements_i);
 }
 
 template <typename T>

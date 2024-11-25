@@ -15,6 +15,7 @@
 
 #include "stream_reader.h"
 
+#include <iostream>
 ReadFuncStreamReader::ReadFuncStreamReader(
     const std::function<void(uint64_t, uint64_t, void*)>& read_func, uint64_t cursor)
     : readFunc_(read_func), cursor_(cursor), StreamReader() {
@@ -26,12 +27,38 @@ ReadFuncStreamReader::Read(char* data, uint64_t size) {
     cursor_ += size;
 }
 
+void
+ReadFuncStreamReader::Seek(uint64_t cursor) {
+    cursor_ = cursor;
+}
+
+uint64_t
+ReadFuncStreamReader::GetCursor() {
+    return cursor_;
+}
+
 IOStreamReader::IOStreamReader(std::istream& istream) : istream_(istream), StreamReader() {
 }
 
 void
 IOStreamReader::Read(char* data, uint64_t size) {
     this->istream_.read(data, static_cast<int64_t>(size));
+    if (istream_.fail()) {
+        auto remaining = std::streamsize(this->istream_.gcount());
+        throw std::runtime_error(fmt::format(
+            "Attempted to read: {} bytes. Remaining content size: {} bytes.", size, remaining));
+    }
+}
+
+void
+IOStreamReader::Seek(uint64_t cursor) {
+    istream_.seekg(cursor, std::ios::beg);
+}
+
+uint64_t
+IOStreamReader::GetCursor() {
+    uint64_t cursor = istream_.tellg();
+    return cursor;
 }
 
 BufferStreamReader::BufferStreamReader(StreamReader* reader,
@@ -41,6 +68,7 @@ BufferStreamReader::BufferStreamReader(StreamReader* reader,
     buffer_size_ = std::min(max_size_, vsag::Options::Instance().block_size_limit());
     buffer_.resize(buffer_size_);
     buffer_cursor_ = buffer_size_;
+    valid_size_ = buffer_size_;
 }
 
 void
@@ -51,7 +79,7 @@ BufferStreamReader::Read(char* data, uint64_t size) {
     // Loop to read until read_size is satisfied
     while (total_copied < size) {
         // Calculate the available data in src
-        size_t available_in_src = buffer_size_ - buffer_cursor_;
+        size_t available_in_src = valid_size_ - buffer_cursor_;
 
         // If there is available data in src, copy it to dest
         if (available_in_src > 0) {
@@ -60,7 +88,6 @@ BufferStreamReader::Read(char* data, uint64_t size) {
             total_copied += bytes_to_copy;
             buffer_cursor_ += bytes_to_copy;
         }
-
         // If we have copied enough data, we can exit
         if (total_copied >= size) {
             break;
@@ -68,8 +95,24 @@ BufferStreamReader::Read(char* data, uint64_t size) {
 
         // If src is full, reset cursor and read new data from reader
         buffer_cursor_ = 0;  // Reset cursor to overwrite src's content
-        auto read_size = std::min(max_size_ - cursor_, buffer_size_);
-        reader_impl_->Read(buffer_.data(), read_size);
-        cursor_ += read_size;
+        valid_size_ = std::min(max_size_ - cursor_, buffer_size_);
+        if (valid_size_ == 0) {
+            throw std::runtime_error(
+                "BufferStreamReader: The file size is smaller than the memory you want to read.");
+        }
+        reader_impl_->Read(buffer_.data(), valid_size_);
+        cursor_ += valid_size_;
     }
+}
+
+void
+BufferStreamReader::Seek(uint64_t cursor) {
+    reader_impl_->Seek(cursor);
+    buffer_cursor_ = buffer_size_;  // record the invalidation of the buffer
+    cursor_ = cursor;
+}
+
+uint64_t
+BufferStreamReader::GetCursor() {
+    return reader_impl_->GetCursor() - (valid_size_ - buffer_cursor_);
 }

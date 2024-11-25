@@ -290,7 +290,7 @@ public:
     void
     loadIndex(StreamReader& buffer_reader, SpaceInterface* s, size_t max_elements_i = 0) override;
 
-    size_t
+    void
     DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t max_elements_i = 0);
 
     const float*

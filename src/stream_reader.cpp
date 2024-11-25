@@ -15,7 +15,6 @@
 
 #include "stream_reader.h"
 
-#include <iostream>
 ReadFuncStreamReader::ReadFuncStreamReader(
     const std::function<void(uint64_t, uint64_t, void*)>& read_func, uint64_t cursor)
     : readFunc_(read_func), cursor_(cursor), StreamReader() {
@@ -33,7 +32,7 @@ ReadFuncStreamReader::Seek(uint64_t cursor) {
 }
 
 uint64_t
-ReadFuncStreamReader::GetCursor() {
+ReadFuncStreamReader::GetCursor() const {
     return cursor_;
 }
 
@@ -56,7 +55,7 @@ IOStreamReader::Seek(uint64_t cursor) {
 }
 
 uint64_t
-IOStreamReader::GetCursor() {
+IOStreamReader::GetCursor() const {
     uint64_t cursor = istream_.tellg();
     return cursor;
 }
@@ -113,6 +112,6 @@ BufferStreamReader::Seek(uint64_t cursor) {
 }
 
 uint64_t
-BufferStreamReader::GetCursor() {
+BufferStreamReader::GetCursor() const {
     return reader_impl_->GetCursor() - (valid_size_ - buffer_cursor_);
 }

@@ -32,7 +32,7 @@ public:
     Seek(uint64_t cursor) = 0;
 
     virtual uint64_t
-    GetCursor() = 0;
+    GetCursor() const = 0;
 
     template <typename T>
     static void
@@ -71,7 +71,7 @@ public:
     Seek(uint64_t cursor) override;
 
     uint64_t
-    GetCursor() override;
+    GetCursor() const override;
 
 private:
     const std::function<void(uint64_t, uint64_t, void*)>& readFunc_;
@@ -89,7 +89,7 @@ public:
     Seek(uint64_t cursor) override;
 
     uint64_t
-    GetCursor() override;
+    GetCursor() const override;
 
 private:
     std::istream& istream_;
@@ -106,10 +106,10 @@ public:
     Seek(uint64_t cursor) override;
 
     uint64_t
-    GetCursor() override;
+    GetCursor() const override;
 
 private:
-    StreamReader* reader_impl_{nullptr};
+    StreamReader* const reader_impl_{nullptr};
     vsag::Vector<char> buffer_;
     size_t buffer_cursor_{0};
     size_t valid_size_{0};

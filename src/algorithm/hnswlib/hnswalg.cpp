@@ -846,7 +846,7 @@ ReadOne(StreamReader& reader, T& value, size_t& cursor) {
     cursor += sizeof(value);
 }
 
-size_t
+void
 HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t max_elements_i) {
     size_t cursor = 0;
 

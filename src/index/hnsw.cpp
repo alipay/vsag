@@ -44,20 +44,20 @@ const static uint32_t GENERATE_SEARCH_K = 50;
 const static uint32_t GENERATE_SEARCH_L = 400;
 const static float GENERATE_OMEGA = 0.51;
 
-HNSW::HNSW(IndexCommonParam index_common_param, HnswParameters params)
-    : space_(std::move(params.space)),
-      use_static_(params.use_static),
-      use_conjugate_graph_(params.use_conjugate_graph),
-      use_reversed_edges_(params.use_reversed_edges),
-      type_(params.type),
+HNSW::HNSW(HnswParameters& hnsw_params, const IndexCommonParam& index_common_param)
+    : space_(std::move(hnsw_params.space)),
+      use_static_(hnsw_params.use_static),
+      use_conjugate_graph_(hnsw_params.use_conjugate_graph),
+      use_reversed_edges_(hnsw_params.use_reversed_edges),
+      type_(hnsw_params.type),
       dim_(index_common_param.dim_) {
-    auto M = std::min(std::max((int)params.max_degree, MINIMAL_M), MAXIMAL_M);
+    auto M = std::min(std::max((int)hnsw_params.max_degree, MINIMAL_M), MAXIMAL_M);
 
-    if (params.ef_construction <= 0) {
+    if (hnsw_params.ef_construction <= 0) {
         throw std::runtime_error(MESSAGE_PARAMETER);
     }
 
-    if (params.use_conjugate_graph) {
+    if (hnsw_params.use_conjugate_graph) {
         conjugate_graph_ = std::make_shared<ConjugateGraph>();
     }
 
@@ -73,9 +73,9 @@ HNSW::HNSW(IndexCommonParam index_common_param, HnswParameters params)
                                                        DEFAULT_MAX_ELEMENT,
                                                        allocator_.get(),
                                                        M,
-                                                       params.ef_construction,
+                                                       hnsw_params.ef_construction,
                                                        use_reversed_edges_,
-                                                       params.normalize,
+                                                       hnsw_params.normalize,
                                                        Options::Instance().block_size_limit());
     } else {
         if (dim_ % 4 != 0) {
@@ -87,7 +87,7 @@ HNSW::HNSW(IndexCommonParam index_common_param, HnswParameters params)
             DEFAULT_MAX_ELEMENT,
             allocator_.get(),
             M,
-            params.ef_construction,
+            hnsw_params.ef_construction,
             Options::Instance().block_size_limit());
     }
 }

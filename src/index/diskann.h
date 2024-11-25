@@ -52,7 +52,7 @@ public:
     // offset: uint64, len: uint64, dest: void*
     using read_request = std::tuple<uint64_t, uint64_t, void*>;
 
-    DiskANN(IndexCommonParam index_common_param, DiskannParameters diskann_parameters);
+    DiskANN(DiskannParameters& diskann_params, const IndexCommonParam& index_common_param);
 
     ~DiskANN() = default;
 

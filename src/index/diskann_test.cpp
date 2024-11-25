@@ -57,7 +57,7 @@ TEST_CASE("build", "[diskann][ut]") {
     diskann_obj.use_reference = false;
     diskann_obj.use_preload = false;
 
-    auto index = std::make_shared<vsag::DiskANN>(commom_param, diskann_obj);
+    auto index = std::make_shared<vsag::DiskANN>(diskann_obj, commom_param);
 
     int64_t num_elements = 10;
     auto [ids, vectors] = fixtures::generate_ids_and_vectors(num_elements, commom_param.dim_);
@@ -106,7 +106,7 @@ TEST_CASE("build & search empty index", "[diskann][ut]") {
     diskann_obj.use_reference = false;
     diskann_obj.use_preload = false;
 
-    auto index = std::make_shared<vsag::DiskANN>(commom_param, diskann_obj);
+    auto index = std::make_shared<vsag::DiskANN>(diskann_obj, commom_param);
 
     auto dataset = vsag::Dataset::Make();
     dataset->NumElements(0);
@@ -158,7 +158,7 @@ TEST_CASE("knn_search", "[diskann][ut]") {
     diskann_obj.use_reference = false;
     diskann_obj.use_preload = false;
 
-    auto index = std::make_shared<vsag::DiskANN>(commom_param, diskann_obj);
+    auto index = std::make_shared<vsag::DiskANN>(diskann_obj, commom_param);
 
     int64_t num_elements = 100;
     auto [ids, vectors] = fixtures::generate_ids_and_vectors(num_elements, commom_param.dim_);
@@ -182,7 +182,7 @@ TEST_CASE("knn_search", "[diskann][ut]") {
     vsag::JsonType params{{"diskann", {{"ef_search", 100}, {"beam_search", 4}, {"io_limit", 200}}}};
 
     SECTION("index empty") {
-        auto empty_index = std::make_shared<vsag::DiskANN>(commom_param, diskann_obj);
+        auto empty_index = std::make_shared<vsag::DiskANN>(diskann_obj, commom_param);
         auto result = empty_index->KnnSearch(query, k, params.dump());
         REQUIRE_FALSE(result.has_value());
         REQUIRE(result.error().type == vsag::ErrorType::INDEX_EMPTY);
@@ -259,7 +259,7 @@ TEST_CASE("range_search", "[diskann][ut]") {
     diskann_obj.use_reference = false;
     diskann_obj.use_preload = false;
 
-    auto index = std::make_shared<vsag::DiskANN>(commom_param, diskann_obj);
+    auto index = std::make_shared<vsag::DiskANN>(diskann_obj, commom_param);
 
     int64_t num_elements = 100;
     auto [ids, vectors] = fixtures::generate_ids_and_vectors(num_elements, commom_param.dim_);
@@ -311,7 +311,7 @@ TEST_CASE("range_search", "[diskann][ut]") {
     }
 
     SECTION("index empty") {
-        auto empty_index = std::make_shared<vsag::DiskANN>(commom_param, diskann_obj);
+        auto empty_index = std::make_shared<vsag::DiskANN>(diskann_obj, commom_param);
         auto result = empty_index->RangeSearch(query, radius, params.dump());
         REQUIRE_FALSE(result.has_value());
         REQUIRE(result.error().type == vsag::ErrorType::INDEX_EMPTY);
@@ -399,7 +399,7 @@ TEST_CASE("serialize empty index", "[diskann][ut]") {
     diskann_obj.use_reference = false;
     diskann_obj.use_preload = false;
 
-    auto index = std::make_shared<vsag::DiskANN>(commom_param, diskann_obj);
+    auto index = std::make_shared<vsag::DiskANN>(diskann_obj, commom_param);
 
     auto result = index->Serialize();
     REQUIRE(result.has_value());
@@ -421,7 +421,7 @@ TEST_CASE("deserialize on not empty index", "[diskann][ut]") {
     diskann_obj.use_reference = false;
     diskann_obj.use_preload = false;
 
-    auto index = std::make_shared<vsag::DiskANN>(commom_param, diskann_obj);
+    auto index = std::make_shared<vsag::DiskANN>(diskann_obj, commom_param);
 
     int64_t num_elements = 100;
     auto [ids, vectors] = fixtures::generate_ids_and_vectors(num_elements, commom_param.dim_);
@@ -475,7 +475,7 @@ TEST_CASE("split building process", "[diskann][ut]") {
     {
         vsag::Timer timer(partial_time);
         while (not checkpoint.finish) {
-            partial_index = std::make_shared<vsag::DiskANN>(commom_param, diskann_obj);
+            partial_index = std::make_shared<vsag::DiskANN>(diskann_obj, commom_param);
             checkpoint = partial_index->ContinueBuild(dataset, checkpoint.data).value();
         }
     }
@@ -509,7 +509,7 @@ TEST_CASE("split building process", "[diskann][ut]") {
     {
         vsag::Timer timer(full_time);
         std::shared_ptr<vsag::DiskANN> full_index =
-            std::make_shared<vsag::DiskANN>(commom_param, diskann_obj);
+            std::make_shared<vsag::DiskANN>(diskann_obj, commom_param);
         full_index->Build(dataset);
     }
     correct = 0;

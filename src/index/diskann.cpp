@@ -134,18 +134,18 @@ convert_binary_to_stream(const Binary& binary, std::stringstream& stream) {
     }
 }
 
-DiskANN::DiskANN(IndexCommonParam index_common_param, DiskannParameters diskann_parameters)
-    : metric_(diskann_parameters.metric),
-      L_(diskann_parameters.ef_construction),
-      R_(diskann_parameters.max_degree),
-      p_val_(diskann_parameters.pq_sample_rate),
-      disk_pq_dims_(diskann_parameters.pq_dims),
+DiskANN::DiskANN(DiskannParameters& diskann_params, const IndexCommonParam& index_common_param)
+    : metric_(diskann_params.metric),
+      L_(diskann_params.ef_construction),
+      R_(diskann_params.max_degree),
+      p_val_(diskann_params.pq_sample_rate),
+      disk_pq_dims_(diskann_params.pq_dims),
       dim_(index_common_param.dim_),
-      preload_(diskann_parameters.use_preload),
-      use_reference_(diskann_parameters.use_reference),
-      use_opq_(diskann_parameters.use_opq),
-      use_bsa_(diskann_parameters.use_bsa),
-      use_async_io_(diskann_parameters.use_async_io) {
+      preload_(diskann_params.use_preload),
+      use_reference_(diskann_params.use_reference),
+      use_opq_(diskann_params.use_opq),
+      use_bsa_(diskann_params.use_bsa),
+      use_async_io_(diskann_params.use_async_io) {
     if (not use_async_io_) {
         pool_ = std::make_unique<ThreadPool>(Option::Instance().num_threads_io());
     }

@@ -49,35 +49,36 @@ Factory::CreateIndex(const std::string& origin_name,
             CHECK_ARGUMENT(parsed_params.contains(INDEX_HNSW),
                            fmt::format("parameters must contains {}", INDEX_HNSW));
             auto& hnsw_param_obj = parsed_params[INDEX_HNSW];
-            auto params = HnswParameters::FromJson(index_common_params, hnsw_param_obj);
+            auto hnsw_params = HnswParameters::FromJson(index_common_params, hnsw_param_obj);
             logger::debug("created a hnsw index");
-            return std::make_shared<HNSW>(index_common_params, params);
+            return std::make_shared<HNSW>(hnsw_params, index_common_params);
         } else if (name == INDEX_FRESH_HNSW) {
             // read parameters from json, throw exception if not exists
             CHECK_ARGUMENT(parsed_params.contains(INDEX_HNSW),
                            fmt::format("parameters must contains {}", INDEX_HNSW));
             auto& hnsw_param_obj = parsed_params[INDEX_HNSW];
-            auto params = FreshHnswParameters::FromJson(index_common_params, hnsw_param_obj);
+            auto hnsw_params = FreshHnswParameters::FromJson(index_common_params, hnsw_param_obj);
             logger::debug("created a fresh-hnsw index");
-            return std::make_shared<HNSW>(index_common_params, params);
+            return std::make_shared<HNSW>(hnsw_params, index_common_params);
         } else if (name == INDEX_DISKANN) {
             // read parameters from json, throw exception if not exists
             CHECK_ARGUMENT(parsed_params.contains(INDEX_DISKANN),
                            fmt::format("parameters must contains {}", INDEX_DISKANN));
             auto& diskann_param_obj = parsed_params[INDEX_DISKANN];
-            auto params = DiskannParameters::FromJson(index_common_params, diskann_param_obj);
+            auto diskann_params =
+                DiskannParameters::FromJson(index_common_params, diskann_param_obj);
             logger::debug("created a diskann index");
-            return std::make_shared<DiskANN>(index_common_params, params);
+            return std::make_shared<DiskANN>(diskann_params, index_common_params);
         } else if (name == INDEX_HGRAPH) {
             if (allocator == nullptr) {
                 index_common_params.allocator_ = DefaultAllocator::Instance().get();
             }
             logger::debug("created a hgraph index");
-            JsonType param;
+            JsonType hgraph_params;
             if (parsed_params.contains(INDEX_PARAM)) {
-                param = std::move(parsed_params[INDEX_PARAM]);
+                hgraph_params = std::move(parsed_params[INDEX_PARAM]);
             }
-            HGraphParameters hgraph_param(param, index_common_params);
+            HGraphParameters hgraph_param(hgraph_params, index_common_params);
             auto hgraph_index =
                 std::make_shared<HGraphIndex>(hgraph_param.GetJson(), index_common_params);
             hgraph_index->Init();

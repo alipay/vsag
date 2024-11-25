@@ -47,7 +47,7 @@ namespace vsag {
 
 class HNSW : public Index {
 public:
-    HNSW(HnswParameters& hnsw_params, const IndexCommonParam& index_common_param);
+    HNSW(HnswParameters hnsw_params, const IndexCommonParam& index_common_param);
 
     virtual ~HNSW() {
         alg_hnsw_ = nullptr;

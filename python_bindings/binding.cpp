@@ -105,27 +105,40 @@ public:
             ->Float32Vectors(vector.mutable_data())
             ->Owner(false);
 
-        auto labels = py::array_t<int64_t>(k);
-        auto dists = py::array_t<float>(k);
+        size_t ids_shape[1]{k};
+        size_t ids_strides[1]{sizeof(int64_t)};
+        size_t dists_shape[1]{k};
+        size_t dists_strides[1]{sizeof(float)};
+
+        auto ids = py::array_t<int64_t>(ids_shape, ids_strides);
+        auto dists = py::array_t<float>(dists_shape, dists_strides);
         if (auto result = index_->KnnSearch(query, k, parameters); result.has_value()) {
-            auto labels_data = labels.mutable_data();
-            auto dists_data = dists.mutable_data();
-            auto ids = result.value()->GetIds();
-            auto distances = result.value()->GetDistances();
+            auto ids_view = ids.mutable_unchecked<1>();
+            auto dists_view = dists.mutable_unchecked<1>();
+
+            auto vsag_ids = result.value()->GetIds();
+            auto vsag_distances = result.value()->GetDistances();
             for (int i = 0; i < data_num * k; ++i) {
-                labels_data[i] = ids[i];
-                dists_data[i] = distances[i];
+                ids_view(i) = vsag_ids[i];
+                dists_view(i) = vsag_distances[i];
             }
         }
 
-        return py::make_tuple(labels, dists);
+        return py::make_tuple(ids, dists);
     }
 
     py::object
     BatchKnnSearch(py::array_t<float> vector, size_t k, std::string& parameters) {
-        auto count = vector.shape()[0];
-        auto labels = py::array_t<int64_t>(k * count);
-        auto dists = py::array_t<float>(k * count);
+        size_t count = vector.shape()[0];
+
+        size_t ids_shape[2]{count, k};
+        size_t ids_strides[2]{k * sizeof(int64_t), sizeof(int64_t)};
+        size_t dists_shape[2]{count, k};
+        size_t dists_strides[2]{k *sizeof(float), sizeof(float)};
+
+        auto ids = py::array_t<int64_t>(ids_shape, ids_strides);
+        auto dists = py::array_t<float>(dists_shape, dists_strides);
+
         auto dim = vector.shape()[1];
 #pragma omp parallel for
         for (uint64_t j = 0; j < count; ++j) {
@@ -137,18 +150,20 @@ public:
                 ->Owner(false);
 
             if (auto result = index_->KnnSearch(query, k, parameters); result.has_value()) {
-                auto labels_data = labels.mutable_data();
-                auto dists_data = dists.mutable_data();
-                auto ids = result.value()->GetIds();
-                auto distances = result.value()->GetDistances();
+                auto vsag_ids = result.value()->GetIds();
+                auto vsag_distances = result.value()->GetDistances();
+
+                auto ids_view = ids.mutable_unchecked<2>();
+                auto dists_view = dists.mutable_unchecked<2>();
+
                 for (int i = 0; i < data_num * k; ++i) {
-                    labels_data[j * k + i] = ids[i];
-                    dists_data[j * k + i] = distances[i];
+                    ids_view(j, i) = vsag_ids[i];
+                    dists_view(j, i) = vsag_distances[i];
                 }
             }
         }
 
-        return py::make_tuple(labels, dists);
+        return py::make_tuple(ids, dists);
     }
 
     py::object

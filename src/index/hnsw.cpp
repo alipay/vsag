@@ -506,7 +506,7 @@ HNSW::deserialize(const BinarySet& binary_set) {
 
     Binary b = binary_set.Get(HNSW_DATA);
     auto func = [&](uint64_t offset, uint64_t len, void* dest) -> void {
-        if (len + offset >= b.size) {
+        if (len + offset > b.size) {
             throw std::runtime_error(
                 fmt::format("offset({}) + len({}) > size({})", offset, len, b.size));
         }
@@ -555,7 +555,7 @@ HNSW::deserialize(const ReaderSet& reader_set) {
     const auto& hnsw_data = reader_set.Get(HNSW_DATA);
 
     auto func = [&](uint64_t offset, uint64_t len, void* dest) -> void {
-        if (len + offset >= hnsw_data->Size()) {
+        if (len + offset > hnsw_data->Size()) {
             throw std::runtime_error(
                 fmt::format("offset({}) + len({}) > size({})", offset, len, hnsw_data->Size()));
         }

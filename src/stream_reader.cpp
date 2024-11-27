@@ -20,7 +20,7 @@
 #include "vsag/options.h"
 
 ReadFuncStreamReader::ReadFuncStreamReader(
-    const std::function<void(uint64_t, uint64_t, void*)>& read_func, uint64_t cursor)
+    const std::function<void(uint64_t, uint64_t, void*)> read_func, uint64_t cursor)
     : readFunc_(read_func), cursor_(cursor), StreamReader() {
 }
 

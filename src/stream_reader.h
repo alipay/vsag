@@ -61,7 +61,7 @@ public:
 
 class ReadFuncStreamReader : public StreamReader {
 public:
-    ReadFuncStreamReader(const std::function<void(uint64_t, uint64_t, void*)>& read_func,
+    ReadFuncStreamReader(const std::function<void(uint64_t, uint64_t, void*)> read_func,
                          uint64_t cursor);
 
     void
@@ -74,7 +74,7 @@ public:
     GetCursor() const override;
 
 private:
-    const std::function<void(uint64_t, uint64_t, void*)>& readFunc_;
+    const std::function<void(uint64_t, uint64_t, void*)> readFunc_;
     uint64_t cursor_;
 };
 

@@ -844,7 +844,6 @@ HierarchicalNSW::loadIndex(StreamReader& buffer_reader, SpaceInterface* s, size_
     this->DeserializeImpl(buffer_reader, s, max_elements_i);
 }
 
-
 template <typename T>
 static void
 ReadOne(StreamReader& reader, T& value) {

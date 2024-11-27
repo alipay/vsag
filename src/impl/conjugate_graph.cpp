@@ -15,7 +15,6 @@
 
 #include "conjugate_graph.h"
 
-#include <iostream>
 namespace vsag {
 
 ConjugateGraph::ConjugateGraph() {

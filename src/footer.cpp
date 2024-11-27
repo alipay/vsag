@@ -15,7 +15,6 @@
 
 #include "footer.h"
 
-#include <iostream>
 namespace vsag {
 
 SerializationFooter::SerializationFooter() {

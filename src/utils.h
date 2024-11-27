@@ -106,9 +106,9 @@ try_parse_parameters(const std::string& json_string) {
 
 template <typename IndexOpParameters>
 tl::expected<IndexOpParameters, Error>
-try_parse_parameters(IndexCommonParam index_common_param, JsonType& param_obj) {
+try_parse_parameters(JsonType& param_obj, IndexCommonParam index_common_param) {
     try {
-        return IndexOpParameters::FromJson(index_common_param, param_obj);
+        return IndexOpParameters::FromJson(param_obj, index_common_param);
     } catch (const std::exception& e) {
         return tl::unexpected<Error>(ErrorType::INVALID_ARGUMENT, e.what());
     }

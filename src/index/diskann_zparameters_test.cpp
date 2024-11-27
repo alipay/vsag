@@ -33,5 +33,5 @@ TEST_CASE("create diskann with correct parameter", "[ut][diskann]") {
         }
         )";
     nlohmann::json parsed_params = nlohmann::json::parse(build_parameter_json);
-    vsag::DiskannParameters::FromJson(commom_param, parsed_params);
+    vsag::DiskannParameters::FromJson(parsed_params, commom_param);
 }

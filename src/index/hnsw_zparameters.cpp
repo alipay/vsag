@@ -24,7 +24,7 @@
 namespace vsag {
 
 HnswParameters
-HnswParameters::FromJson(IndexCommonParam index_common_param, JsonType& hnsw_param_obj) {
+HnswParameters::FromJson(JsonType& hnsw_param_obj, IndexCommonParam index_common_param) {
     HnswParameters obj;
 
     if (index_common_param.data_type_ == DataTypes::DATA_TYPE_FLOAT) {
@@ -108,8 +108,8 @@ HnswSearchParameters::FromJson(const std::string& json_string) {
 }
 
 HnswParameters
-FreshHnswParameters::FromJson(IndexCommonParam index_common_param, JsonType& hnsw_param_obj) {
-    HnswParameters obj = HnswParameters::FromJson(index_common_param, hnsw_param_obj);
+FreshHnswParameters::FromJson(JsonType& hnsw_param_obj, IndexCommonParam index_common_param) {
+    HnswParameters obj = HnswParameters::FromJson(hnsw_param_obj, index_common_param);
     obj.use_static = false;
     // set obj.use_reversed_edges
     obj.use_reversed_edges = true;

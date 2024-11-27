@@ -49,7 +49,7 @@ Factory::CreateIndex(const std::string& origin_name,
             CHECK_ARGUMENT(parsed_params.contains(INDEX_HNSW),
                            fmt::format("parameters must contains {}", INDEX_HNSW));
             auto& hnsw_param_obj = parsed_params[INDEX_HNSW];
-            auto hnsw_params = HnswParameters::FromJson(index_common_params, hnsw_param_obj);
+            auto hnsw_params = HnswParameters::FromJson(hnsw_param_obj, index_common_params);
             logger::debug("created a hnsw index");
             return std::make_shared<HNSW>(hnsw_params, index_common_params);
         } else if (name == INDEX_FRESH_HNSW) {
@@ -57,7 +57,7 @@ Factory::CreateIndex(const std::string& origin_name,
             CHECK_ARGUMENT(parsed_params.contains(INDEX_HNSW),
                            fmt::format("parameters must contains {}", INDEX_HNSW));
             auto& hnsw_param_obj = parsed_params[INDEX_HNSW];
-            auto hnsw_params = FreshHnswParameters::FromJson(index_common_params, hnsw_param_obj);
+            auto hnsw_params = FreshHnswParameters::FromJson(hnsw_param_obj, index_common_params);
             logger::debug("created a fresh-hnsw index");
             return std::make_shared<HNSW>(hnsw_params, index_common_params);
         } else if (name == INDEX_DISKANN) {
@@ -66,7 +66,7 @@ Factory::CreateIndex(const std::string& origin_name,
                            fmt::format("parameters must contains {}", INDEX_DISKANN));
             auto& diskann_param_obj = parsed_params[INDEX_DISKANN];
             auto diskann_params =
-                DiskannParameters::FromJson(index_common_params, diskann_param_obj);
+                DiskannParameters::FromJson(diskann_param_obj, index_common_params);
             logger::debug("created a diskann index");
             return std::make_shared<DiskANN>(diskann_params, index_common_params);
         } else if (name == INDEX_HGRAPH) {

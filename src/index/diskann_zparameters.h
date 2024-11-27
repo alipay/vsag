@@ -26,7 +26,7 @@ namespace vsag {
 struct DiskannParameters {
 public:
     static DiskannParameters
-    FromJson(IndexCommonParam index_common_param, JsonType& hnsw_param_obj);
+    FromJson(JsonType& diskann_param_obj, IndexCommonParam index_common_param);
 
 public:
     // require vars

@@ -30,5 +30,5 @@ TEST_CASE("create hnsw with correct parameter", "[ut][hnsw]") {
         )";
 
     nlohmann::json parsed_params = nlohmann::json::parse(build_parameter_json);
-    vsag::HnswParameters::FromJson(commom_param, parsed_params);
+    vsag::HnswParameters::FromJson(parsed_params, commom_param);
 }

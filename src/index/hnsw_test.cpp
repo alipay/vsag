@@ -36,7 +36,7 @@ parse_hnsw_params(vsag::IndexCommonParam index_common_param) {
         }
     )";
     nlohmann::json parsed_params = nlohmann::json::parse(build_parameter_json);
-    return vsag::HnswParameters::FromJson(index_common_param, parsed_params);
+    return vsag::HnswParameters::FromJson(parsed_params, index_common_param);
 }
 
 TEST_CASE("build & add", "[ut][hnsw]") {

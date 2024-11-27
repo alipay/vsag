@@ -44,12 +44,12 @@ check_diskann_hnsw_build_parameters(const std::string& json_string) {
                               fmt::format("parameters must contains {}", INDEX_DISKANN));
     }
     if (auto ret =
-            try_parse_parameters<HnswParameters>(index_common_params, parsed_params[INDEX_HNSW]);
+            try_parse_parameters<HnswParameters>(parsed_params[INDEX_HNSW], index_common_params);
         not ret.has_value()) {
         return tl::unexpected(ret.error());
     }
-    if (auto ret = try_parse_parameters<DiskannParameters>(index_common_params,
-                                                           parsed_params[INDEX_DISKANN]);
+    if (auto ret = try_parse_parameters<DiskannParameters>(parsed_params[INDEX_DISKANN],
+                                                           index_common_params);
         not ret.has_value()) {
         return tl::unexpected(ret.error());
     }

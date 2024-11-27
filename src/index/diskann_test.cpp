@@ -38,7 +38,7 @@ parse_diskann_params(vsag::IndexCommonParam index_common_param) {
         }
     )";
     nlohmann::json parsed_params = nlohmann::json::parse(build_parameter_json);
-    return vsag::DiskannParameters::FromJson(index_common_param, parsed_params);
+    return vsag::DiskannParameters::FromJson(parsed_params, index_common_param);
 }
 
 TEST_CASE("build", "[diskann][ut]") {

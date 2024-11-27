@@ -24,7 +24,7 @@
 namespace vsag {
 
 DiskannParameters
-DiskannParameters::FromJson(IndexCommonParam index_common_param, JsonType& diskann_param_obj) {
+DiskannParameters::FromJson(JsonType& diskann_param_obj, IndexCommonParam index_common_param) {
     DiskannParameters obj;
 
     CHECK_ARGUMENT(

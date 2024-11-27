@@ -139,6 +139,8 @@ AVX512Capable() {
 #include <queue>
 #include <vector>
 
+#include "stream_reader.h"
+
 namespace hnswlib {
 typedef size_t labeltype;
 
@@ -241,12 +243,7 @@ public:
     calcSerializeSize() = 0;
 
     virtual void
-    loadIndex(std::function<void(uint64_t, uint64_t, void*)> read_func,
-              SpaceInterface* s,
-              size_t max_elements_i = 0) = 0;
-
-    virtual void
-    loadIndex(std::istream& in_stream, SpaceInterface* s, size_t max_elements_i = 0) = 0;
+    loadIndex(StreamReader& in_stream, SpaceInterface* s, size_t max_elements_i = 0) = 0;
 
     virtual size_t
     getCurrentElementCount() = 0;

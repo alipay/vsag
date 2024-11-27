@@ -1069,36 +1069,15 @@ public:
         }
     }
 
-    // load using reader
-    void
-    loadIndex(std::function<void(uint64_t, uint64_t, void*)> read_func,
-              SpaceInterface* s,
-              size_t max_elements_i) override {
-        int64_t cursor = 0;
-        ReadFuncStreamReader reader(read_func, cursor);
-        DeserializeImpl(reader, s, max_elements_i);
-    }
-
-    // load index from a file stream
-    void
-    loadIndex(std::istream& in_stream, SpaceInterface* s, size_t max_elements_i) override {
-        IOStreamReader reader(in_stream);
-        this->DeserializeImpl(reader, s, max_elements_i);
-    }
-
-    // origin load function
-    void
-    loadIndex(const std::string& location, SpaceInterface* s, size_t max_elements_i = 0) {
-        std::ifstream input(location, std::ios::binary);
-        IOStreamReader reader(input);
-        this->DeserializeImpl(reader, s, max_elements_i);
-        input.close();
-    }
-
     template <typename T>
     static void
     ReadOne(StreamReader& reader, T& value) {
         reader.Read(reinterpret_cast<char*>(&value), sizeof(value));
+    }
+
+    void
+    loadIndex(StreamReader& buffer_reader, SpaceInterface* s, size_t max_elements_i = 0) override {
+        this->DeserializeImpl(buffer_reader, s, max_elements_i);
     }
 
     void

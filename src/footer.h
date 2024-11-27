@@ -14,6 +14,7 @@
 // limitations under the License.
 
 #pragma once
+#include "algorithm/hnswlib/stream_reader.h"
 #include "fmt/format.h"
 #include "nlohmann/json.hpp"
 #include "vsag/constants.h"
@@ -41,7 +42,7 @@ public:
     Serialize(std::ostream& out_stream) const;
 
     void
-    Deserialize(std::istream& in_stream);
+    Deserialize(StreamReader& in_stream);
 
 private:
     nlohmann::json json_;

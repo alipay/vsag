@@ -50,7 +50,7 @@ public:
     Deserialize(const Binary& binary);
 
     tl::expected<void, Error>
-    Deserialize(std::istream& in_stream);
+    Deserialize(StreamReader& in_stream);
 
     size_t
     GetMemoryUsage() const;

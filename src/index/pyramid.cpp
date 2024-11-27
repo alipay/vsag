@@ -24,47 +24,45 @@ Pyramid::Build(const DatasetPtr& base) {
 
 tl::expected<DatasetPtr, Error>
 Pyramid::KnnSearch(const DatasetPtr& query,
-          int64_t k,
-          const std::string& parameters,
-          BitsetPtr invalid) const {
+                   int64_t k,
+                   const std::string& parameters,
+                   BitsetPtr invalid) const {
     return {};
 }
-
 
 tl::expected<DatasetPtr, Error>
 Pyramid::KnnSearch(const DatasetPtr& query,
-          int64_t k,
-          const std::string& parameters,
-          const std::function<bool(int64_t)>& filter) const {
+                   int64_t k,
+                   const std::string& parameters,
+                   const std::function<bool(int64_t)>& filter) const {
     return {};
 }
 
 tl::expected<DatasetPtr, Error>
 Pyramid::RangeSearch(const DatasetPtr& query,
-            float radius,
-            const std::string& parameters,
-            int64_t limited_size) const {
+                     float radius,
+                     const std::string& parameters,
+                     int64_t limited_size) const {
     return {};
 }
 
 tl::expected<DatasetPtr, Error>
 Pyramid::RangeSearch(const DatasetPtr& query,
-            float radius,
-            const std::string& parameters,
-            BitsetPtr invalid,
-            int64_t limited_size) const {
+                     float radius,
+                     const std::string& parameters,
+                     BitsetPtr invalid,
+                     int64_t limited_size) const {
     return {};
 }
 
 tl::expected<DatasetPtr, Error>
 Pyramid::RangeSearch(const DatasetPtr& query,
-            float radius,
-            const std::string& parameters,
-            const std::function<bool(int64_t)>& filter,
-            int64_t limited_size) const {
+                     float radius,
+                     const std::string& parameters,
+                     const std::function<bool(int64_t)>& filter,
+                     int64_t limited_size) const {
     return {};
 }
-
 
 tl::expected<BinarySet, Error>
 Pyramid::Serialize() const {
@@ -91,4 +89,4 @@ Pyramid::GetMemoryUsage() const {
     return 0;
 }
 
-}
+}  // namespace vsag

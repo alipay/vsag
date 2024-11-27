@@ -26,10 +26,8 @@ public:
 
     ~Pyramid() = default;
 
-
     tl::expected<std::vector<int64_t>, Error>
     Build(const DatasetPtr& base) override;
-
 
     tl::expected<DatasetPtr, Error>
     KnnSearch(const DatasetPtr& query,
@@ -43,13 +41,11 @@ public:
               const std::string& parameters,
               const std::function<bool(int64_t)>& filter) const override;
 
-
     tl::expected<DatasetPtr, Error>
     RangeSearch(const DatasetPtr& query,
                 float radius,
                 const std::string& parameters,
                 int64_t limited_size = -1) const override;
-
 
     tl::expected<DatasetPtr, Error>
     RangeSearch(const DatasetPtr& query,
@@ -57,7 +53,6 @@ public:
                 const std::string& parameters,
                 BitsetPtr invalid,
                 int64_t limited_size = -1) const override;
-
 
     tl::expected<DatasetPtr, Error>
     RangeSearch(const DatasetPtr& query,
@@ -68,7 +63,6 @@ public:
 
     tl::expected<BinarySet, Error>
     Serialize() const override;
-
 
     tl::expected<void, Error>
     Deserialize(const BinarySet& binary_set) override;
@@ -81,8 +75,8 @@ public:
 
     int64_t
     GetMemoryUsage() const override;
-private:
 
+private:
 };
 
-}
+}  // namespace vsag

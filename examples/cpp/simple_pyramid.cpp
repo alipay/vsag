@@ -17,11 +17,13 @@
 
 #include <iostream>
 
-bool is_path_belong_to(const std::string& a, const std::string& b) {
+bool
+is_path_belong_to(const std::string& a, const std::string& b) {
     return b.compare(0, a.size(), a) == 0;
 }
 
-std::string create_random_string(bool is_full) {
+std::string
+create_random_string(bool is_full) {
     const std::vector<std::string> level1 = {"a", "b", "c"};
     const std::vector<std::string> level2 = {"d", "e"};
     const std::vector<std::string> level3 = {"f", "g", "h"};
@@ -71,11 +73,6 @@ main(int argc, char** argv) {
     auto vectors = new float[dim * num_vectors];
     auto paths = new std::string[num_vectors];
 
-    auto level1 = {"a", "b", "c"};
-    auto level2 = {"d", "e"};
-    auto level3 = {"f", "g", "h"};
-
-
     std::mt19937 rng;
     rng.seed(47);
     std::uniform_real_distribution<> distrib_real;
@@ -107,7 +104,12 @@ main(int argc, char** argv) {
     )";
     auto index = vsag::Factory::CreateIndex("pyramid", pyramid_build_paramesters).value();
     auto base = vsag::Dataset::Make();
-    base->NumElements(num_vectors)->Dim(dim)->Ids(ids)->Float32Vectors(vectors)->Paths(paths)->Owner(false);
+    base->NumElements(num_vectors)
+        ->Dim(dim)
+        ->Ids(ids)
+        ->Float32Vectors(vectors)
+        ->Paths(paths)
+        ->Owner(false);
     index->Build(base);
 
     // prepare a query vector

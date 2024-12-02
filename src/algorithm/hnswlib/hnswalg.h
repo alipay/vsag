@@ -27,6 +27,7 @@
 #include <memory>
 #include <mutex>
 #include <random>
+#include <shared_mutex>
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
@@ -37,7 +38,6 @@
 #include "algorithm_interface.h"
 #include "block_manager.h"
 #include "visited_list_pool.h"
-
 namespace hnswlib {
 using InnerIdType = vsag::InnerIdType;
 using linklistsizeint = unsigned int;
@@ -77,9 +77,10 @@ private:
 
     // Locks operations with element by label value
     mutable vsag::Vector<std::mutex> label_op_locks_;
+    mutable std::shared_mutex resize_mutex_{};
 
-    std::mutex global_{};
-    vsag::Vector<std::recursive_mutex> link_list_locks_;
+    mutable std::shared_mutex global_{};
+    mutable vsag::Vector<std::shared_mutex> link_list_locks_;
 
     InnerIdType enterpoint_node_{0};
 
@@ -106,7 +107,7 @@ private:
     DISTFUNC fstdistfunc_{nullptr};
     void* dist_func_param_{nullptr};
 
-    mutable std::mutex label_lookup_lock_{};  // lock for label_lookup_
+    mutable std::shared_mutex label_lookup_lock_{};  // lock for label_lookup_
     vsag::UnorderedMap<LabelType, InnerIdType> label_lookup_;
 
     std::default_random_engine level_generator_;
@@ -231,7 +232,7 @@ public:
     }
 
     MaxHeap
-    searchBaseLayer(InnerIdType ep_id, const void* data_point, int layer);
+    searchBaseLayer(InnerIdType ep_id, const void* data_point, int layer) const;
 
     template <bool has_deletions, bool collect_metrics = false>
     MaxHeap
@@ -251,17 +252,38 @@ public:
     void
     getNeighborsByHeuristic2(MaxHeap& top_candidates, size_t M);
 
-    linklistsizeint*
+    void
+    setBatchNeigohbors(InnerIdType internal_id,
+                       int level,
+                       const InnerIdType* neighbors,
+                       size_t neigbor_count);
+
+    void
+    appendNeigohbor(InnerIdType internal_id, int level, InnerIdType neighbor, size_t max_degree);
+
+    inline unsigned short int
+    getListCount(InnerIdType internal_id, int level);
+
+    inline std::shared_ptr<char[]>
     getLinklist0(InnerIdType internal_id) const {
-        return (linklistsizeint*)(data_level0_memory_->GetElementPtr(internal_id, offsetLevel0_));
+        std::shared_lock lock(link_list_locks_[internal_id]);
+        std::shared_ptr<char[]> data = std::shared_ptr<char[]>(new char[size_links_level0_]);
+        auto src = data_level0_memory_->GetElementPtr(internal_id, offsetLevel0_);
+        std::memcpy(data.get(), src, size_links_level0_);
+        return data;
     }
 
-    linklistsizeint*
+    inline std::shared_ptr<char[]>
     getLinklist(InnerIdType internal_id, int level) const {
-        return (linklistsizeint*)(link_lists_[internal_id] + (level - 1) * size_links_per_element_);
+        std::shared_lock lock(link_list_locks_[internal_id]);
+        std::shared_ptr<char[]> data = std::shared_ptr<char[]>(new char[size_links_per_element_]);
+        std::memcpy(data.get(),
+                    link_lists_[internal_id] + (level - 1) * size_links_per_element_,
+                    size_links_per_element_);
+        return data;
     }
 
-    linklistsizeint*
+    inline std::shared_ptr<char[]>
     getLinklistAtLevel(InnerIdType internal_id, int level) const {
         return level == 0 ? getLinklist0(internal_id) : getLinklist(internal_id, level);
     }
@@ -327,7 +349,8 @@ public:
     */
     bool
     isMarkedDeleted(InnerIdType internalId) const {
-        unsigned char* ll_cur = ((unsigned char*)getLinklist0(internalId)) + 2;
+        auto data = getLinklist0(internalId);
+        unsigned char* ll_cur = ((unsigned char*)data.get()) + 2;
         return *ll_cur & DELETE_MARK;
     }
 

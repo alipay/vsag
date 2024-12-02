@@ -175,11 +175,11 @@ TEST_CASE("DiskAnn Multi-threading", "[ft][diskann]") {
 }
 
 TEST_CASE("HNSW Multi-threading", "[ft][hnsw]") {
-    int dim = 256;              // Dimension of the elements
-    int max_elements = 100000;  // Maximum number of elements, should be known beforehand
-    int max_degree = 36;        // Tightly connected with internal dimensionality of the data
+    int dim = 16;             // Dimension of the elements
+    int max_elements = 1000;  // Maximum number of elements, should be known beforehand
+    int max_degree = 16;      // Tightly connected with internal dimensionality of the data
     // strongly affects the memory consumption
-    int ef_construction = 300;  // Controls index search speed/build speed tradeoff
+    int ef_construction = 200;  // Controls index search speed/build speed tradeoff
     int ef_search = 100;
     float threshold = 8.0;
     nlohmann::json hnsw_parameters{
@@ -200,10 +200,8 @@ TEST_CASE("HNSW Multi-threading", "[ft][hnsw]") {
     for (int i = 0; i < max_elements; i++) ids[i] = i;
     for (int i = 0; i < dim * max_elements; i++) data[i] = distrib_real(rng);
 
-    auto num_threads = 10;
-    ThreadPool pool(num_threads);
+    ThreadPool pool(10);
     std::vector<std::future<uint64_t>> insert_results;
-    auto start = std::chrono::high_resolution_clock::now();  // 获取开始时间
     for (int64_t i = 0; i < max_elements; ++i) {
         insert_results.push_back(pool.enqueue([&ids, &data, &index, dim, i]() -> uint64_t {
             auto dataset = vsag::Dataset::Make();
@@ -220,8 +218,6 @@ TEST_CASE("HNSW Multi-threading", "[ft][hnsw]") {
     for (auto& res : insert_results) {
         REQUIRE(res.get() == 0);
     }
-    auto end = std::chrono::high_resolution_clock::now();  // 获取结束时间
-    std::chrono::duration<double> duration = end - start;
 
     std::vector<std::future<float>> future_results;
     float correct = 0;
@@ -242,20 +238,20 @@ TEST_CASE("HNSW Multi-threading", "[ft][hnsw]") {
     for (int i = 0; i < future_results.size(); ++i) {
         correct += future_results[i].get();
     }
+
     float recall = correct / max_elements;
-    std::cout << "recall:" << recall << "   qps:" << max_elements / duration.count()
-              << "   qps/core:" << max_elements / (duration.count() * num_threads) << std::endl;
+    std::cout << index->GetStats() << std::endl;
+    REQUIRE(recall > 0.95);
 }
 
 TEST_CASE("multi-threading read-write test", "[ft][hnsw]") {
     // avoid too much slow task logs
     vsag::Options::Instance().logger()->SetLevel(vsag::Logger::Level::kWARN);
 
-    int dim = 256;              // Dimension of the elements
-    int max_elements = 100000;  // Maximum number of elements, should be known beforehand
-    int max_degree = 36;        // Tightly connected with internal dimensionality of the data
-    // strongly affects the memory consumption
-    int ef_construction = 300;  // Controls index search speed/build speed tradeoff
+    int dim = 16;
+    int max_elements = 5000;
+    int max_degree = 16;
+    int ef_construction = 200;
     int ef_search = 100;
     nlohmann::json hnsw_parameters{
         {"max_degree", max_degree},
@@ -267,6 +263,8 @@ TEST_CASE("multi-threading read-write test", "[ft][hnsw]") {
     auto index = vsag::Factory::CreateIndex("hnsw", index_parameters.dump()).value();
     std::shared_ptr<int64_t[]> ids(new int64_t[max_elements]);
     std::shared_ptr<float[]> data(new float[dim * max_elements]);
+
+    ThreadPool pool(16);
 
     // Generate random data
     std::mt19937 rng;
@@ -281,9 +279,6 @@ TEST_CASE("multi-threading read-write test", "[ft][hnsw]") {
 
     std::vector<std::future<uint64_t>> insert_results;
     std::vector<std::future<bool>> search_results;
-    auto num_threads = 16;
-    ThreadPool pool(num_threads);
-    auto start = std::chrono::high_resolution_clock::now();  // 获取开始时间
     for (int64_t i = 0; i < max_elements; ++i) {
         // insert
         insert_results.push_back(pool.enqueue([&ids, &data, &index, dim, i]() -> uint64_t {
@@ -310,10 +305,6 @@ TEST_CASE("multi-threading read-write test", "[ft][hnsw]") {
     for (auto& res : insert_results) {
         REQUIRE(res.get() == 0);
     }
-    auto end = std::chrono::high_resolution_clock::now();  // 获取结束时间
-    std::chrono::duration<double> duration = end - start;
-    std::cout << "qps:" << 2 * max_elements / duration.count()
-              << "   qps/core:" << 2 * max_elements / (duration.count() * num_threads) << std::endl;
 
     for (int i = 0; i < search_results.size(); ++i) {
         REQUIRE(search_results[i].get());

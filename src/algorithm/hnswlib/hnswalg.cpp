@@ -186,13 +186,7 @@ HierarchicalNSW::setBatchNeigohbors(InnerIdType internal_id,
                                     int level,
                                     const InnerIdType* neighbors,
                                     size_t neigbor_count) {
-    linklistsizeint* ll_cur = nullptr;
-    if (level == 0) {
-        ll_cur = (linklistsizeint*)data_level0_memory_->GetElementPtr(internal_id, offsetLevel0_);
-    } else {
-        ll_cur =
-            (linklistsizeint*)(link_lists_[internal_id] + (level - 1) * size_links_per_element_);
-    }
+    linklistsizeint* ll_cur = getLinklistAtLevel(internal_id, level);
     std::unique_lock lock(link_list_locks_[internal_id]);
     for (int i = 1; i <= neigbor_count; ++i) {
         ll_cur[i] = neighbors[i - 1];
@@ -205,13 +199,7 @@ HierarchicalNSW::appendNeigohbor(InnerIdType internal_id,
                                  int level,
                                  InnerIdType neighbor,
                                  size_t max_degree) {
-    linklistsizeint* ll_cur = nullptr;
-    if (level == 0) {
-        ll_cur = (linklistsizeint*)data_level0_memory_->GetElementPtr(internal_id, offsetLevel0_);
-    } else {
-        ll_cur =
-            (linklistsizeint*)(link_lists_[internal_id] + (level - 1) * size_links_per_element_);
-    }
+    linklistsizeint* ll_cur = getLinklistAtLevel(internal_id, level);
     std::unique_lock lock(link_list_locks_[internal_id]);
     size_t neigbor_count = getListCount(ll_cur) + 1;
     if (neigbor_count <= max_degree) {
@@ -220,18 +208,12 @@ HierarchicalNSW::appendNeigohbor(InnerIdType internal_id,
     }
 }
 
-inline unsigned short int
-HierarchicalNSW::getListCount(InnerIdType internal_id, int level) {
-    auto ptr = getLinklistAtLevel(internal_id, level);
-    return *((unsigned short int*)ptr.get());
-}
-
 void
 HierarchicalNSW::updateConnections(InnerIdType internal_id,
                                    const vsag::Vector<InnerIdType>& cand_neighbors,
                                    int level,
                                    bool is_update) {
-    auto link_data = getLinklistAtLevel(internal_id, level);
+    auto link_data = getLinklistAtLevelWithLock(internal_id, level);
     linklistsizeint* ll_cur = (linklistsizeint*)link_data.get();
 
     auto cur_size = getListCount(ll_cur);
@@ -261,7 +243,7 @@ HierarchicalNSW::checkReverseConnection() {
     uint64_t reversed_edge_count = 0;
     for (int internal_id = 0; internal_id < cur_element_count_; ++internal_id) {
         for (int level = 0; level <= element_levels_[internal_id]; ++level) {
-            auto link_data = getLinklistAtLevel(internal_id, level);
+            auto link_data = getLinklistAtLevelWithLock(internal_id, level);
             unsigned int* data = (unsigned int*)link_data.get();
             auto link_list = data + 1;
             auto size = getListCount(data);
@@ -343,7 +325,7 @@ HierarchicalNSW::searchBaseLayer(InnerIdType ep_id, const void* data_point, int 
 
         InnerIdType curNodeNum = curr_el_pair.second;
 
-        auto link_data = getLinklistAtLevel(curNodeNum, layer);
+        auto link_data = getLinklistAtLevelWithLock(curNodeNum, layer);
         int* data =
             (int*)
                 link_data.get();  // = (int *)(linkList0_ + curNodeNum * size_links_per_element0_);
@@ -428,7 +410,7 @@ HierarchicalNSW::searchBaseLayerST(InnerIdType ep_id,
         candidate_set.pop();
 
         InnerIdType current_node_id = current_node_pair.second;
-        auto link_data = getLinklist0(current_node_id);
+        auto link_data = getLinklistAtLevelWithLock(current_node_id, 0);
         int* data = (int*)link_data.get();
         size_t size = getListCount((linklistsizeint*)data);
         //                bool cur_node_deleted = isMarkedDeleted(current_node_id);
@@ -521,7 +503,7 @@ HierarchicalNSW::searchBaseLayerST(InnerIdType ep_id,
         candidate_set.pop();
 
         InnerIdType current_node_id = current_node_pair.second;
-        auto link_data = getLinklist0(current_node_id);
+        auto link_data = getLinklistAtLevelWithLock(current_node_id, 0);
         int* data = (int*)link_data.get();
         size_t size = getListCount((linklistsizeint*)data);
         //                bool cur_node_deleted = isMarkedDeleted(current_node_id);
@@ -643,7 +625,7 @@ HierarchicalNSW::mutuallyConnectNewElement(InnerIdType cur_c,
     updateConnections(cur_c, selectedNeighbors, level, isUpdate);
 
     for (unsigned int selectedNeighbor : selectedNeighbors) {
-        auto ll_other_data = getLinklistAtLevel(selectedNeighbor, level);
+        auto ll_other_data = getLinklistAtLevelWithLock(selectedNeighbor, level);
         linklistsizeint* ll_other = (linklistsizeint*)ll_other_data.get();
 
         size_t sz_link_list_other = getListCount(ll_other);
@@ -926,7 +908,7 @@ HierarchicalNSW::DeserializeImpl(StreamReader& reader, SpaceInterface* s, size_t
     if (use_reversed_edges_) {
         for (int internal_id = 0; internal_id < cur_element_count_; ++internal_id) {
             for (int level = 0; level <= element_levels_[internal_id]; ++level) {
-                auto link_data = getLinklistAtLevel(internal_id, level);
+                auto link_data = getLinklistAtLevelWithLock(internal_id, level);
                 unsigned int* data = (unsigned int*)link_data.get();
                 auto link_list = data + 1;
                 auto size = getListCount(data);
@@ -1065,8 +1047,7 @@ HierarchicalNSW::modifyOutEdge(InnerIdType old_internal_id, InnerIdType new_inte
     for (int level = 0; level <= element_levels_[old_internal_id]; ++level) {
         auto& edges = getEdges(old_internal_id, level);
         for (const auto& in_node : edges) {
-            auto link_data = getLinklistAtLevel(in_node, level);
-            linklistsizeint* data = (linklistsizeint*)link_data.get();
+            auto data = getLinklistAtLevel(in_node, level);
             size_t link_size = getListCount(data);
             auto* links = (InnerIdType*)(data + 1);
             for (int i = 0; i < link_size; ++i) {
@@ -1084,8 +1065,7 @@ HierarchicalNSW::modifyInEdges(InnerIdType right_internal_id,
                                InnerIdType wrong_internal_id,
                                bool is_erase) {
     for (int level = 0; level <= element_levels_[right_internal_id]; ++level) {
-        auto link_data = getLinklistAtLevel(right_internal_id, level);
-        linklistsizeint* data = (linklistsizeint*)link_data.get();
+        auto data = getLinklistAtLevel(right_internal_id, level);
         size_t link_size = getListCount(data);
         auto* links = (InnerIdType*)(data + 1);
         for (int i = 0; i < link_size; ++i) {
@@ -1110,15 +1090,10 @@ HierarchicalNSW::swapConnections(InnerIdType pre_internal_id, InnerIdType post_i
 
         // Swap the data and the adjacency lists of the graph.
         auto tmp_data_element = std::shared_ptr<char[]>(new char[size_data_per_element_]);
-        memcpy(tmp_data_element.get(),
-               data_level0_memory_->GetElementPtr(pre_internal_id, offsetLevel0_),
-               size_data_per_element_);
-        memcpy(data_level0_memory_->GetElementPtr(post_internal_id, offsetLevel0_),
-               data_level0_memory_->GetElementPtr(pre_internal_id, offsetLevel0_),
-               size_data_per_element_);
-        memcpy(data_level0_memory_->GetElementPtr(post_internal_id, offsetLevel0_),
-               tmp_data_element.get(),
-               size_data_per_element_);
+        memcpy(tmp_data_element.get(), getLinklist0(pre_internal_id), size_data_per_element_);
+        memcpy(
+            getLinklist0(pre_internal_id), getLinklist0(post_internal_id), size_data_per_element_);
+        memcpy(getLinklist0(post_internal_id), tmp_data_element.get(), size_data_per_element_);
 
         if (normalize_) {
             std::swap(molds_[pre_internal_id], molds_[post_internal_id]);
@@ -1155,8 +1130,7 @@ HierarchicalNSW::swapConnections(InnerIdType pre_internal_id, InnerIdType post_i
 void
 HierarchicalNSW::dealNoInEdge(InnerIdType id, int level, int m_curmax, int skip_c) {
     // Establish edges from the neighbors of the id pointing to the id.
-    auto link_data = getLinklistAtLevel(id, level);
-    auto alone_data = (linklistsizeint*)link_data.get();
+    auto alone_data = getLinklistAtLevel(id, level);
     int alone_size = getListCount(alone_data);
     auto alone_link = (unsigned int*)(alone_data + 1);
     auto& in_edges = getEdges(id, level);
@@ -1164,13 +1138,12 @@ HierarchicalNSW::dealNoInEdge(InnerIdType id, int level, int m_curmax, int skip_
         if (alone_link[j] == skip_c) {
             continue;
         }
-        auto to_edge_link_data = getLinklistAtLevel(alone_link[j], level);
-        auto to_edge_data_cur = (linklistsizeint*)to_edge_link_data.get();
+        auto to_edge_data_cur = (unsigned int*)getLinklistAtLevel(alone_link[j], level);
         int to_edge_size_cur = getListCount(to_edge_data_cur);
         auto to_edge_data_link_cur = (unsigned int*)(to_edge_data_cur + 1);
         if (to_edge_size_cur < m_curmax) {
             to_edge_data_link_cur[to_edge_size_cur] = id;
-            setBatchNeigohbors(alone_link[j], level, to_edge_data_link_cur, to_edge_size_cur + 1);
+            setListCount(to_edge_data_cur, to_edge_size_cur + 1);
             in_edges.insert(alone_link[j]);
         }
     }
@@ -1213,8 +1186,7 @@ HierarchicalNSW::removePoint(LabelType label) {
     // If the node to be deleted is an entry node, find another top-level node.
     if (cur_c == enterpoint_node_) {
         for (int level = max_level_; level >= 0; level--) {
-            auto link_data = getLinklistAtLevel(enterpoint_node_, level);
-            auto data = (unsigned int*)link_data.get();
+            auto data = (unsigned int*)getLinklistAtLevel(enterpoint_node_, level);
             int size = getListCount(data);
             if (size != 0) {
                 max_level_ = level;
@@ -1229,8 +1201,7 @@ HierarchicalNSW::removePoint(LabelType label) {
     // indegree nodes.
     for (int level = 0; level <= element_levels_[cur_c]; ++level) {
         const auto in_edges_cur = getEdges(cur_c, level);
-        auto link_data_cur = getLinklistAtLevel(cur_c, level);
-        auto data_cur = (linklistsizeint*)link_data_cur.get();
+        auto data_cur = getLinklistAtLevel(cur_c, level);
         int size_cur = getListCount(data_cur);
         auto data_link_cur = (unsigned int*)(data_cur + 1);
 
@@ -1251,8 +1222,7 @@ HierarchicalNSW::removePoint(LabelType label) {
             }
 
             // Add the neighbors of the node to be deleted to the candidate queue.
-            auto link_in_edge_data_cur = getLinklistAtLevel(in_edge, level);
-            auto in_edge_data_cur = (unsigned int*)link_in_edge_data_cur.get();
+            auto in_edge_data_cur = (unsigned int*)getLinklistAtLevel(in_edge, level);
             int in_edge_size_cur = getListCount(in_edge_data_cur);
             auto in_edge_data_link_cur = (unsigned int*)(in_edge_data_cur + 1);
             for (int i = 0; i < in_edge_size_cur; ++i) {
@@ -1350,7 +1320,7 @@ HierarchicalNSW::addPoint(const void* data_point, LabelType label, int level) {
                 bool changed = true;
                 while (changed) {
                     changed = false;
-                    auto link_data = getLinklist(currObj, lev);
+                    auto link_data = getLinklistAtLevelWithLock(currObj, lev);
                     auto* data = (unsigned int*)link_data.get();
                     int size = getListCount(data);
 
@@ -1424,7 +1394,7 @@ HierarchicalNSW::searchKnn(const void* query_data,
         bool changed = true;
         while (changed) {
             changed = false;
-            auto link_data = getLinklist(currObj, level);
+            auto link_data = getLinklistAtLevelWithLock(currObj, level);
             auto* data = (unsigned int*)link_data.get();
             int size = getListCount(data);
             //            metric_hops_++;
@@ -1482,7 +1452,7 @@ HierarchicalNSW::searchRange(const void* query_data,
         bool changed = true;
         while (changed) {
             changed = false;
-            auto link_data = getLinklist(currObj, level);
+            auto link_data = getLinklistAtLevelWithLock(currObj, level);
             auto* data = (unsigned int*)link_data.get();
             int size = getListCount(data);
             metric_hops_++;
@@ -1524,7 +1494,7 @@ HierarchicalNSW::checkIntegrity() {
     vsag::Vector<int> inbound_connections_num(cur_element_count_, 0, allocator_);
     for (int i = 0; i < cur_element_count_; i++) {
         for (int l = 0; l <= element_levels_[i]; l++) {
-            auto data_ll_cur = getLinklistAtLevel(i, l);
+            auto data_ll_cur = getLinklistAtLevelWithLock(i, l);
             linklistsizeint* ll_cur = (linklistsizeint*)data_ll_cur.get();
             int size = getListCount(ll_cur);
             auto* data = (InnerIdType*)(ll_cur + 1);

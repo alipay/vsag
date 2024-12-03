@@ -1,7 +1,7 @@
 
 CMAKE_GENERATOR ?= "Unix Makefiles"
 CMAKE_INSTALL_PREFIX ?= "/usr/local/"
-COMPILE_JOBS ?= 4
+COMPILE_JOBS ?= 6
 VSAG_CMAKE_ARGS = -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} -DNUM_BUILDING_JOBS=${COMPILE_JOBS} -DENABLE_TESTS=1 -DENABLE_PYBINDS=1 -G ${CMAKE_GENERATOR} -S. -Bbuild
 UT_FILTER = ""
 ifdef CASE
@@ -99,8 +99,7 @@ test_cov: cov            ## Build and run unit tests with code coverage enabled.
 	./build/tests/unittests -d yes ${UT_FILTER} --allow-running-no-tests ${UT_SHARD}
 	./build/tests/functests -d yes ${UT_FILTER} --allow-running-no-tests ${UT_SHARD}
 	./build/mockimpl/tests_mockimpl -d yes ${UT_FILTER} --allow-running-no-tests ${UT_SHARD}
-	bash scripts/aci/collect_cpp_coverage.sh
-	genhtml --output-directory testresult/coverage/html testresult/coverage/coverage.info --ignore-errors inconsistent,inconsistent
+	bash scripts/collect_cpp_coverage.sh
 
 .PHONY: clean
 clean:                   ## Clear build/ directory.

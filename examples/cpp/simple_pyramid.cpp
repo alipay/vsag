@@ -41,7 +41,6 @@ create_random_string(bool is_full) {
         std::uniform_int_distribution<> dist(1, 3);
         int num_levels = dist(mt);
 
-        // 随机选择级别数量
         if (num_levels >= 1) {
             selected_levels.push_back(level1[rand() % level1.size()]);
         }

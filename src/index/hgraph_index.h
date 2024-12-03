@@ -240,6 +240,9 @@ private:
     void
     hnsw_add(const DatasetPtr& data);
 
+    void
+    resize(uint64_t new_size);
+
     GraphInterfacePtr
     generate_one_route_graph();
 
@@ -279,6 +282,9 @@ private:
         return this->label_lookup_.at(inner_id);
     }
 
+    void
+    add_one_point(const float* data, int level, InnerIdType id);
+
 private:
     std::default_random_engine level_generator_{2021};
     double mult_{1.0};
@@ -292,7 +298,7 @@ private:
     uint64_t max_level_{0};
 
     uint64_t ef_construct_{400};
-    std::mutex global_mutex_;
+    std::shared_mutex global_mutex_;
 
     // Locks operations with element by label value
     mutable vsag::Vector<std::mutex> label_op_mutex_;

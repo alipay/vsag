@@ -28,9 +28,8 @@ main(int argc, char** argv) {
     auto ids = new int64_t[num_vectors];
     auto vectors = new float[dim * num_vectors];
 
-    std::mt19937 rng;
-    rng.seed(47);
-    std::uniform_real_distribution<> distrib_real;
+    std::mt19937 rng(47);
+    std::uniform_real_distribution<float> distrib_real;
     for (int64_t i = 0; i < num_vectors; ++i) {
         ids[i] = i;
     }
@@ -45,7 +44,9 @@ main(int argc, char** argv) {
         "metric_type": "l2",
         "dim": 128,
         "index_param": {
-            "base_quantization_type": "sq8"
+            "base_quantization_type": "sq8",
+            "max_degree": 26,
+            "ef_construction": 100
         }
     }
     )";
@@ -64,7 +65,7 @@ main(int argc, char** argv) {
     // search on the index
     auto hgraph_search_parameters = R"(
     {
-        "hnsw": {
+        "hgraph": {
             "ef_search": 100
         }
     }

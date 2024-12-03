@@ -44,36 +44,27 @@ const static uint32_t GENERATE_SEARCH_K = 50;
 const static uint32_t GENERATE_SEARCH_L = 400;
 const static float GENERATE_OMEGA = 0.51;
 
-HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
-           int M,
-           int ef_construction,
-           DataTypes type,
-           bool use_static,
-           bool use_reversed_edges,
-           bool use_conjugate_graph,
-           bool normalize,
-           Allocator* allocator)
-    : space_(std::move(space_interface)),
-      use_static_(use_static),
-      use_conjugate_graph_(use_conjugate_graph),
-      use_reversed_edges_(use_reversed_edges),
-      type_(type) {
-    dim_ = *((size_t*)space_->get_dist_func_param());
+HNSW::HNSW(HnswParameters hnsw_params, const IndexCommonParam& index_common_param)
+    : space_(std::move(hnsw_params.space)),
+      use_static_(hnsw_params.use_static),
+      use_conjugate_graph_(hnsw_params.use_conjugate_graph),
+      use_reversed_edges_(hnsw_params.use_reversed_edges),
+      type_(hnsw_params.type),
+      dim_(index_common_param.dim_) {
+    auto M = std::min(std::max((int)hnsw_params.max_degree, MINIMAL_M), MAXIMAL_M);
 
-    M = std::min(std::max(M, MINIMAL_M), MAXIMAL_M);
-
-    if (ef_construction <= 0) {
+    if (hnsw_params.ef_construction <= 0) {
         throw std::runtime_error(MESSAGE_PARAMETER);
     }
 
-    if (use_conjugate_graph) {
+    if (hnsw_params.use_conjugate_graph) {
         conjugate_graph_ = std::make_shared<ConjugateGraph>();
     }
 
-    if (not allocator) {
+    if (not index_common_param.allocator_) {
         allocator_ = std::make_shared<SafeAllocator>(DefaultAllocator::Instance());
     } else {
-        allocator_ = std::make_shared<SafeAllocator>(allocator);
+        allocator_ = std::make_shared<SafeAllocator>(index_common_param.allocator_);
     }
 
     if (!use_static_) {
@@ -82,9 +73,9 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
                                                        DEFAULT_MAX_ELEMENT,
                                                        allocator_.get(),
                                                        M,
-                                                       ef_construction,
+                                                       hnsw_params.ef_construction,
                                                        use_reversed_edges_,
-                                                       normalize,
+                                                       hnsw_params.normalize,
                                                        Options::Instance().block_size_limit());
     } else {
         if (dim_ % 4 != 0) {
@@ -96,7 +87,7 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
             DEFAULT_MAX_ELEMENT,
             allocator_.get(),
             M,
-            ef_construction,
+            hnsw_params.ef_construction,
             Options::Instance().block_size_limit());
     }
 }
@@ -238,10 +229,14 @@ HNSW::knn_search(const DatasetPtr& query,
         auto params = HnswSearchParameters::FromJson(parameters);
 
         // perform search
+        int64_t original_k = k;
         std::priority_queue<std::pair<float, size_t>> results;
         double time_cost;
         try {
             Timer t(time_cost);
+            if (use_conjugate_graph_ and params.use_conjugate_graph_search) {
+                k = std::max(k, LOOK_AT_K);
+            }
             results = alg_hnsw_->searchKnn(
                 (const void*)(vector), k, std::max(params.ef_search, k), filter_ptr);
         } catch (const std::runtime_error& e) {
@@ -273,9 +268,13 @@ HNSW::knn_search(const DatasetPtr& query,
                 return this->alg_hnsw_->getDistanceByLabel(label, vector);
             };
             conjugate_graph_->EnhanceResult(results, func);
+            k = original_k;
         }
 
         // return result
+        while (results.size() > k) {
+            results.pop();
+        }
 
         result->Dim(results.size())->NumElements(1)->Owner(true, allocator_->GetRawAllocator());
 
@@ -506,6 +505,10 @@ HNSW::deserialize(const BinarySet& binary_set) {
 
     Binary b = binary_set.Get(HNSW_DATA);
     auto func = [&](uint64_t offset, uint64_t len, void* dest) -> void {
+        if (len + offset > b.size) {
+            throw std::runtime_error(
+                fmt::format("offset({}) + len({}) > size({})", offset, len, b.size));
+        }
         std::memcpy(dest, b.data.get() + offset, len);
     };
 
@@ -514,7 +517,11 @@ HNSW::deserialize(const BinarySet& binary_set) {
         if (auto result = init_memory_space(); not result.has_value()) {
             return tl::unexpected(result.error());
         }
-        alg_hnsw_->loadIndex(func, this->space_.get());
+
+        int64_t cursor = 0;
+        ReadFuncStreamReader reader(func, cursor);
+        BufferStreamReader buffer_reader(&reader, b.size, allocator_.get());
+        alg_hnsw_->loadIndex(buffer_reader, this->space_.get());
         if (use_conjugate_graph_) {
             Binary b_cg = binary_set.Get(CONJUGATE_GRAPH_DATA);
             if (not conjugate_graph_->Deserialize(b_cg).has_value()) {
@@ -544,8 +551,14 @@ HNSW::deserialize(const ReaderSet& reader_set) {
         return {};
     }
 
+    const auto& hnsw_data = reader_set.Get(HNSW_DATA);
+
     auto func = [&](uint64_t offset, uint64_t len, void* dest) -> void {
-        reader_set.Get(HNSW_DATA)->Read(offset, len, dest);
+        if (len + offset > hnsw_data->Size()) {
+            throw std::runtime_error(
+                fmt::format("offset({}) + len({}) > size({})", offset, len, hnsw_data->Size()));
+        }
+        hnsw_data->Read(offset, len, dest);
     };
 
     try {
@@ -553,7 +566,11 @@ HNSW::deserialize(const ReaderSet& reader_set) {
         if (auto result = init_memory_space(); not result.has_value()) {
             return tl::unexpected(result.error());
         }
-        alg_hnsw_->loadIndex(func, this->space_.get());
+
+        int64_t cursor = 0;
+        ReadFuncStreamReader reader(func, cursor);
+        BufferStreamReader buffer_reader(&reader, hnsw_data->Size(), allocator_.get());
+        alg_hnsw_->loadIndex(buffer_reader, this->space_.get());
     } catch (const std::runtime_error& e) {
         LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to deserialize: ", e.what());
     }
@@ -574,8 +591,18 @@ HNSW::deserialize(std::istream& in_stream) {
         if (auto result = init_memory_space(); not result.has_value()) {
             return tl::unexpected(result.error());
         }
-        alg_hnsw_->loadIndex(in_stream, this->space_.get());
-        if (use_conjugate_graph_ and not conjugate_graph_->Deserialize(in_stream).has_value()) {
+
+        std::streampos current_position = in_stream.tellg();
+        in_stream.seekg(0, std::ios::end);
+        std::streamsize size = in_stream.tellg();
+        in_stream.seekg(current_position);
+        auto max_size = size - current_position;
+
+        IOStreamReader reader(in_stream);
+        BufferStreamReader buffer_reader(&reader, max_size, allocator_.get());
+        alg_hnsw_->loadIndex(buffer_reader, this->space_.get());
+
+        if (use_conjugate_graph_ and not conjugate_graph_->Deserialize(buffer_reader).has_value()) {
             throw std::runtime_error("error in deserialize conjugate graph");
         }
     } catch (const std::runtime_error& e) {
@@ -701,10 +728,13 @@ HNSW::brute_force(const DatasetPtr& query, int64_t k) {
         float* dists = (float*)allocator_->Allocate(sizeof(float) * k);
         result->Distances(dists);
 
-        auto vector = query->GetFloat32Vectors();
+        void* vector = nullptr;
+        size_t data_size = 0;
+        get_vectors(query, &vector, &data_size);
+
         std::shared_lock lock(rw_mutex_);
         std::priority_queue<std::pair<float, LabelType>> bf_result =
-            alg_hnsw_->bruteForce((const void*)vector, k);
+            alg_hnsw_->bruteForce(vector, k);
         result->Dim(std::min(k, (int64_t)bf_result.size()));
 
         for (int i = result->GetDim() - 1; i >= 0; i--) {
@@ -739,18 +769,26 @@ HNSW::pretrain(const std::vector<int64_t>& base_tag_ids,
         return 0;
     }
 
+    uint32_t data_size = 0;
     uint32_t add_edges = 0;
     int64_t topk_neighbor_tag_id;
-    const float* topk_data;
-    std::shared_ptr<float[]> generated_data(new float[dim_]);
+    const void* topk_data;
+    const void* base_data;
     auto base = Dataset::Make();
     auto generated_query = Dataset::Make();
-    base->Dim(dim_)->NumElements(1)->Owner(false);
-    generated_query->Dim(dim_)->NumElements(1)->Float32Vectors(generated_data.get())->Owner(false);
+    if (type_ == DataTypes::DATA_TYPE_INT8) {
+        data_size = dim_;
+    } else {
+        data_size = dim_ * 4;
+    }
+
+    std::shared_ptr<int8_t[]> generated_data(new int8_t[data_size]);
+    set_dataset(generated_query, generated_data.get(), 1);
 
     for (const int64_t& base_tag_id : base_tag_ids) {
         try {
-            base->Float32Vectors(this->alg_hnsw_->getDataByLabel(base_tag_id));
+            base_data = (const void*)this->alg_hnsw_->getDataByLabel(base_tag_id);
+            set_dataset(base, base_data, 1);
         } catch (const std::runtime_error& e) {
             LOG_ERROR_AND_RETURNS(
                 ErrorType::INVALID_ARGUMENT,
@@ -776,11 +814,18 @@ HNSW::pretrain(const std::vector<int64_t>& base_tag_ids,
             if (topk_neighbor_tag_id == base_tag_id) {
                 continue;
             }
-            topk_data = this->alg_hnsw_->getDataByLabel(topk_neighbor_tag_id);
+            topk_data = (const void*)this->alg_hnsw_->getDataByLabel(topk_neighbor_tag_id);
 
             for (int d = 0; d < dim_; d++) {
-                generated_data.get()[d] = vsag::GENERATE_OMEGA * base->GetFloat32Vectors()[d] +
-                                          (1 - vsag::GENERATE_OMEGA) * topk_data[d];
+                if (type_ == DataTypes::DATA_TYPE_INT8) {
+                    generated_data.get()[d] =
+                        vsag::GENERATE_OMEGA * (float)(((int8_t*)base_data)[d]) +
+                        (1 - vsag::GENERATE_OMEGA) * (float)(((int8_t*)topk_data)[d]);
+                } else {
+                    ((float*)generated_data.get())[d] =
+                        vsag::GENERATE_OMEGA * ((float*)base_data)[d] +
+                        (1 - vsag::GENERATE_OMEGA) * ((float*)topk_data)[d];
+                }
             }
 
             auto feedback_result = this->Feedback(generated_query, k, parameters, base_tag_id);
@@ -821,6 +866,20 @@ HNSW::get_vectors(const vsag::DatasetPtr& base, void** vectors_ptr, size_t* data
         *data_size_ptr = dim_ * sizeof(int8_t);
     } else {
         throw std::invalid_argument(fmt::format("no support for this metric: {}", (int)type_));
+    }
+}
+
+void
+HNSW::set_dataset(const DatasetPtr& base, const void* vectors_ptr, uint32_t num_element) const {
+    if (type_ == DataTypes::DATA_TYPE_FLOAT) {
+        base->Float32Vectors((float*)vectors_ptr)
+            ->Dim(dim_)
+            ->Owner(false)
+            ->NumElements(num_element);
+    } else if (type_ == DataTypes::DATA_TYPE_INT8) {
+        base->Int8Vectors((int8_t*)vectors_ptr)->Dim(dim_)->Owner(false)->NumElements(num_element);
+    } else {
+        throw std::invalid_argument(fmt::format("no support for this type: {}", (int)type_));
     }
 }
 

@@ -73,6 +73,8 @@ const char* const HNSW_PARAMETER_CONSTRUCTION = "ef_construction";
 const char* const HNSW_PARAMETER_USE_STATIC = "use_static";
 const char* const HNSW_PARAMETER_REVERSED_EDGES = "use_reversed_edges";
 
+const char* const INDEX_PARAM = "index_param";
+
 // statstic key
 const char* const STATSTIC_MEMORY = "memory";
 const char* const STATSTIC_INDEX_NAME = "index_name";
@@ -99,5 +101,6 @@ const char* const SERIALIZE_VERSION = "VERSION";
 const char* const HGRAPH_USE_REORDER = HGRAPH_USE_REORDER_KEY;
 const char* const HGRAPH_BASE_QUANTIZATION_TYPE = "base_quantization_type";
 const char* const HGRAPH_GRAPH_MAX_DEGREE = "max_degree";
+const char* const HGRAPH_BUILD_EF_CONSTRUCTION = "ef_construction";
 
 };  // namespace vsag

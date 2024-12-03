@@ -71,6 +71,8 @@ extern const char* const HNSW_PARAMETER_CONSTRUCTION;
 extern const char* const HNSW_PARAMETER_USE_STATIC;
 extern const char* const HNSW_PARAMETER_REVERSED_EDGES;
 
+extern const char* const INDEX_PARAM;
+
 // statstic key
 extern const char* const STATSTIC_MEMORY;
 extern const char* const STATSTIC_INDEX_NAME;
@@ -98,5 +100,6 @@ extern const char* const SERIALIZE_VERSION;
 extern const char* const HGRAPH_USE_REORDER;
 extern const char* const HGRAPH_BASE_QUANTIZATION_TYPE;
 extern const char* const HGRAPH_GRAPH_MAX_DEGREE;
+extern const char* const HGRAPH_BUILD_EF_CONSTRUCTION;
 
 }  // namespace vsag

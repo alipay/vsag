@@ -27,6 +27,9 @@ ConjugateGraph::AddNeighbor(int64_t from_tag_id, int64_t to_tag_id) {
         return false;
     }
     auto& neighbor_set = conjugate_graph_[from_tag_id];
+    if (neighbor_set.size() >= MAXIMUM_DEGREE) {
+        return false;
+    }
     auto insert_result = neighbor_set.insert(to_tag_id);
     if (!insert_result.second) {
         return false;
@@ -54,6 +57,10 @@ ConjugateGraph::get_neighbors(int64_t from_tag_id) const {
 tl::expected<uint32_t, Error>
 ConjugateGraph::EnhanceResult(std::priority_queue<std::pair<float, size_t>>& results,
                               const std::function<float(int64_t)>& distance_of_tag) const {
+    if (this->is_empty()) {
+        return 0;
+    }
+
     int64_t k = results.size();
     int64_t look_at_k = std::min(LOOK_AT_K, k);
     std::priority_queue<std::pair<float, size_t>> old_results(results);
@@ -99,13 +106,9 @@ ConjugateGraph::GetMemoryUsage() const {
 
 template <typename T>
 static void
-read_var_from_stream(std::istream& in_stream, uint32_t* offset, T* dest) {
-    in_stream.read((char*)dest, sizeof(T));
+read_var_from_stream(StreamReader& in_stream, uint32_t* offset, T* dest) {
+    in_stream.Read((char*)dest, sizeof(T));
     *offset += sizeof(T);
-
-    if (in_stream.fail()) {
-        throw std::runtime_error("Failed to read from stream.");
-    }
 }
 
 void
@@ -156,14 +159,21 @@ ConjugateGraph::Serialize(std::ostream& out_stream) const {
 
 tl::expected<void, Error>
 ConjugateGraph::Deserialize(const Binary& binary) {
-    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
-    ss.write(reinterpret_cast<const char*>(binary.data.get()), binary.size);
-    ss.seekg(0, std::ios::beg);
-    return this->Deserialize(ss);
+    auto func = [&](uint64_t offset, uint64_t len, void* dest) -> void {
+        if (len + offset > binary.size) {
+            throw std::runtime_error(
+                fmt::format("offset({}) + len({}) > size({})", offset, len, binary.size));
+        }
+        std::memcpy(dest, binary.data.get() + offset, len);
+    };
+
+    int64_t cursor = 0;
+    ReadFuncStreamReader reader(func, cursor);
+    return this->Deserialize(reader);
 }
 
 tl::expected<void, Error>
-ConjugateGraph::Deserialize(std::istream& in_stream) {
+ConjugateGraph::Deserialize(StreamReader& in_stream) {
     try {
         uint32_t offset = 0;
         uint32_t footer_offset = 0;
@@ -173,7 +183,7 @@ ConjugateGraph::Deserialize(std::istream& in_stream) {
 
         conjugate_graph_.clear();
 
-        auto cur_pos = in_stream.tellg();
+        auto cur_pos = in_stream.GetCursor();
 
         read_var_from_stream(in_stream, &offset, &memory_usage_);
         if (memory_usage_ <= FOOTER_SIZE) {
@@ -181,13 +191,11 @@ ConjugateGraph::Deserialize(std::istream& in_stream) {
                 fmt::format("Incorrect header: memory_usage_({})", memory_usage_));
         }
         footer_offset = memory_usage_ - FOOTER_SIZE;
-        in_stream.seekg(cur_pos);
-        in_stream.seekg(footer_offset, std::ios::cur);
+        in_stream.Seek(cur_pos + footer_offset);
         footer_.Deserialize(in_stream);
 
         offset = sizeof(memory_usage_);
-        in_stream.seekg(cur_pos);
-        in_stream.seekg(offset, std::ios::cur);
+        in_stream.Seek(cur_pos + offset);
         while (offset != memory_usage_ - FOOTER_SIZE) {
             read_var_from_stream(in_stream, &offset, &from_tag_id);
             read_var_from_stream(in_stream, &offset, &neighbor_size);
@@ -202,6 +210,11 @@ ConjugateGraph::Deserialize(std::istream& in_stream) {
         clear();
         LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to deserialize: ", e.what());
     }
+}
+
+bool
+ConjugateGraph::is_empty() const {
+    return (this->memory_usage_ == sizeof(this->memory_usage_) + FOOTER_SIZE);
 }
 
 }  // namespace vsag

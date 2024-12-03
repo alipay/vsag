@@ -16,6 +16,7 @@
 #include "hgraph_zparameters.h"
 
 #include "../utils.h"
+#include "common.h"
 #include "fmt/format-inl.h"
 #include "inner_string_params.h"
 #include "vsag/constants.h"
@@ -25,13 +26,14 @@ namespace vsag {
 const std::unordered_map<std::string, std::vector<std::string>> HGraphParameters::EXTERNAL_MAPPING =
     {{HGRAPH_USE_REORDER, {HGRAPH_USE_REORDER_KEY}},
      {HGRAPH_BASE_QUANTIZATION_TYPE, {HGRAPH_BASE_CODES_KEY, QUANTIZATION_TYPE_KEY}},
-     {HGRAPH_GRAPH_MAX_DEGREE, {HGRAPH_GRAPH_KEY, GRAPH_PARAMS_KEY, GRAPH_PARAM_MAX_DEGREE}}};
+     {HGRAPH_GRAPH_MAX_DEGREE, {HGRAPH_GRAPH_KEY, GRAPH_PARAMS_KEY, GRAPH_PARAM_MAX_DEGREE}},
+     {HGRAPH_BUILD_EF_CONSTRUCTION, {BUILD_PARAMS_KEY, BUILD_EF_CONSTRUCTION}}};
 
-HGraphParameters::HGraphParameters(const IndexCommonParam& common_param, const std::string& str)
+HGraphParameters::HGraphParameters(JsonType& hgraph_param, const IndexCommonParam& common_param)
     : common_param_(common_param) {
     this->check_common_param();
     this->refresh_json_by_string();
-    this->ParseStringParam(str);
+    this->ParseStringParam(hgraph_param);
     this->refresh_string_by_json();
 }
 
@@ -43,12 +45,8 @@ HGraphParameters::check_common_param() const {
 }
 
 void
-HGraphParameters::ParseStringParam(const std::string& str) {
-    if (str == "") {
-        return;
-    }
-    auto json_obj = JsonType::parse(str);
-    for (const auto& [key, value] : json_obj.items()) {
+HGraphParameters::ParseStringParam(JsonType& hgraph_param) {
+    for (const auto& [key, value] : hgraph_param.items()) {
         this->CheckAndSetKeyValue(key, value);
     }
     this->refresh_string_by_json();
@@ -98,7 +96,7 @@ const std::string HGraphParameters::DEFAULT_HGRAPH_PARAMS = format_map(
             "type": "nsw",
             "{GRAPH_PARAMS_KEY}": {
                 "{GRAPH_PARAM_MAX_DEGREE}": 64,
-                "{GRAPH_PARAM_INIT_MAX_CAPACITY}": 2000000
+                "{GRAPH_PARAM_INIT_MAX_CAPACITY}": 1000
             }
         },
         "{HGRAPH_BASE_CODES_KEY}": {
@@ -122,11 +120,30 @@ const std::string HGraphParameters::DEFAULT_HGRAPH_PARAMS = format_map(
             "{QUANTIZATION_TYPE_KEY}": "{QUANTIZATION_TYPE_VALUE_SQ8}",
             "{QUANTIZATION_PARAMS_KEY}": {}
         },
-        "build_params": {
-            "ef_construction": 400,
+        "{BUILD_PARAMS_KEY}": {
+            "{BUILD_EF_CONSTRUCTION}": 400,
             "{BUILD_THREAD_COUNT}": 5
         }
     })",
     DEFAULT_MAP);
 
+HGraphSearchParameters
+HGraphSearchParameters::FromJson(const std::string& json_string) {
+    JsonType params = JsonType::parse(json_string);
+
+    HGraphSearchParameters obj;
+
+    // set obj.ef_search
+    CHECK_ARGUMENT(params.contains(INDEX_HGRAPH),
+                   fmt::format("parameters must contains {}", INDEX_HGRAPH));
+
+    CHECK_ARGUMENT(
+        params[INDEX_HGRAPH].contains(HNSW_PARAMETER_EF_RUNTIME),
+        fmt::format("parameters[{}] must contains {}", INDEX_HGRAPH, HNSW_PARAMETER_EF_RUNTIME));
+    obj.ef_search = params[INDEX_HGRAPH][HNSW_PARAMETER_EF_RUNTIME];
+    CHECK_ARGUMENT((1 <= obj.ef_search) and (obj.ef_search <= 1000),
+                   fmt::format("ef_search({}) must in range[1, 1000]", obj.ef_search));
+
+    return obj;
+}
 }  // namespace vsag

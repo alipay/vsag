@@ -24,10 +24,10 @@
 namespace vsag {
 class HGraphParameters {
 public:
-    explicit HGraphParameters(const IndexCommonParam& common_param, const std::string& str = "");
+    explicit HGraphParameters(JsonType& hgraph_param, const IndexCommonParam& common_param);
 
     void
-    ParseStringParam(const std::string& str);
+    ParseStringParam(JsonType& hgraph_param);
 
     void
     CheckAndSetKeyValue(const std::string& key, JsonType& value);
@@ -68,6 +68,19 @@ private:
     static const std::string DEFAULT_HGRAPH_PARAMS;
 
     static const std::unordered_map<std::string, std::vector<std::string>> EXTERNAL_MAPPING;
+};
+
+class HGraphSearchParameters {
+public:
+    static HGraphSearchParameters
+    FromJson(const std::string& json_string);
+
+public:
+    int64_t ef_search{30};
+    bool use_reorder{false};
+
+private:
+    HGraphSearchParameters() = default;
 };
 
 }  // namespace vsag

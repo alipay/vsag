@@ -17,6 +17,8 @@
 
 namespace vsag {
 
+constexpr static const char* PART_SLASH = "/";
+
 tl::expected<std::vector<int64_t>, Error>
 Pyramid::Build(const DatasetPtr& base) {
     return {};

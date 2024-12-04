@@ -16,8 +16,18 @@
 #pragma once
 
 #include "vsag/vsag.h"
+#include "typing.h"
 
 namespace vsag {
+
+struct IndexNode {
+    std::shared_ptr<Index> index{nullptr};
+    Vector<std::shared_ptr<IndexNode>> children;
+    IndexNode(Allocator* allocator): children(allocator) {
+
+    }
+};
+
 
 class Pyramid : public Index {
 public:
@@ -77,6 +87,7 @@ public:
     GetMemoryUsage() const override;
 
 private:
+    Vector<std::shared_ptr<IndexNode>> indexes_;
 };
 
 }  // namespace vsag

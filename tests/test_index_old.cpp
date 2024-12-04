@@ -78,7 +78,6 @@ TEST_CASE("hnsw int8 recall", "[ft][index][hnsw]") {
 TEST_CASE("index search distance", "[ft][index]") {
     vsag::Options::Instance().logger()->SetLevel(vsag::Logger::Level::kDEBUG);
 
-    
     size_t num_vectors = 1000;
     size_t dim = 256;
     auto metric_type = GENERATE("ip", "cosine", "l2");
@@ -89,7 +88,7 @@ TEST_CASE("index search distance", "[ft][index]") {
 
     constexpr auto build_parameter_json = R"(
     {{
-        "dtype": "float32",
+        "dtype": "float32", 
         "metric_type": "{}",
         "dim": {},
         "hnsw": {{

@@ -2170,6 +2170,9 @@ int64_t PQFlashIndex<T, LabelT>::range_search(const T *query, const double range
         {
             if (distances[i] > (float)(range + THRESHOLD_ERROR))
             {
+                if (res_count < 10) {
+                    std::cout << distances[i] << " " << (float)(range + THRESHOLD_ERROR) << " " << res_count << std::endl;
+                }
                 break;
             } else {
                 res_count = i + 1;

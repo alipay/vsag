@@ -543,10 +543,6 @@ HierarchicalNSW::searchBaseLayerST(InnerIdType ep_id,
         }
     }
     while (not top_candidates.empty() && top_candidates.top().first > radius + THRESHOLD_ERROR) {
-        if (top_candidates.size() <= 10) {
-            std::cout << "why be removed:" << top_candidates.top().first << " "
-                      << radius + THRESHOLD_ERROR << std::endl;
-        }
         top_candidates.pop();
     }
 
@@ -1480,9 +1476,6 @@ HierarchicalNSW::searchRange(const void* query_data,
         std::pair<float, InnerIdType> rez = top_candidates.top();
         result.emplace(rez.first, getExternalLabel(rez.second));
         top_candidates.pop();
-    }
-    if (result.size() < 10) {
-        std::cout << "searchRange:" << result.size() << std::endl;
     }
 
     // std::cout << "hnswalg::result.size(): " << result.size() << std::endl;

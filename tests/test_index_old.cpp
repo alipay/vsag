@@ -175,14 +175,14 @@ TEST_CASE("index search distance", "[ft][index]") {
             std::cout << "max_score:" << max_score << std::endl;
             std::cout << "current result:";
             for (int j = 0; j < range_result->GetDim(); ++j) {
-                std::cout << range_result->GetIds()[j] << " ";
+                std::cout << range_result->GetDistances()[j] << " ";
             }
             std::cout << std::endl;
-            result = index->RangeSearch(query, max_score + 1, search_parameters);
+            result = index->RangeSearch(query, max_score + 0.001, search_parameters);
             auto after_range_result = result.value();
             std::cout << "miss result:";
             for (int j = 0; j < after_range_result->GetDim(); ++j) {
-                std::cout << after_range_result->GetIds()[j] << " ";
+                std::cout << after_range_result->GetDistances()[j] << " ";
             }
             std::cout << std::endl;
         }

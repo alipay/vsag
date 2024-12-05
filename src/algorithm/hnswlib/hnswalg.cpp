@@ -1481,6 +1481,9 @@ HierarchicalNSW::searchRange(const void* query_data,
         result.emplace(rez.first, getExternalLabel(rez.second));
         top_candidates.pop();
     }
+    if (result.size() < 10) {
+        std::cout << "searchRange:" << result.size() << std::endl;
+    }
 
     // std::cout << "hnswalg::result.size(): " << result.size() << std::endl;
     return result;

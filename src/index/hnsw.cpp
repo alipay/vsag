@@ -583,18 +583,10 @@ HNSW::deserialize(std::istream& in_stream) {
         if (auto result = init_memory_space(); not result.has_value()) {
             return tl::unexpected(result.error());
         }
-
-        std::streampos current_position = in_stream.tellg();
-        in_stream.seekg(0, std::ios::end);
-        std::streamsize size = in_stream.tellg();
-        in_stream.seekg(current_position);
-        auto max_size = size - current_position;
-
         IOStreamReader reader(in_stream);
-        BufferStreamReader buffer_reader(&reader, max_size, allocator_.get());
-        alg_hnsw->loadIndex(buffer_reader, this->space.get());
+        alg_hnsw->loadIndex(reader, this->space.get());
 
-        if (use_conjugate_graph_ and not conjugate_graph_->Deserialize(buffer_reader).has_value()) {
+        if (use_conjugate_graph_ and not conjugate_graph_->Deserialize(reader).has_value()) {
             throw std::runtime_error("error in deserialize conjugate graph");
         }
     } catch (const std::runtime_error& e) {

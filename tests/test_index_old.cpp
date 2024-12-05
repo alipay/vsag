@@ -171,6 +171,21 @@ TEST_CASE("index search distance", "[ft][index]") {
         result = index->RangeSearch(query, max_score, search_parameters);
         REQUIRE(result.has_value());
         auto range_result = result.value();
+        if (range_result->GetDim() < k) {
+            std::cout << "max_score:" << max_score << std::endl;
+            std::cout << "current result:";
+            for (int j = 0; j < range_result->GetDim(); ++j) {
+                std::cout << range_result->GetIds()[j] << " ";
+            }
+            std::cout << std::endl;
+            result = index->RangeSearch(query, max_score + 1, search_parameters);
+            auto after_range_result = result.value();
+            std::cout << "miss result:";
+            for (int j = 0; j < after_range_result->GetDim(); ++j) {
+                std::cout << after_range_result->GetIds()[j] << " ";
+            }
+            std::cout << std::endl;
+        }
         REQUIRE(range_result->GetDim() >= k);
         for (int j = 0; j < range_result->GetDim(); ++j) {
             auto id = range_result->GetIds()[j];

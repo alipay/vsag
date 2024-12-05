@@ -543,6 +543,10 @@ HierarchicalNSW::searchBaseLayerST(InnerIdType ep_id,
         }
     }
     while (not top_candidates.empty() && top_candidates.top().first > radius + THRESHOLD_ERROR) {
+        if (top_candidates.size() <= 10) {
+            std::cout << "why be removed:" << top_candidates.top().first << " "
+                      << radius + THRESHOLD_ERROR << std::endl;
+        }
         top_candidates.pop();
     }
 

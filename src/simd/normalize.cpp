@@ -13,28 +13,48 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "sq4_uniform_simd.h"
+#include "normalize.h"
 
 #include "simd_status.h"
 
 namespace vsag {
 
-static SQ4UniformComputeCodesType
-GetSQ4UniformComputeCodesIP() {
+static NormalizeType
+GetNormalize() {
     if (SimdStatus::SupportAVX512()) {
 #if defined(ENABLE_AVX512)
-        return avx512::SQ4UniformComputeCodesIP;
+        return avx512::Normalize;
 #endif
     } else if (SimdStatus::SupportAVX2()) {
 #if defined(ENABLE_AVX2)
-        return avx2::SQ4UniformComputeCodesIP;
+        return avx2::Normalize;
 #endif
     } else if (SimdStatus::SupportSSE()) {
 #if defined(ENABLE_SSE)
-        return sse::SQ4UniformComputeCodesIP;
+        return sse::Normalize;
 #endif
     }
-    return generic::SQ4UniformComputeCodesIP;
+    return generic::Normalize;
 }
-SQ4UniformComputeCodesType SQ4UniformComputeCodesIP = GetSQ4UniformComputeCodesIP();
+NormalizeType Normalize = GetNormalize();
+
+static DivScalarType
+GetDivScalar() {
+    if (SimdStatus::SupportAVX512()) {
+#if defined(ENABLE_AVX512)
+        return avx512::DivScalar;
+#endif
+    } else if (SimdStatus::SupportAVX2()) {
+#if defined(ENABLE_AVX2)
+        return avx2::DivScalar;
+#endif
+    } else if (SimdStatus::SupportSSE()) {
+#if defined(ENABLE_SSE)
+        return sse::DivScalar;
+#endif
+    }
+    return generic::DivScalar;
+}
+DivScalarType DivScalar = GetDivScalar();
+
 }  // namespace vsag

@@ -17,6 +17,8 @@
 
 #include <fmt/format-inl.h>
 
+#include <memory>
+
 #include "common.h"
 #include "data_cell/sparse_graph_datacell.h"
 #include "hgraph_zparameters.h"
@@ -45,7 +47,8 @@ HGraphIndex::HGraphIndex(const JsonType& index_param,
       label_lookup_(common_param.allocator_),
       label_op_mutex_(MAX_LABEL_OPERATION_LOCKS, common_param_.allocator_),
       neighbors_mutex_(0, common_param_.allocator_),
-      route_graphs_(common_param.allocator_) {
+      route_graphs_(common_param.allocator_),
+      labels_(common_param.allocator_) {
     this->dim_ = common_param.dim_;
     this->metric_ = common_param.metric_;
     this->allocator_ = common_param.allocator_;
@@ -77,8 +80,17 @@ HGraphIndex::Init() {
 
     mult_ = 1 / log(1.0 * static_cast<double>(this->bottom_graph_->MaximumDegree()));
 
-    this->pool_ =
-        std::make_shared<hnswlib::VisitedListPool>(this->bottom_graph_->MaxCapacity(), allocator_);
+    resize(bottom_graph_->max_capacity_);
+
+    if (this->index_param_.contains(BUILD_PARAMS_KEY)) {
+        auto& build_params = this->index_param_[BUILD_PARAMS_KEY];
+        if (build_params.contains(BUILD_EF_CONSTRUCTION)) {
+            this->ef_construct_ = build_params[BUILD_EF_CONSTRUCTION];
+        }
+        if (build_params.contains(BUILD_THREAD_COUNT)) {
+            this->build_thread_count_ = build_params[BUILD_THREAD_COUNT];
+        }
+    }
 
     if (this->build_thread_count_ > 1) {
         this->build_pool_ = std::make_unique<progschj::ThreadPool>(this->build_thread_count_);
@@ -133,26 +145,26 @@ HGraphIndex::knn_search(const DatasetPtr& query,
         // check query vector
         CHECK_ARGUMENT(query->GetNumElements() == 1, "query dataset should contain 1 vector only");
 
-        auto ep = this->entry_point_id_;
+        InnerSearchParam search_param;
+        search_param.ep_ = this->entry_point_id_;
+        search_param.ef_ = 1;
+        search_param.is_id_allowed_ = nullptr;
         for (int64_t i = this->route_graphs_.size() - 1; i >= 0; --i) {
             auto result = this->search_one_graph(query->GetFloat32Vectors(),
                                                  this->route_graphs_[i],
                                                  this->basic_flatten_codes_,
-                                                 ep,
-                                                 1,
-                                                 nullptr);
-            ep = result.top().second;
+                                                 search_param);
+            search_param.ep_ = result.top().second;
         }
 
         auto params = HGraphSearchParameters::FromJson(parameters);
 
-        auto ef = params.ef_search;
+        search_param.ef_ = params.ef_search;
+        search_param.is_id_allowed_ = &ft;
         auto search_result = this->search_one_graph(query->GetFloat32Vectors(),
                                                     this->bottom_graph_,
                                                     this->basic_flatten_codes_,
-                                                    ep,
-                                                    ef,
-                                                    &ft);
+                                                    search_param);
 
         while (search_result.size() > k) {
             search_result.pop();
@@ -233,7 +245,7 @@ HGraphIndex::hnsw_add(const DatasetPtr& data) {
     auto* ids = data->GetIds();
     auto* datas = data->GetFloat32Vectors();
     auto cur_count = this->bottom_graph_->TotalCount();
-    vsag::Vector<std::shared_mutex>(total + cur_count, allocator_).swap(this->neighbors_mutex_);
+    this->resize(total + cur_count);
 
     std::mutex add_mutex;
 
@@ -245,6 +257,7 @@ HGraphIndex::hnsw_add(const DatasetPtr& data) {
             {
                 std::unique_lock<std::shared_mutex> lock(this->label_lookup_mutex_);
                 this->label_lookup_[label] = inner_id;
+                this->labels_[inner_id] = label;
             }
 
             std::unique_lock<std::mutex> add_lock(add_mutex);
@@ -283,19 +296,22 @@ HGraphIndex::generate_one_route_graph() {
                                                  bottom_graph_->MaximumDegree() / 2);
 }
 
+template <HGraphIndex::InnerSearchMode mode>
 HGraphIndex::MaxHeap
 HGraphIndex::search_one_graph(const float* query,
                               const GraphInterfacePtr& graph,
                               const FlattenInterfacePtr& flatten,
-                              InnerIdType ep,
-                              uint64_t ef,
-                              BaseFilterFunctor* is_id_allowed) const {
+                              InnerSearchParam& inner_search_param) const {
     auto visited_list = this->pool_->getFreeVisitedList();
 
     auto* visited_array = visited_list->mass;
     auto visited_array_tag = visited_list->curV;
     auto computer = flatten->FactoryComputer(query);
     auto prefetch_neighbor_visit_num = 1;  // TODO(LHT) Optimize the param;
+
+    auto* is_id_allowed = inner_search_param.is_id_allowed_;
+    auto ep = inner_search_param.ep_;
+    auto ef = inner_search_param.ef_;
 
     MaxHeap candidate_set(allocator_);
     MaxHeap cur_result(allocator_);
@@ -305,6 +321,11 @@ HGraphIndex::search_one_graph(const float* query,
     if (not is_id_allowed || (*is_id_allowed)(get_label_by_id(ep))) {
         cur_result.emplace(dist, ep);
         lower_bound = cur_result.top().first;
+    }
+    if constexpr (mode == RANGE_SEARCH_MODE) {
+        if (dist > inner_search_param.radius_) {
+            cur_result.pop();
+        }
     }
     candidate_set.emplace(-dist, ep);
     visited_array[ep] = visited_array_tag;
@@ -316,8 +337,10 @@ HGraphIndex::search_one_graph(const float* query,
     while (not candidate_set.empty()) {
         auto current_node_pair = candidate_set.top();
 
-        if ((-current_node_pair.first) > lower_bound && cur_result.size() == ef) {
-            break;
+        if constexpr (mode == InnerSearchMode::KNN_SEARCH_MODE) {
+            if ((-current_node_pair.first) > lower_bound && cur_result.size() == ef) {
+                break;
+            }
         }
         candidate_set.pop();
 
@@ -355,7 +378,8 @@ HGraphIndex::search_one_graph(const float* query,
 
         for (auto i = 0; i < count_no_visited; ++i) {
             dist = tmp_result[i];
-            if (cur_result.size() < ef || lower_bound > dist) {
+            if (cur_result.size() < ef || lower_bound > dist ||
+                (mode == RANGE_SEARCH_MODE && dist <= inner_search_param.radius_)) {
                 candidate_set.emplace(-dist, to_be_visited[i]);
                 flatten->Prefetch(candidate_set.top().second);
 
@@ -363,16 +387,87 @@ HGraphIndex::search_one_graph(const float* query,
                     cur_result.emplace(dist, to_be_visited[i]);
                 }
 
-                if (cur_result.size() > ef)
-                    cur_result.pop();
+                if constexpr (mode == KNN_SEARCH_MODE) {
+                    if (cur_result.size() > ef) {
+                        cur_result.pop();
+                    }
+                }
 
-                if (not cur_result.empty())
+                if (not cur_result.empty()) {
                     lower_bound = cur_result.top().first;
+                }
             }
         }
     }
     this->pool_->releaseVisitedList(visited_list);
     return cur_result;
+}
+
+tl::expected<DatasetPtr, Error>
+HGraphIndex::range_search(const DatasetPtr& query,
+                          float radius,
+                          const std::string& parameters,
+                          BaseFilterFunctor* filter_ptr,
+                          int64_t limited_size) const {
+    try {
+        int64_t query_dim = query->GetDim();
+        CHECK_ARGUMENT(
+            query_dim == dim_,
+            fmt::format("query.dim({}) must be equal to index.dim({})", query_dim, dim_));
+        // check radius
+        CHECK_ARGUMENT(radius >= 0, fmt::format("radius({}) must be greater equal than 0", radius))
+
+        // check query vector
+        CHECK_ARGUMENT(query->GetNumElements() == 1, "query dataset should contain 1 vector only");
+
+        // check limited_size
+        CHECK_ARGUMENT(limited_size != 0,
+                       fmt::format("limited_size({}) must not be equal to 0", limited_size));
+
+        InnerSearchParam search_param;
+        search_param.ep_ = this->entry_point_id_;
+        search_param.ef_ = 1;
+        for (int64_t i = this->route_graphs_.size() - 1; i >= 0; --i) {
+            auto result = this->search_one_graph(query->GetFloat32Vectors(),
+                                                 this->route_graphs_[i],
+                                                 this->basic_flatten_codes_,
+                                                 search_param);
+            search_param.ep_ = result.top().second;
+        }
+
+        auto params = HGraphSearchParameters::FromJson(parameters);
+
+        search_param.ef_ = std::max(params.ef_search, limited_size);
+        search_param.is_id_allowed_ = filter_ptr;
+        search_param.radius_ = radius;
+        auto search_result = this->search_one_graph(query->GetFloat32Vectors(),
+                                                    this->bottom_graph_,
+                                                    this->basic_flatten_codes_,
+                                                    search_param);
+        if (limited_size > 0) {
+            while (search_result.size() > limited_size) {
+                search_result.pop();
+            }
+        }
+
+        auto dataset_results = Dataset::Make();
+        dataset_results->Dim(search_result.size())->NumElements(1)->Owner(true, allocator_);
+        auto* ids = (int64_t*)allocator_->Allocate(sizeof(int64_t) * search_result.size());
+        dataset_results->Ids(ids);
+        auto* dists = (float*)allocator_->Allocate(sizeof(float) * search_result.size());
+        dataset_results->Distances(dists);
+
+        for (int64_t j = search_result.size() - 1; j >= 0; --j) {
+            dists[j] = search_result.top().first;
+            ids[j] = search_result.top().second;
+            search_result.pop();
+        }
+        return std::move(dataset_results);
+    } catch (const std::invalid_argument& e) {
+        LOG_ERROR_AND_RETURNS(ErrorType::INVALID_ARGUMENT,
+                              "[HGraph] failed to knn_search(invalid argument): ",
+                              e.what());
+    }
 }
 
 void
@@ -508,6 +603,9 @@ HGraphIndex::serialize_basic_info(StreamWriter& writer) const {
     StreamWriter::WriteObj(writer, this->entry_point_id_);
     StreamWriter::WriteObj(writer, this->ef_construct_);
     StreamWriter::WriteObj(writer, this->mult_);
+    StreamWriter::WriteObj(writer, this->max_capacity_);
+    StreamWriter::WriteVector(writer, this->labels_);
+
     uint64_t size = this->label_lookup_.size();
     StreamWriter::WriteObj(writer, size);
     for (auto& pair : this->label_lookup_) {
@@ -546,8 +644,7 @@ HGraphIndex::deserialize(StreamReader& reader) {
     for (uint64_t i = 0; i < this->max_level_; ++i) {
         this->route_graphs_[i]->Deserialize(reader);
     }
-    vsag::Vector<std::shared_mutex>(this->GetNumElements(), allocator_)
-        .swap(this->neighbors_mutex_);
+    resize(max_capacity_);
 }
 
 void
@@ -559,6 +656,8 @@ HGraphIndex::deserialize_basic_info(StreamReader& reader) {
     StreamReader::ReadObj(reader, this->entry_point_id_);
     StreamReader::ReadObj(reader, this->ef_construct_);
     StreamReader::ReadObj(reader, this->mult_);
+    StreamReader::ReadObj(reader, this->max_capacity_);
+    StreamReader::ReadVector(reader, this->labels_);
 
     uint64_t size;
     StreamReader::ReadObj(reader, size);
@@ -661,18 +760,24 @@ HGraphIndex::calc_distance_by_id(const float* vector, int64_t id) const {
 }
 void
 HGraphIndex::add_one_point(const float* data, int level, InnerIdType inner_id) {
-    auto ep = this->entry_point_id_;
     MaxHeap result(allocator_);
+
+    InnerSearchParam param{
+        .ep_ = this->entry_point_id_,
+        .ef_ = 1,
+        .is_id_allowed_ = nullptr,
+    };
+
     for (auto j = max_level_ - 1; j > level; --j) {
-        result = search_one_graph(data, route_graphs_[j], basic_flatten_codes_, ep, 1, nullptr);
-        ep = result.top().second;
+        result = search_one_graph(data, route_graphs_[j], basic_flatten_codes_, param);
+        param.ep_ = result.top().second;
     }
 
+    param.ef_ = this->ef_construct_;
     for (auto j = level; j >= 0; --j) {
         if (route_graphs_[j]->TotalCount() != 0) {
-            result = search_one_graph(
-                data, route_graphs_[j], basic_flatten_codes_, ep, this->ef_construct_, nullptr);
-            ep = this->mutually_connect_new_element(
+            result = search_one_graph(data, route_graphs_[j], basic_flatten_codes_, param);
+            param.ep_ = this->mutually_connect_new_element(
                 inner_id, result, route_graphs_[j], basic_flatten_codes_, false);
         } else {
             route_graphs_[j]->InsertNeighborsById(inner_id, Vector<InnerIdType>(allocator_));
@@ -680,14 +785,24 @@ HGraphIndex::add_one_point(const float* data, int level, InnerIdType inner_id) {
         route_graphs_[j]->IncreaseTotalCount(1);
     }
     if (bottom_graph_->TotalCount() != 0) {
-        result = search_one_graph(
-            data, this->bottom_graph_, basic_flatten_codes_, ep, this->ef_construct_, nullptr);
+        result = search_one_graph(data, this->bottom_graph_, basic_flatten_codes_, param);
         this->mutually_connect_new_element(
             inner_id, result, this->bottom_graph_, basic_flatten_codes_, false);
     } else {
         bottom_graph_->InsertNeighborsById(inner_id, Vector<InnerIdType>(allocator_));
     }
     bottom_graph_->IncreaseTotalCount(1);
+}
+
+void
+HGraphIndex::resize(uint64_t new_size) {
+    auto cur_size = this->neighbors_mutex_.size();
+    if (cur_size < new_size) {
+        vsag::Vector<std::shared_mutex>(new_size, allocator_).swap(this->neighbors_mutex_);
+        pool_ = std::make_shared<hnswlib::VisitedListPool>(new_size, allocator_);
+        labels_.resize(new_size);
+        this->max_capacity_ = new_size;
+    }
 }
 
 }  // namespace vsag

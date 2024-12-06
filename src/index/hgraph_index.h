@@ -196,15 +196,12 @@ private:
                const std::string& parameters,
                const std::function<bool(int64_t)>& filter) const;
 
-    // TODO(LHT): implement
     tl::expected<DatasetPtr, Error>
     range_search(const DatasetPtr& query,
                  float radius,
                  const std::string& parameters,
                  BaseFilterFunctor* filter_ptr,
-                 int64_t limited_size) const {
-        return Dataset::Make();
-    };
+                 int64_t limited_size) const;
 
     tl::expected<void, Error>
     serialize(std::ostream& out_stream) const;
@@ -240,16 +237,18 @@ private:
     void
     hnsw_add(const DatasetPtr& data);
 
+    void
+    resize(uint64_t new_size);
+
     GraphInterfacePtr
     generate_one_route_graph();
 
+    template <InnerSearchMode mode = InnerSearchMode::KNN_SEARCH_MODE>
     MaxHeap
     search_one_graph(const float* query,
                      const GraphInterfacePtr& graph,
                      const FlattenInterfacePtr& codes,
-                     InnerIdType ep,
-                     uint64_t ef,
-                     BaseFilterFunctor* is_id_allowed = nullptr) const;
+                     InnerSearchParam& inner_search_param) const;
 
     void
     select_edges_by_heuristic(MaxHeap& edges,
@@ -276,7 +275,7 @@ private:
     get_label_by_id(InnerIdType inner_id) const {
         std::shared_lock<std::shared_mutex> lock(this->label_lookup_mutex_);
         // the inner_id is guarantee in label_lookup
-        return this->label_lookup_.at(inner_id);
+        return this->labels_[inner_id];
     }
 
     void
@@ -289,7 +288,8 @@ private:
     Allocator* allocator_{nullptr};
 
     UnorderedMap<LabelType, InnerIdType> label_lookup_;
-    mutable std::shared_mutex label_lookup_mutex_{};  // lock for label_lookup_
+    Vector<LabelType> labels_;
+    mutable std::shared_mutex label_lookup_mutex_{};  // lock for label_lookup_ & labels_
 
     InnerIdType entry_point_id_{std::numeric_limits<InnerIdType>::max()};
     uint64_t max_level_{0};
@@ -308,5 +308,7 @@ private:
 
     std::unique_ptr<progschj::ThreadPool> build_pool_{nullptr};
     uint64_t build_thread_count_{100};
+
+    InnerIdType max_capacity_{0};
 };
 }  // namespace vsag

@@ -19,7 +19,7 @@ namespace hnswlib {
 
 BlockManager::BlockManager(size_t size_data_per_element,
                            size_t block_size_limit,
-                           vsag::Allocator* allocator)
+                           vsag::SafeAllocator* allocator)
     : max_elements_(0), size_data_per_element_(size_data_per_element), allocator_(allocator) {
     data_num_per_block_ = block_size_limit / size_data_per_element_;
     block_size_ = size_data_per_element * data_num_per_block_;

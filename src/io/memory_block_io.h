@@ -35,12 +35,12 @@ namespace vsag {
 
 class MemoryBlockIO : public BasicIO<MemoryBlockIO> {
 public:
-    explicit MemoryBlockIO(Allocator* allocator, uint64_t block_size = DEFAULT_BLOCK_SIZE)
+    explicit MemoryBlockIO(SafeAllocator* allocator, uint64_t block_size = DEFAULT_BLOCK_SIZE)
         : block_size_(block_size), allocator_(allocator), blocks_(0, allocator) {
     }
 
     MemoryBlockIO(const JsonType& io_param, const IndexCommonParam& common_param)
-        : allocator_(common_param.allocator_), blocks_(0, common_param.allocator_) {
+        : allocator_(common_param.allocator_.get()), blocks_(0, common_param.allocator_.get()) {
         if (io_param.contains(BLOCK_IO_BLOCK_SIZE_KEY)) {
             this->block_size_ =
                 io_param[BLOCK_IO_BLOCK_SIZE_KEY];  // TODO(LHT): trans str to uint64_t
@@ -106,7 +106,7 @@ private:
 
     Vector<uint8_t*> blocks_;
 
-    Allocator* const allocator_{nullptr};
+    SafeAllocator* const allocator_{nullptr};
 
     static const uint64_t DEFAULT_BLOCK_SIZE = 128 * 1024 * 1024;  // 128MB
 };

@@ -112,7 +112,7 @@ private:
     std::default_random_engine level_generator_;
     std::default_random_engine update_probability_generator_;
 
-    vsag::Allocator* allocator_{nullptr};
+    vsag::SafeAllocator* allocator_{nullptr};
 
     mutable std::atomic<uint64_t> metric_distance_computations_{0};
     mutable std::atomic<uint64_t> metric_hops_{0};
@@ -128,7 +128,7 @@ private:
 public:
     HierarchicalNSW(SpaceInterface* s,
                     size_t max_elements,
-                    vsag::Allocator* allocator,
+                    vsag::SafeAllocator* allocator,
                     size_t M = 16,
                     size_t ef_construction = 200,
                     bool use_reversed_edges = false,

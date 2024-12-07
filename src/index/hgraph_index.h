@@ -45,7 +45,9 @@ public:
                                         Vector<std::pair<float, InnerIdType>>,
                                         CompareByFirst>;
 
-    HGraphIndex(const JsonType& index_param, const IndexCommonParam& common_param) noexcept;
+    HGraphIndex(const JsonType& index_param, IndexCommonParam& common_param) noexcept;
+
+    ~HGraphIndex() override;
 
     void
     Init();
@@ -170,7 +172,7 @@ public:
     MetricType metric_{MetricType::METRIC_TYPE_L2SQR};
 
     const JsonType index_param_{};
-    const IndexCommonParam common_param_{};
+    IndexCommonParam common_param_;
 
 private:
     class InnerSearchParam {
@@ -284,8 +286,6 @@ private:
 private:
     std::default_random_engine level_generator_{2021};
     double mult_{1.0};
-
-    Allocator* allocator_{nullptr};
 
     UnorderedMap<LabelType, InnerIdType> label_lookup_;
     Vector<LabelType> labels_;

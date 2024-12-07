@@ -45,7 +45,7 @@ public:
     vl_type* mass{nullptr};
     uint64_t numelements{0};
 
-    VisitedList(uint64_t numelements1, vsag::Allocator* allocator) : allocator_(allocator) {
+    VisitedList(uint64_t numelements1, vsag::SafeAllocator* allocator) : allocator_(allocator) {
         curV = -1;
         numelements = numelements1;
     }
@@ -66,7 +66,7 @@ public:
         allocator_->Deallocate(mass);
     }
 
-    vsag::Allocator* allocator_;
+    vsag::SafeAllocator* allocator_;
 };
 
 using VisitedListPtr = std::shared_ptr<VisitedList>;
@@ -79,7 +79,7 @@ using VisitedListPtr = std::shared_ptr<VisitedList>;
 
 class VisitedListPool {
 public:
-    VisitedListPool(uint64_t max_element_count, vsag::Allocator* allocator)
+    VisitedListPool(uint64_t max_element_count, vsag::SafeAllocator* allocator)
         : allocator_(allocator), pool_(allocator), max_element_count_(max_element_count) {
     }
 
@@ -109,7 +109,7 @@ private:
     vsag::Vector<VisitedListPtr> pool_;
     std::mutex poolguard_;
     uint64_t max_element_count_;
-    vsag::Allocator* allocator_;
+    vsag::SafeAllocator* allocator_;
 };
 
 }  // namespace hnswlib

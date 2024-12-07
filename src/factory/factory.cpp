@@ -70,9 +70,6 @@ Factory::CreateIndex(const std::string& origin_name,
             logger::debug("created a diskann index");
             return std::make_shared<DiskANN>(diskann_params, index_common_params);
         } else if (name == INDEX_HGRAPH) {
-            if (allocator == nullptr) {
-                index_common_params.allocator_ = DefaultAllocator::Instance().get();
-            }
             logger::debug("created a hgraph index");
             JsonType hgraph_params;
             if (parsed_params.contains(INDEX_PARAM)) {

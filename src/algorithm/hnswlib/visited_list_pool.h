@@ -45,7 +45,7 @@ public:
     vl_type* mass{nullptr};
     uint64_t numelements{0};
 
-    VisitedList(uint64_t numelements1, vsag::Allocator* allocator) : allocator_(allocator) {
+    VisitedList(uint64_t numelements1, vsag::SafeAllocator* allocator) : allocator_(allocator) {
         curV = -1;
         numelements = numelements1;
     }
@@ -66,7 +66,7 @@ public:
         allocator_->Deallocate(mass);
     }
 
-    vsag::Allocator* allocator_;
+    vsag::SafeAllocator* allocator_;
 };
 
 using VisitedListPtr = std::shared_ptr<VisitedList>;
@@ -79,7 +79,7 @@ using VisitedListPtr = std::shared_ptr<VisitedList>;
 
 class VisitedListPool {
 public:
-    VisitedListPool(uint64_t max_element_count, vsag::Allocator* allocator)
+    VisitedListPool(uint64_t max_element_count, vsag::SafeAllocator* allocator)
         : allocator_(allocator), pool_(allocator), max_element_count_(max_element_count) {
     }
 
@@ -89,7 +89,7 @@ public:
         {
             std::unique_lock<std::mutex> lock(poolguard_);
             if (not pool_.empty()) {
-                rez = pool_.front();
+                rez = pool_.back();
                 pool_.pop_back();
             } else {
                 rez = std::make_shared<VisitedList>(max_element_count_, allocator_);
@@ -102,14 +102,14 @@ public:
     void
     releaseVisitedList(VisitedListPtr vl) {
         std::unique_lock<std::mutex> lock(poolguard_);
-        pool_.push_back(vl);
+        pool_.emplace_back(vl);
     }
 
 private:
     vsag::Vector<VisitedListPtr> pool_;
     std::mutex poolguard_;
     uint64_t max_element_count_;
-    vsag::Allocator* allocator_;
+    vsag::SafeAllocator* allocator_;
 };
 
 }  // namespace hnswlib

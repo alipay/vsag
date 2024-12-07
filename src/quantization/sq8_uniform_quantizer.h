@@ -28,7 +28,7 @@ public:
     using norm_type = uint64_t;
     using sum_type = float;
 
-    explicit SQ8UniformQuantizer(int dim, Allocator* allocator);
+    explicit SQ8UniformQuantizer(int dim, SafeAllocator* allocator);
 
     SQ8UniformQuantizer(const JsonType& quantization_param, const IndexCommonParam& common_param);
 
@@ -84,7 +84,7 @@ private:
 };
 
 template <MetricType metric>
-SQ8UniformQuantizer<metric>::SQ8UniformQuantizer(int dim, Allocator* allocator)
+SQ8UniformQuantizer<metric>::SQ8UniformQuantizer(int dim, SafeAllocator* allocator)
     : Quantizer<SQ8UniformQuantizer<metric>>(dim, allocator) {
     lower_bound_ = std::numeric_limits<DataType>::max();
     diff_ = std::numeric_limits<DataType>::lowest();
@@ -109,7 +109,7 @@ SQ8UniformQuantizer<metric>::SQ8UniformQuantizer(int dim, Allocator* allocator)
 template <MetricType metric>
 SQ8UniformQuantizer<metric>::SQ8UniformQuantizer(const JsonType& quantization_param,
                                                  const IndexCommonParam& common_param)
-    : SQ8UniformQuantizer<metric>(common_param.dim_, common_param.allocator_){};
+    : SQ8UniformQuantizer<metric>(common_param.dim_, common_param.allocator_.get()){};
 
 template <MetricType metric>
 bool

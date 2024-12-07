@@ -66,7 +66,7 @@ IOStreamReader::GetCursor() const {
 
 BufferStreamReader::BufferStreamReader(StreamReader* reader,
                                        size_t max_size,
-                                       vsag::Allocator* allocator)
+                                       vsag::SafeAllocator* allocator)
     : reader_impl_(reader), max_size_(max_size), buffer_(allocator), StreamReader() {
     buffer_size_ = std::min(max_size_, vsag::Options::Instance().block_size_limit());
     buffer_.resize(buffer_size_);

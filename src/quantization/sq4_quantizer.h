@@ -31,7 +31,7 @@ namespace vsag {
 template <MetricType metric = MetricType::METRIC_TYPE_L2SQR>
 class SQ4Quantizer : public Quantizer<SQ4Quantizer<metric>> {
 public:
-    explicit SQ4Quantizer(int dim, Allocator* allocator);
+    explicit SQ4Quantizer(int dim, SafeAllocator* allocator);
 
     explicit SQ4Quantizer(const JsonType& quantization_param, const IndexCommonParam& common_param);
 
@@ -74,7 +74,7 @@ private:
 };
 
 template <MetricType metric>
-SQ4Quantizer<metric>::SQ4Quantizer(int dim, Allocator* allocator)
+SQ4Quantizer<metric>::SQ4Quantizer(int dim, SafeAllocator* allocator)
     : Quantizer<SQ4Quantizer<metric>>(dim, allocator) {
     this->code_size_ = (dim + (1 << 6) - 1) >> 6 << 6;
     lower_bound_.resize(dim, std::numeric_limits<DataType>::max());
@@ -84,7 +84,7 @@ SQ4Quantizer<metric>::SQ4Quantizer(int dim, Allocator* allocator)
 template <MetricType metric>
 SQ4Quantizer<metric>::SQ4Quantizer(const JsonType& quantization_param,
                                    const IndexCommonParam& common_param)
-    : SQ4Quantizer<metric>(common_param.dim_, common_param.allocator_){};
+    : SQ4Quantizer<metric>(common_param.dim_, common_param.allocator_.get()){};
 
 template <MetricType metric>
 bool

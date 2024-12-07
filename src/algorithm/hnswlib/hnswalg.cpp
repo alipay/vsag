@@ -19,7 +19,7 @@
 namespace hnswlib {
 HierarchicalNSW::HierarchicalNSW(SpaceInterface* s,
                                  size_t max_elements,
-                                 vsag::Allocator* allocator,
+                                 vsag::SafeAllocator* allocator,
                                  size_t M,
                                  size_t ef_construction,
                                  bool use_reversed_edges,

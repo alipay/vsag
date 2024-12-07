@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "hgraph_index.h"
+#include "hgraph.h"
 
 #include <fmt/format-inl.h>
 
@@ -21,7 +21,7 @@
 
 #include "common.h"
 #include "data_cell/sparse_graph_datacell.h"
-#include "hgraph_zparameters.h"
+#include "index/hgraph_zparameters.h"
 
 namespace vsag {
 BinarySet
@@ -40,7 +40,7 @@ empty_binaryset() {
     return bs;
 }
 
-HGraphIndex::HGraphIndex(const JsonType& index_param, vsag::IndexCommonParam& common_param) noexcept
+HGraph::HGraph(const JsonType& index_param, vsag::IndexCommonParam& common_param) noexcept
     : index_param_(index_param),
       label_lookup_(common_param.allocator_.get()),
       label_op_mutex_(0, common_param.allocator_.get()),
@@ -53,7 +53,7 @@ HGraphIndex::HGraphIndex(const JsonType& index_param, vsag::IndexCommonParam& co
 }
 
 void
-HGraphIndex::Init() {
+HGraph::Init() {
     CHECK_ARGUMENT(this->index_param_.contains(HGRAPH_USE_REORDER_KEY),
                    fmt::format("hgraph parameters must contains {}", HGRAPH_USE_REORDER_KEY));
     this->use_reorder_ = this->index_param_[HGRAPH_USE_REORDER_KEY];
@@ -96,12 +96,12 @@ HGraphIndex::Init() {
 }
 
 tl::expected<std::vector<int64_t>, Error>
-HGraphIndex::build(const DatasetPtr& data) {
-    return this->add(data);
+HGraph::Build(const DatasetPtr& data) {
+    return this->Add(data);
 }
 
 tl::expected<std::vector<int64_t>, Error>
-HGraphIndex::add(const DatasetPtr& data) {
+HGraph::Add(const DatasetPtr& data) {
     std::vector<int64_t> failed_ids;
     try {
         auto base_dim = data->GetDim();
@@ -126,10 +126,10 @@ HGraphIndex::add(const DatasetPtr& data) {
 }
 
 tl::expected<DatasetPtr, Error>
-HGraphIndex::knn_search(const DatasetPtr& query,
-                        int64_t k,
-                        const std::string& parameters,
-                        const std::function<bool(int64_t)>& filter) const {
+HGraph::KnnSearch(const vsag::DatasetPtr& query,
+                  int64_t k,
+                  const std::string& parameters,
+                  const std::function<bool(int64_t)>& filter) const {
     BitsetOrCallbackFilter ft(filter);
     try {
         int64_t query_dim = query->GetDim();
@@ -191,17 +191,17 @@ HGraphIndex::knn_search(const DatasetPtr& query,
 }
 
 tl::expected<BinarySet, Error>
-HGraphIndex::serialize() const {
+HGraph::Serialize() const {
     if (GetNumElements() == 0) {
         return empty_binaryset();
     }
-    SlowTaskTimer t("hgraph serialize");
+    SlowTaskTimer t("hgraph Serialize");
     size_t num_bytes = this->cal_serialize_size();
     try {
         std::shared_ptr<int8_t[]> bin(new int8_t[num_bytes]);
         auto buffer = reinterpret_cast<char*>(const_cast<int8_t*>(bin.get()));
         BufferStreamWriter writer(buffer);
-        this->serialize(writer);
+        this->Serialize(writer);
         Binary b{
             .data = bin,
             .size = num_bytes,
@@ -212,16 +212,16 @@ HGraphIndex::serialize() const {
         return bs;
     } catch (const std::bad_alloc& e) {
         LOG_ERROR_AND_RETURNS(
-            ErrorType::NO_ENOUGH_MEMORY, "failed to serialize(bad alloc): ", e.what());
+            ErrorType::NO_ENOUGH_MEMORY, "failed to Serialize(bad alloc): ", e.what());
     }
 }
 
 tl::expected<void, Error>
-HGraphIndex::deserialize(const ReaderSet& reader_set) {
-    SlowTaskTimer t("hgraph deserialize");
+HGraph::Deserialize(const ReaderSet& reader_set) {
+    SlowTaskTimer t("hgraph Deserialize");
     if (this->GetNumElements() > 0) {
         LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
-                              "failed to deserialize: index is not empty");
+                              "failed to Deserialize: index is not empty");
     }
 
     try {
@@ -230,16 +230,16 @@ HGraphIndex::deserialize(const ReaderSet& reader_set) {
         };
         uint64_t cursor = 0;
         auto reader = ReadFuncStreamReader(func, cursor);
-        this->deserialize(reader);
+        this->Deserialize(reader);
     } catch (const std::runtime_error& e) {
-        LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to deserialize: ", e.what());
+        LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to Deserialize: ", e.what());
     }
 
     return {};
 };
 
 void
-HGraphIndex::hnsw_add(const DatasetPtr& data) {
+HGraph::hnsw_add(const DatasetPtr& data) {
     uint64_t total = data->GetNumElements();
     auto* ids = data->GetIds();
     auto* datas = data->GetFloat32Vectors();
@@ -290,17 +290,17 @@ HGraphIndex::hnsw_add(const DatasetPtr& data) {
 }
 
 GraphInterfacePtr
-HGraphIndex::generate_one_route_graph() {
+HGraph::generate_one_route_graph() {
     const auto& allocator = this->common_param_.allocator_.get();
     return std::make_shared<SparseGraphDataCell>(allocator, bottom_graph_->MaximumDegree() / 2);
 }
 
-template <HGraphIndex::InnerSearchMode mode>
-HGraphIndex::MaxHeap
-HGraphIndex::search_one_graph(const float* query,
-                              const GraphInterfacePtr& graph,
-                              const FlattenInterfacePtr& flatten,
-                              InnerSearchParam& inner_search_param) const {
+template <HGraph::InnerSearchMode mode>
+HGraph::MaxHeap
+HGraph::search_one_graph(const float* query,
+                         const GraphInterfacePtr& graph,
+                         const FlattenInterfacePtr& flatten,
+                         InnerSearchParam& inner_search_param) const {
     const auto& allocator = this->common_param_.allocator_.get();
     auto visited_list = this->pool_->getFreeVisitedList();
 
@@ -404,11 +404,11 @@ HGraphIndex::search_one_graph(const float* query,
 }
 
 tl::expected<DatasetPtr, Error>
-HGraphIndex::range_search(const DatasetPtr& query,
-                          float radius,
-                          const std::string& parameters,
-                          BaseFilterFunctor* filter_ptr,
-                          int64_t limited_size) const {
+HGraph::RangeSearch(const vsag::DatasetPtr& query,
+                    float radius,
+                    const std::string& parameters,
+                    vsag::BaseFilterFunctor* filter_ptr,
+                    int64_t limited_size) const {
     try {
         int64_t query_dim = query->GetDim();
         CHECK_ARGUMENT(
@@ -472,9 +472,9 @@ HGraphIndex::range_search(const DatasetPtr& query,
 }
 
 void
-HGraphIndex::select_edges_by_heuristic(HGraphIndex::MaxHeap& edges,
-                                       uint64_t max_size,
-                                       const FlattenInterfacePtr& flatten) {
+HGraph::select_edges_by_heuristic(HGraph::MaxHeap& edges,
+                                  uint64_t max_size,
+                                  const FlattenInterfacePtr& flatten) {
     if (edges.size() < max_size) {
         return;
     }
@@ -513,11 +513,11 @@ HGraphIndex::select_edges_by_heuristic(HGraphIndex::MaxHeap& edges,
 }
 
 InnerIdType
-HGraphIndex::mutually_connect_new_element(InnerIdType cur_c,
-                                          MaxHeap& top_candidates,
-                                          GraphInterfacePtr graph,
-                                          FlattenInterfacePtr flatten,
-                                          bool is_update) {
+HGraph::mutually_connect_new_element(InnerIdType cur_c,
+                                     MaxHeap& top_candidates,
+                                     GraphInterfacePtr graph,
+                                     FlattenInterfacePtr flatten,
+                                     bool is_update) {
     const auto& allocator = this->common_param_.allocator_.get();
     const size_t max_size = graph->MaximumDegree();
     this->select_edges_by_heuristic(top_candidates, max_size, flatten);
@@ -598,7 +598,7 @@ HGraphIndex::mutually_connect_new_element(InnerIdType cur_c,
 }
 
 void
-HGraphIndex::serialize_basic_info(StreamWriter& writer) const {
+HGraph::serialize_basic_info(StreamWriter& writer) const {
     StreamWriter::WriteObj(writer, this->use_reorder_);
     StreamWriter::WriteObj(writer, this->dim_);
     StreamWriter::WriteObj(writer, this->metric_);
@@ -619,7 +619,7 @@ HGraphIndex::serialize_basic_info(StreamWriter& writer) const {
 }
 
 void
-HGraphIndex::serialize(StreamWriter& writer) const {
+HGraph::Serialize(StreamWriter& writer) const {
     this->serialize_basic_info(writer);
     this->basic_flatten_codes_->Serialize(writer);
     this->bottom_graph_->Serialize(writer);
@@ -632,7 +632,7 @@ HGraphIndex::serialize(StreamWriter& writer) const {
 }
 
 void
-HGraphIndex::deserialize(StreamReader& reader) {
+HGraph::Deserialize(StreamReader& reader) {
     this->deserialize_basic_info(reader);
     this->basic_flatten_codes_->Deserialize(reader);
     this->bottom_graph_->Deserialize(reader);
@@ -651,7 +651,7 @@ HGraphIndex::deserialize(StreamReader& reader) {
 }
 
 void
-HGraphIndex::deserialize_basic_info(StreamReader& reader) {
+HGraph::deserialize_basic_info(StreamReader& reader) {
     StreamReader::ReadObj(reader, this->use_reorder_);
     StreamReader::ReadObj(reader, this->dim_);
     StreamReader::ReadObj(reader, this->metric_);
@@ -674,31 +674,31 @@ HGraphIndex::deserialize_basic_info(StreamReader& reader) {
 }
 
 uint64_t
-HGraphIndex::cal_serialize_size() const {
+HGraph::cal_serialize_size() const {
     auto calSizeFunc = [](uint64_t cursor, uint64_t size, void* buf) { return; };
     WriteFuncStreamWriter writer(calSizeFunc, 0);
-    this->serialize(writer);
+    this->Serialize(writer);
     return writer.cursor_;
 }
 
 tl::expected<void, Error>
-HGraphIndex::serialize(std::ostream& out_stream) const {
+HGraph::Serialize(std::ostream& out_stream) const {
     try {
         IOStreamWriter writer(out_stream);
-        this->serialize(writer);
+        this->Serialize(writer);
         return {};
     } catch (const std::bad_alloc& e) {
         LOG_ERROR_AND_RETURNS(
-            ErrorType::NO_ENOUGH_MEMORY, "failed to serialize(bad alloc): ", e.what());
+            ErrorType::NO_ENOUGH_MEMORY, "failed to Serialize(bad alloc): ", e.what());
     }
 }
 
 tl::expected<void, Error>
-HGraphIndex::deserialize(const BinarySet& binary_set) {
-    SlowTaskTimer t("hnsw deserialize");
+HGraph::Deserialize(const BinarySet& binary_set) {
+    SlowTaskTimer t("hnsw Deserialize");
     if (this->GetNumElements() > 0) {
         LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
-                              "failed to deserialize: index is not empty");
+                              "failed to Deserialize: index is not empty");
     }
 
     // check if binary set is an empty index
@@ -714,34 +714,34 @@ HGraphIndex::deserialize(const BinarySet& binary_set) {
     try {
         uint64_t cursor = 0;
         auto reader = ReadFuncStreamReader(func, cursor);
-        this->deserialize(reader);
+        this->Deserialize(reader);
     } catch (const std::runtime_error& e) {
-        LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to deserialize: ", e.what());
+        LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to Deserialize: ", e.what());
     } catch (const std::out_of_range& e) {
-        LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to deserialize: ", e.what());
+        LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to Deserialize: ", e.what());
     }
 
     return {};
 }
 
 tl::expected<void, Error>
-HGraphIndex::deserialize(std::istream& in_stream) {
-    SlowTaskTimer t("hgraph deserialize");
+HGraph::Deserialize(std::istream& in_stream) {
+    SlowTaskTimer t("hgraph Deserialize");
     if (this->GetNumElements() > 0) {
         LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
-                              "failed to deserialize: index is not empty");
+                              "failed to Deserialize: index is not empty");
     }
     try {
         IOStreamReader reader(in_stream);
-        this->deserialize(reader);
+        this->Deserialize(reader);
         return {};
     } catch (const std::bad_alloc& e) {
         LOG_ERROR_AND_RETURNS(
-            ErrorType::NO_ENOUGH_MEMORY, "failed to deserialize(bad alloc): ", e.what());
+            ErrorType::NO_ENOUGH_MEMORY, "failed to Deserialize(bad alloc): ", e.what());
     }
 }
 tl::expected<float, Error>
-HGraphIndex::calc_distance_by_id(const float* vector, int64_t id) const {
+HGraph::calc_distance_by_id(const float* vector, int64_t id) const {
     auto flat = this->basic_flatten_codes_;
     if (use_reorder_) {
         flat = this->high_precise_codes_;
@@ -762,7 +762,7 @@ HGraphIndex::calc_distance_by_id(const float* vector, int64_t id) const {
     }
 }
 void
-HGraphIndex::add_one_point(const float* data, int level, InnerIdType inner_id) {
+HGraph::add_one_point(const float* data, int level, InnerIdType inner_id) {
     const auto& allocator = this->common_param_.allocator_.get();
     MaxHeap result(allocator);
 
@@ -799,7 +799,7 @@ HGraphIndex::add_one_point(const float* data, int level, InnerIdType inner_id) {
 }
 
 void
-HGraphIndex::resize(uint64_t new_size) {
+HGraph::resize(uint64_t new_size) {
     const auto& allocator = this->common_param_.allocator_.get();
     auto cur_size = this->neighbors_mutex_.size();
     if (cur_size < new_size) {

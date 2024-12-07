@@ -28,7 +28,7 @@
 #include "vsag/errors.h"
 
 vsag::DiskannParameters
-parse_diskann_params(vsag::IndexCommonParam index_common_param) {
+parse_diskann_params(vsag::IndexCommonParam& index_common_param) {
     auto build_parameter_json = R"(
         {
             "max_degree": 16,

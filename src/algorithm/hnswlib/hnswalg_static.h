@@ -76,7 +76,7 @@ private:
 
     size_t data_element_per_block_{0};
 
-    vsag::Allocator* allocator_;
+    vsag::SafeAllocator* allocator_;
     DISTFUNC fstdistfunc_;
     void* dist_func_param_{nullptr};
 
@@ -114,7 +114,7 @@ public:
 
     StaticHierarchicalNSW(SpaceInterface* s,
                           size_t max_elements,
-                          vsag::Allocator* allocator,
+                          vsag::SafeAllocator* allocator,
                           size_t M = 16,
                           size_t ef_construction = 200,
                           size_t block_size_limit = 128 * 1024 * 1024,

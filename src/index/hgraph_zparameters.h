@@ -24,7 +24,7 @@
 namespace vsag {
 class HGraphParameters {
 public:
-    explicit HGraphParameters(JsonType& hgraph_param, const IndexCommonParam& common_param);
+    explicit HGraphParameters(JsonType& hgraph_param, IndexCommonParam& common_param);
 
     void
     ParseStringParam(JsonType& hgraph_param);
@@ -63,7 +63,7 @@ private:
 
     std::string str_{DEFAULT_HGRAPH_PARAMS};
 
-    const IndexCommonParam common_param_;
+    IndexCommonParam& common_param_;
 
     static const std::string DEFAULT_HGRAPH_PARAMS;
 

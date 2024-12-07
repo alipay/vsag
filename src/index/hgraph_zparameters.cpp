@@ -29,7 +29,7 @@ const std::unordered_map<std::string, std::vector<std::string>> HGraphParameters
      {HGRAPH_GRAPH_MAX_DEGREE, {HGRAPH_GRAPH_KEY, GRAPH_PARAMS_KEY, GRAPH_PARAM_MAX_DEGREE}},
      {HGRAPH_BUILD_EF_CONSTRUCTION, {BUILD_PARAMS_KEY, BUILD_EF_CONSTRUCTION}}};
 
-HGraphParameters::HGraphParameters(JsonType& hgraph_param, const IndexCommonParam& common_param)
+HGraphParameters::HGraphParameters(JsonType& hgraph_param, IndexCommonParam& common_param)
     : common_param_(common_param) {
     this->check_common_param();
     this->refresh_json_by_string();

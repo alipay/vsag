@@ -29,7 +29,7 @@ check_diskann_hnsw_build_parameters(const std::string& json_string) {
     JsonType parsed_params = JsonType::parse(json_string);
     IndexCommonParam index_common_params;
     try {
-        index_common_params = IndexCommonParam::CheckAndCreate(parsed_params, nullptr);
+        index_common_params = std::move(IndexCommonParam::CheckAndCreate(parsed_params, nullptr));
     } catch (const std::exception& e) {
         return tl::unexpected<Error>(ErrorType::INVALID_ARGUMENT, e.what());
     }

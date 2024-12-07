@@ -97,7 +97,9 @@ private:
 
 class BufferStreamReader : public StreamReader {
 public:
-    explicit BufferStreamReader(StreamReader* reader, size_t max_size, vsag::Allocator* allocator);
+    explicit BufferStreamReader(StreamReader* reader,
+                                size_t max_size,
+                                vsag::SafeAllocator* allocator);
 
     void
     Read(char* data, uint64_t size) override;

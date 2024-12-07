@@ -15,8 +15,7 @@
 
 #pragma once
 
-#include "vsag/allocator.h"
-
+#include "safe_allocator.h"
 namespace vsag {
 
 template <class T>
@@ -29,7 +28,7 @@ public:
     using size_type = size_t;
     using difference_type = std::ptrdiff_t;
 
-    AllocatorWrapper(Allocator* allocator) {
+    AllocatorWrapper(SafeAllocator* allocator) {
         this->allocator_ = allocator;
     }
 
@@ -69,6 +68,6 @@ public:
         using other = AllocatorWrapper<U>;
     };
 
-    Allocator* allocator_{};
+    SafeAllocator* allocator_{nullptr};
 };
 }  // namespace vsag

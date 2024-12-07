@@ -35,7 +35,7 @@ TestSparseGraphDataCell(const JsonType& graph_param, const IndexCommonParam& par
 }
 
 TEST_CASE("graph basic test", "[ut][sparse_graph_datacell]") {
-    auto allocator = std::make_shared<DefaultAllocator>();
+    auto allocator = std::make_unique<DefaultAllocator>();
     auto dims = {32, 64};
     auto max_degrees = {5, 12, 24, 32, 64, 128};
     auto max_capacities = {1, 100, 10000, 10'000'000, 32'179'837};
@@ -55,7 +55,7 @@ TEST_CASE("graph basic test", "[ut][sparse_graph_datacell]") {
     for (auto dim : dims) {
         IndexCommonParam param;
         param.dim_ = dim;
-        param.allocator_ = allocator.get();
+        param.allocator_ = std::make_unique<SafeAllocator>(allocator.get());
         for (auto& gp : graph_params) {
             TestSparseGraphDataCell(gp, param);
         }

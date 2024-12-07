@@ -25,7 +25,7 @@ using namespace vsag;
 
 void
 GraphInterfaceTest::BasicTest(uint64_t max_id, uint64_t count, GraphInterfacePtr other) {
-    auto allocator = std::make_shared<DefaultAllocator>();
+    auto allocator = std::make_unique<SafeAllocator>(new DefaultAllocator(), true);
     auto max_degree = this->graph_->MaximumDegree();
     auto old_count = this->graph_->TotalCount();
     UnorderedMap<InnerIdType, std::shared_ptr<Vector<InnerIdType>>> maps(allocator.get());

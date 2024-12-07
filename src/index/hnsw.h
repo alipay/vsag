@@ -47,7 +47,7 @@ namespace vsag {
 
 class HNSW : public Index {
 public:
-    HNSW(HnswParameters hnsw_params, const IndexCommonParam& index_common_param);
+    HNSW(HnswParameters hnsw_params, IndexCommonParam& index_common_param);
 
     virtual ~HNSW() {
         alg_hnsw_ = nullptr;
@@ -276,7 +276,7 @@ private:
     bool is_init_memory_ = false;
     DataTypes type_;
 
-    std::shared_ptr<SafeAllocator> allocator_;
+    std::unique_ptr<SafeAllocator> allocator_;
 
     mutable std::mutex stats_mutex_;
     mutable std::map<std::string, WindowResultQueue> result_queues_;

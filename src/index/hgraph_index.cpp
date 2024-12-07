@@ -40,18 +40,28 @@ empty_binaryset() {
     return bs;
 }
 
-HGraphIndex::HGraphIndex(const JsonType& index_param,
-                         const vsag::IndexCommonParam& common_param) noexcept
+HGraphIndex::HGraphIndex(const JsonType& index_param, vsag::IndexCommonParam& common_param) noexcept
     : index_param_(index_param),
-      common_param_(common_param),
-      label_lookup_(common_param.allocator_),
-      label_op_mutex_(MAX_LABEL_OPERATION_LOCKS, common_param_.allocator_),
-      neighbors_mutex_(0, common_param_.allocator_),
-      route_graphs_(common_param.allocator_),
-      labels_(common_param.allocator_) {
+      label_lookup_(common_param.allocator_.get()),
+      label_op_mutex_(0, common_param.allocator_.get()),
+      neighbors_mutex_(0, common_param.allocator_.get()),
+      route_graphs_(common_param.allocator_.get()),
+      labels_(common_param.allocator_.get()) {
     this->dim_ = common_param.dim_;
     this->metric_ = common_param.metric_;
-    this->allocator_ = common_param.allocator_;
+    this->common_param_ = std::move(common_param);
+}
+
+HGraphIndex::~HGraphIndex() {
+    this->label_lookup_.clear();
+    this->label_op_mutex_.clear();
+    this->neighbors_mutex_.clear();
+    this->route_graphs_.clear();
+    this->labels_.clear();
+    this->basic_flatten_codes_.reset();
+    this->high_precise_codes_.reset();
+    this->bottom_graph_.reset();
+    this->pool_.reset();
 }
 
 void
@@ -169,13 +179,14 @@ HGraphIndex::knn_search(const DatasetPtr& query,
         while (search_result.size() > k) {
             search_result.pop();
         }
+        const auto& allocator = this->common_param_.allocator_.get();
 
         auto dataset_results = Dataset::Make();
-        dataset_results->Dim(search_result.size())->NumElements(1)->Owner(true, allocator_);
+        dataset_results->Dim(search_result.size())->NumElements(1)->Owner(true, allocator);
 
-        auto* ids = (int64_t*)allocator_->Allocate(sizeof(int64_t) * search_result.size());
+        auto* ids = (int64_t*)allocator->Allocate(sizeof(int64_t) * search_result.size());
         dataset_results->Ids(ids);
-        auto* dists = (float*)allocator_->Allocate(sizeof(float) * search_result.size());
+        auto* dists = (float*)allocator->Allocate(sizeof(float) * search_result.size());
         dataset_results->Distances(dists);
 
         for (int64_t j = search_result.size() - 1; j >= 0; --j) {
@@ -292,8 +303,8 @@ HGraphIndex::hnsw_add(const DatasetPtr& data) {
 
 GraphInterfacePtr
 HGraphIndex::generate_one_route_graph() {
-    return std::make_shared<SparseGraphDataCell>(this->allocator_,
-                                                 bottom_graph_->MaximumDegree() / 2);
+    const auto& allocator = this->common_param_.allocator_.get();
+    return std::make_shared<SparseGraphDataCell>(allocator, bottom_graph_->MaximumDegree() / 2);
 }
 
 template <HGraphIndex::InnerSearchMode mode>
@@ -302,6 +313,7 @@ HGraphIndex::search_one_graph(const float* query,
                               const GraphInterfacePtr& graph,
                               const FlattenInterfacePtr& flatten,
                               InnerSearchParam& inner_search_param) const {
+    const auto& allocator = this->common_param_.allocator_.get();
     auto visited_list = this->pool_->getFreeVisitedList();
 
     auto* visited_array = visited_list->mass;
@@ -313,8 +325,8 @@ HGraphIndex::search_one_graph(const float* query,
     auto ep = inner_search_param.ep_;
     auto ef = inner_search_param.ef_;
 
-    MaxHeap candidate_set(allocator_);
-    MaxHeap cur_result(allocator_);
+    MaxHeap candidate_set(allocator);
+    MaxHeap cur_result(allocator);
     float dist = 0.0f;
     auto lower_bound = std::numeric_limits<float>::max();
     flatten->Query(&dist, computer, &ep, 1);
@@ -330,9 +342,9 @@ HGraphIndex::search_one_graph(const float* query,
     candidate_set.emplace(-dist, ep);
     visited_array[ep] = visited_array_tag;
 
-    Vector<InnerIdType> neighbors(allocator_);
-    Vector<InnerIdType> to_be_visited(graph->MaximumDegree(), allocator_);
-    Vector<float> tmp_result(graph->MaximumDegree(), allocator_);
+    Vector<InnerIdType> neighbors(allocator);
+    Vector<InnerIdType> to_be_visited(graph->MaximumDegree(), allocator);
+    Vector<float> tmp_result(graph->MaximumDegree(), allocator);
 
     while (not candidate_set.empty()) {
         auto current_node_pair = candidate_set.top();
@@ -449,12 +461,13 @@ HGraphIndex::range_search(const DatasetPtr& query,
                 search_result.pop();
             }
         }
+        const auto& allocator = this->common_param_.allocator_.get();
 
         auto dataset_results = Dataset::Make();
-        dataset_results->Dim(search_result.size())->NumElements(1)->Owner(true, allocator_);
-        auto* ids = (int64_t*)allocator_->Allocate(sizeof(int64_t) * search_result.size());
+        dataset_results->Dim(search_result.size())->NumElements(1)->Owner(true, allocator);
+        auto* ids = (int64_t*)allocator->Allocate(sizeof(int64_t) * search_result.size());
         dataset_results->Ids(ids);
-        auto* dists = (float*)allocator_->Allocate(sizeof(float) * search_result.size());
+        auto* dists = (float*)allocator->Allocate(sizeof(float) * search_result.size());
         dataset_results->Distances(dists);
 
         for (int64_t j = search_result.size() - 1; j >= 0; --j) {
@@ -477,9 +490,10 @@ HGraphIndex::select_edges_by_heuristic(HGraphIndex::MaxHeap& edges,
     if (edges.size() < max_size) {
         return;
     }
+    const auto& allocator = this->common_param_.allocator_.get();
 
-    MaxHeap queue_closest(allocator_);
-    vsag::Vector<std::pair<float, InnerIdType>> return_list(allocator_);
+    MaxHeap queue_closest(allocator);
+    vsag::Vector<std::pair<float, InnerIdType>> return_list(allocator);
     while (not edges.empty()) {
         queue_closest.emplace(-edges.top().first, edges.top().second);
         edges.pop();
@@ -516,13 +530,14 @@ HGraphIndex::mutually_connect_new_element(InnerIdType cur_c,
                                           GraphInterfacePtr graph,
                                           FlattenInterfacePtr flatten,
                                           bool is_update) {
+    const auto& allocator = this->common_param_.allocator_.get();
     const size_t max_size = graph->MaximumDegree();
     this->select_edges_by_heuristic(top_candidates, max_size, flatten);
     if (top_candidates.size() > max_size)
         throw std::runtime_error(
             "Should be not be more than max_size candidates returned by the heuristic");
 
-    Vector<InnerIdType> selected_neighbors(allocator_);
+    Vector<InnerIdType> selected_neighbors(allocator);
     selected_neighbors.reserve(max_size);
     while (not top_candidates.empty()) {
         selected_neighbors.emplace_back(top_candidates.top().second);
@@ -543,7 +558,7 @@ HGraphIndex::mutually_connect_new_element(InnerIdType cur_c,
     for (auto selectedNeighbor : selected_neighbors) {
         std::unique_lock<std::shared_mutex> lock(neighbors_mutex_[selectedNeighbor]);
 
-        Vector<InnerIdType> neighbors(allocator_);
+        Vector<InnerIdType> neighbors(allocator);
         graph->GetNeighbors(selectedNeighbor, neighbors);
 
         size_t sz_link_list_other = neighbors.size();
@@ -572,7 +587,7 @@ HGraphIndex::mutually_connect_new_element(InnerIdType cur_c,
                 // finding the "weakest" element to replace it with the new one
                 float d_max = flatten->ComputePairVectors(cur_c, selectedNeighbor);
 
-                MaxHeap candidates(allocator_);
+                MaxHeap candidates(allocator);
                 candidates.emplace(d_max, cur_c);
 
                 for (size_t j = 0; j < sz_link_list_other; j++) {
@@ -582,7 +597,7 @@ HGraphIndex::mutually_connect_new_element(InnerIdType cur_c,
 
                 this->select_edges_by_heuristic(candidates, max_size, flatten);
 
-                Vector<InnerIdType> cand_neighbors(allocator_);
+                Vector<InnerIdType> cand_neighbors(allocator);
                 while (not candidates.empty()) {
                     cand_neighbors.emplace_back(candidates.top().second);
                     candidates.pop();
@@ -760,7 +775,8 @@ HGraphIndex::calc_distance_by_id(const float* vector, int64_t id) const {
 }
 void
 HGraphIndex::add_one_point(const float* data, int level, InnerIdType inner_id) {
-    MaxHeap result(allocator_);
+    const auto& allocator = this->common_param_.allocator_.get();
+    MaxHeap result(allocator);
 
     InnerSearchParam param{
         .ep_ = this->entry_point_id_,
@@ -780,7 +796,7 @@ HGraphIndex::add_one_point(const float* data, int level, InnerIdType inner_id) {
             param.ep_ = this->mutually_connect_new_element(
                 inner_id, result, route_graphs_[j], basic_flatten_codes_, false);
         } else {
-            route_graphs_[j]->InsertNeighborsById(inner_id, Vector<InnerIdType>(allocator_));
+            route_graphs_[j]->InsertNeighborsById(inner_id, Vector<InnerIdType>(allocator));
         }
         route_graphs_[j]->IncreaseTotalCount(1);
     }
@@ -789,17 +805,18 @@ HGraphIndex::add_one_point(const float* data, int level, InnerIdType inner_id) {
         this->mutually_connect_new_element(
             inner_id, result, this->bottom_graph_, basic_flatten_codes_, false);
     } else {
-        bottom_graph_->InsertNeighborsById(inner_id, Vector<InnerIdType>(allocator_));
+        bottom_graph_->InsertNeighborsById(inner_id, Vector<InnerIdType>(allocator));
     }
     bottom_graph_->IncreaseTotalCount(1);
 }
 
 void
 HGraphIndex::resize(uint64_t new_size) {
+    const auto& allocator = this->common_param_.allocator_.get();
     auto cur_size = this->neighbors_mutex_.size();
     if (cur_size < new_size) {
-        vsag::Vector<std::shared_mutex>(new_size, allocator_).swap(this->neighbors_mutex_);
-        pool_ = std::make_shared<hnswlib::VisitedListPool>(new_size, allocator_);
+        vsag::Vector<std::shared_mutex>(new_size, allocator).swap(this->neighbors_mutex_);
+        pool_ = std::make_shared<hnswlib::VisitedListPool>(new_size, allocator);
         labels_.resize(new_size);
         this->max_capacity_ = new_size;
     }

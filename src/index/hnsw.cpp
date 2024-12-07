@@ -44,7 +44,7 @@ const static uint32_t GENERATE_SEARCH_K = 50;
 const static uint32_t GENERATE_SEARCH_L = 400;
 const static float GENERATE_OMEGA = 0.51;
 
-HNSW::HNSW(HnswParameters hnsw_params, const IndexCommonParam& index_common_param)
+HNSW::HNSW(HnswParameters hnsw_params, IndexCommonParam& index_common_param)
     : space_(std::move(hnsw_params.space)),
       use_static_(hnsw_params.use_static),
       use_conjugate_graph_(hnsw_params.use_conjugate_graph),
@@ -61,11 +61,7 @@ HNSW::HNSW(HnswParameters hnsw_params, const IndexCommonParam& index_common_para
         conjugate_graph_ = std::make_shared<ConjugateGraph>();
     }
 
-    if (not index_common_param.allocator_) {
-        allocator_ = std::make_shared<SafeAllocator>(DefaultAllocator::Instance());
-    } else {
-        allocator_ = std::make_shared<SafeAllocator>(index_common_param.allocator_);
-    }
+    allocator_.swap(index_common_param.allocator_);
 
     if (!use_static_) {
         alg_hnsw_ =

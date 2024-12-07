@@ -28,7 +28,9 @@ namespace hnswlib {
 
 class BlockManager {
 public:
-    BlockManager(size_t size_data_per_element, size_t block_size_limit, vsag::Allocator* allocator);
+    BlockManager(size_t size_data_per_element,
+                 size_t block_size_limit,
+                 vsag::SafeAllocator* allocator);
 
     ~BlockManager();
 
@@ -70,6 +72,6 @@ private:
     size_t size_data_per_element_ = 0;
     size_t max_elements_ = 0;
     std::vector<size_t> block_lens_ = {};
-    vsag::Allocator* const allocator_ = nullptr;
+    vsag::SafeAllocator* const allocator_ = nullptr;
 };
 }  // namespace hnswlib

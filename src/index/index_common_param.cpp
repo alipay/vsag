@@ -18,6 +18,7 @@
 #include <fmt/format-inl.h>
 
 #include "common.h"
+#include "default_allocator.h"
 #include "vsag/constants.h"
 
 namespace vsag {
@@ -25,7 +26,12 @@ namespace vsag {
 IndexCommonParam
 IndexCommonParam::CheckAndCreate(JsonType& params, Allocator* allocator) {
     IndexCommonParam result;
-    result.allocator_ = allocator;
+
+    if (allocator != nullptr) {
+        result.allocator_ = std::make_unique<SafeAllocator>(allocator);
+    } else {
+        result.allocator_ = std::make_unique<SafeAllocator>(new DefaultAllocator(), /*owner*/ true);
+    }
     // Check DataType
     CHECK_ARGUMENT(params.contains(PARAMETER_DTYPE),
                    fmt::format("parameters must contains {}", PARAMETER_DTYPE));

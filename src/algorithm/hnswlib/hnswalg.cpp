@@ -1295,8 +1295,8 @@ HierarchicalNSW::addPoint(const void* data_point, LabelType label, int level) {
     int maxlevelcopy = max_level_;
     if (curlevel <= maxlevelcopy)
         lock.unlock();
-    InnerIdType currObj = enterpoint_node_;
-    InnerIdType enterpoint_copy = enterpoint_node_;
+    int64_t currObj = enterpoint_node_;
+    int64_t enterpoint_copy = enterpoint_node_;
 
     memset(data_level0_memory_->GetElementPtr(cur_c, offsetLevel0_), 0, size_data_per_element_);
 
@@ -1383,13 +1383,15 @@ HierarchicalNSW::searchKnn(const void* query_data,
 
     std::shared_ptr<float[]> normalize_query;
     normalizeVector(query_data, normalize_query);
-    InnerIdType currObj;
+    int64_t currObj;
     {
         std::shared_lock data_loc(global_);
         currObj = enterpoint_node_;
     }
-    float curdist =
-        fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
+    if (currObj < 0) {
+        return result;
+    }
+    float curdist = fstdistfunc_(query_data, getDataByInternalId(currObj), dist_func_param_);
     for (int level = max_level_; level > 0; level--) {
         bool changed = true;
         while (changed) {
@@ -1444,9 +1446,12 @@ HierarchicalNSW::searchRange(const void* query_data,
 
     std::shared_ptr<float[]> normalize_query;
     normalizeVector(query_data, normalize_query);
-    InnerIdType currObj = enterpoint_node_;
-    float curdist =
-        fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
+    int64_t currObj;
+    {
+        std::shared_lock data_loc(global_);
+        currObj = enterpoint_node_;
+    }
+    float curdist = fstdistfunc_(query_data, getDataByInternalId(currObj), dist_func_param_);
 
     for (int level = max_level_; level > 0; level--) {
         bool changed = true;

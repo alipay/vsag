@@ -82,7 +82,7 @@ private:
     mutable std::shared_mutex global_{};
     mutable vsag::Vector<std::shared_mutex> link_list_locks_;
 
-    InnerIdType enterpoint_node_{0};
+    int64_t enterpoint_node_{0};
 
     size_t size_links_level0_{0};
     size_t offset_data_{0};

@@ -69,7 +69,7 @@ BufferStreamReader::BufferStreamReader(StreamReader* reader,
                                        vsag::Allocator* allocator)
     : reader_impl_(reader), max_size_(max_size), buffer_(allocator), StreamReader() {
     buffer_size_ = std::min(max_size_, vsag::Options::Instance().block_size_limit());
-    buffer_.resize(buffer_size_);
+    buffer_.reserve(buffer_size_);
     buffer_cursor_ = buffer_size_;
     valid_size_ = buffer_size_;
 }

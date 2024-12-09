@@ -637,6 +637,122 @@ TEST_CASE("remove vectors from the index", "[ft][index]") {
     }
 }
 
+TEST_CASE("update id and vectors from the index", "[ft][index]") {
+    auto logger = vsag::Options::Instance().logger();
+    logger->SetLevel(vsag::Logger::Level::kDEBUG);
+
+    // index param
+    int64_t num_vectors = 1000;
+    int64_t dim = 64;
+    int64_t k = 10;
+    auto index_name = GENERATE("fresh_hnsw", "hnsw", "diskann");
+    auto metric_type = GENERATE("l2");
+    constexpr auto search_parameters = R"(
+    {
+        "hnsw": {
+            "ef_search": 100
+        },
+        "diskann": {
+            "ef_search": 100,
+            "beam_search": 4,
+            "io_limit": 100,
+            "use_reorder": false
+        }
+    }
+    )";
+
+    // data and index
+    auto [ids, vectors] = fixtures::generate_ids_and_vectors(num_vectors, dim);
+    auto index = fixtures::generate_index(index_name, metric_type, num_vectors, dim, ids, vectors);
+
+    // update related
+    std::unordered_map<int64_t, int64_t> update_id_map;
+    std::unordered_map<int64_t, int64_t> reverse_id_map;
+    std::vector<float> update_vecs(vectors);
+    for (int i = 0; i < num_vectors; i++) {
+        update_id_map[ids[i]] = ids[i] + num_vectors;
+    }
+
+    if (index_name != std::string("diskann")) {  // index that supports remove
+        std::vector<int> correct_num = {0, 0};
+        for (int round = 0; round < 2; round++) {
+            // round 0 for update, round 1 for validate update results
+            for (int i = 0; i < num_vectors; i++) {
+                auto query = vsag::Dataset::Make();
+                query->NumElements(1)
+                    ->Dim(dim)
+                    ->Float32Vectors(vectors.data() + i * dim)
+                    ->Owner(false);
+
+                auto result = index->KnnSearch(query, k, search_parameters);
+                REQUIRE(result.has_value());
+
+                if (round == 0) {
+                    if (result.value()->GetIds()[0] == ids[i]) {
+                        correct_num[round] += 1;
+                        REQUIRE(std::abs(result.value()->GetDistances()[0]) < 1e-6);
+                    }
+
+                    int64_t top_2_nn_id = result.value()->GetIds()[1];
+                    if (top_2_nn_id > num_vectors) {
+                        top_2_nn_id -= num_vectors;
+                    }
+                    float diff_dist = 0.;
+                    for (int d = 0; d < dim; d++) {
+                        update_vecs[ids[i] * dim + d] = 0.99f * vectors[ids[i] * dim + d] +
+                                                        0.01f * vectors[top_2_nn_id * dim + d];
+                        diff_dist += (update_vecs[ids[i] * dim + d] - vectors[ids[i] * dim + d]) *
+                                     (update_vecs[ids[i] * dim + d] - vectors[ids[i] * dim + d]);
+                    }
+                    auto new_base = vsag::Dataset::Make();
+                    new_base->NumElements(1)
+                        ->Dim(dim)
+                        ->Float32Vectors(update_vecs.data() + ids[i] * dim)
+                        ->Owner(false);
+
+                    auto succ_vec_res = index->UpdateVector(ids[i], new_base);
+                    auto succ_id_res = index->UpdateId(ids[i], update_id_map[ids[i]]);
+                    REQUIRE((succ_id_res.has_value() and succ_vec_res.has_value()));
+                    REQUIRE((succ_id_res.value() and succ_vec_res.value()));
+
+                    // old id don't exist
+                    auto failed_old_id_res = index->UpdateId(ids[i], update_id_map[ids[i]]);
+                    REQUIRE(failed_old_id_res.has_value());
+                    REQUIRE(not failed_old_id_res.value());
+
+                    // old id don't exist
+                    failed_old_id_res = index->UpdateVector(ids[i], new_base);
+                    REQUIRE(failed_old_id_res.has_value());
+                    REQUIRE(not failed_old_id_res.value());
+
+                    // new id is used
+                    auto failed_new_id_res =
+                        index->UpdateId(update_id_map[ids[i]], update_id_map[ids[i]]);
+                    REQUIRE(failed_new_id_res.has_value());
+                    REQUIRE(not failed_new_id_res.value());
+
+                    float updated_dist =
+                        index
+                            ->CalcDistanceById(vectors.data() + ids[i] * dim, update_id_map[ids[i]])
+                            .value();
+                    REQUIRE(std::abs(updated_dist - diff_dist) < 1e-6);
+                } else {
+                    if (result.value()->GetIds()[0] == update_id_map[ids[i]]) {
+                        correct_num[round] += 1;
+                        REQUIRE(std::abs(result.value()->GetDistances()[0]) > 1e-6);
+                    }
+                }
+            }
+        }
+
+        REQUIRE(correct_num[0] == correct_num[1]);
+    } else {  // index that does not supports update
+        auto new_base = vsag::Dataset::Make();
+        REQUIRE_THROWS(index->UpdateId(1, 1));
+        REQUIRE_THROWS(index->UpdateVector(1, new_base));
+    }
+}
+
 TEST_CASE("index with bsa", "[ft][index]") {
     vsag::Options::Instance().logger()->SetLevel(vsag::Logger::Level::kDEBUG);
     int64_t num_vectors = 1000;

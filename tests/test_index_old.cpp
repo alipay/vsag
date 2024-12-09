@@ -637,6 +637,90 @@ TEST_CASE("remove vectors from the index", "[ft][index]") {
     }
 }
 
+TEST_CASE("update vectors from the index", "[ft][index]") {
+    auto logger = vsag::Options::Instance().logger();
+    logger->SetLevel(vsag::Logger::Level::kDEBUG);
+
+    // index param
+    int64_t num_vectors = 1000;
+    int64_t dim = 64;
+    int64_t k = 10;
+    auto index_name = GENERATE("fresh_hnsw", "hnsw", "diskann");
+    auto metric_type = GENERATE("l2");
+    constexpr auto search_parameters = R"(
+    {
+        "hnsw": {
+            "ef_search": 100
+        },
+        "diskann": {
+            "ef_search": 100,
+            "beam_search": 4,
+            "io_limit": 100,
+            "use_reorder": false
+        }
+    }
+    )";
+
+    // data and index
+    auto [ids, vectors] = fixtures::generate_ids_and_vectors(num_vectors, dim);
+    auto index = fixtures::generate_index(index_name, metric_type, num_vectors, dim, ids, vectors);
+
+    // update related
+    std::unordered_map<int64_t, int64_t> update_id_map;
+    std::unordered_map<int64_t, int64_t> reverse_id_map;
+    std::vector<float> update_vecs(vectors);
+    for (int i = 0; i < num_vectors; i++) {
+        update_id_map[ids[i]] = ids[i] + num_vectors;
+    }
+
+    if (index_name != std::string("diskann")) {  // index that supports remove
+        std::vector<int> correct_num = {0, 0};
+        for (int round = 0; round < 2; round++) {
+            for (int i = 0; i < num_vectors; i++) {
+                auto query = vsag::Dataset::Make();
+                query->NumElements(1)
+                    ->Dim(dim)
+                    ->Float32Vectors(vectors.data() + i * dim)
+                    ->Owner(false);
+
+                auto result = index->KnnSearch(query, k, search_parameters);
+                REQUIRE(result.has_value());
+
+                if (round == 0) {
+                    if (result.value()->GetIds()[0] == ids[i]) {
+                        correct_num[round] += 1;
+                        REQUIRE(std::abs(result.value()->GetDistances()[0]) < 1e-6);
+                    }
+
+                    int64_t top_2_nn_id = result.value()->GetIds()[1];
+                    if (top_2_nn_id > num_vectors) {
+                        top_2_nn_id -= num_vectors;
+                    }
+                    for (int d = 0; d < dim; d++) {
+                        update_vecs[ids[i] * dim + d] = 0.95f * vectors[ids[i] * dim + d] +
+                                                        0.05f * vectors[top_2_nn_id * dim + d];
+                    }
+                    auto new_base = vsag::Dataset::Make();
+                    new_base->NumElements(1)
+                        ->Dim(dim)
+                        ->Float32Vectors(update_vecs.data() + ids[i] * dim)
+                        ->Owner(false);
+                    index->Update(ids[i], update_id_map[ids[i]], new_base);
+                } else {
+                    if (result.value()->GetIds()[0] == update_id_map[ids[i]]) {
+                        correct_num[round] += 1;
+                        REQUIRE(std::abs(result.value()->GetDistances()[0]) > 1e-6);
+                    }
+                }
+            }
+        }
+
+        REQUIRE(correct_num[0] == correct_num[1]);
+    } else {  // index that does not supports remove
+        REQUIRE_THROWS(index->Remove(-1));
+    }
+}
+
 TEST_CASE("index with bsa", "[ft][index]") {
     vsag::Options::Instance().logger()->SetLevel(vsag::Logger::Level::kDEBUG);
     int64_t num_vectors = 1000;

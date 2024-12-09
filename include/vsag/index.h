@@ -88,6 +88,19 @@ public:
     }
 
     /**
+     * Update the id and vector of given ID from the index
+     *
+     * @param old_id is the the id that need to be updated from the index
+     * @param new_id is the updated new id
+     * @param new_base is the updated new vector
+     * @return result indicates whether the update operation is successful.
+     */
+    virtual tl::expected<bool, Error>
+    Update(int64_t old_id, int64_t new_id, const DatasetPtr& new_base) {
+        throw std::runtime_error("Index not support update vector");
+    }
+
+    /**
       * Performing single KNN search on index
       * 
       * @param query should contains dim, num_elements and vectors

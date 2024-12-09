@@ -1148,6 +1148,28 @@ HierarchicalNSW::dealNoInEdge(InnerIdType id, int level, int m_curmax, int skip_
 }
 
 void
+HierarchicalNSW::updatePoint(LabelType old_label, LabelType new_label, const void* data_point) {
+    InnerIdType internal_id = 0;
+    std::unique_lock<std::mutex> lock_table(label_lookup_lock_);
+    auto iter = label_lookup_.find(old_label);
+    if (iter == label_lookup_.end()) {
+        throw std::runtime_error("no label in HNSW");
+    } else {
+        internal_id = iter->second;
+
+        // reset label
+        label_lookup_.erase(iter);
+        label_lookup_[new_label] = internal_id;
+        setExternalLabel(internal_id, new_label);
+
+        // reset data
+        std::shared_ptr<float[]> normalize_data;
+        normalizeVector(data_point, normalize_data);
+        memcpy(getDataByInternalId(internal_id), data_point, data_size_);
+    }
+}
+
+void
 HierarchicalNSW::removePoint(LabelType label) {
     InnerIdType cur_c = 0;
     InnerIdType internal_id = 0;

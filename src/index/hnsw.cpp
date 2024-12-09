@@ -621,6 +621,32 @@ HNSW::GetStats() const {
 }
 
 tl::expected<bool, Error>
+HNSW::update(int64_t old_id, int64_t new_id, const DatasetPtr& new_base) {
+    if (use_static_) {
+        LOG_ERROR_AND_RETURNS(ErrorType::UNSUPPORTED_INDEX_OPERATION,
+                              "static hnsw does not support update");
+    }
+
+    try {
+        std::unique_lock lock(rw_mutex_);
+
+        // the validation of the new vector
+        void* new_base_vec = nullptr;
+        size_t data_size = 0;
+        get_vectors(new_base, &new_base_vec, &data_size);
+
+        // note that the validation of old_id is handled within updatePoint.
+        std::reinterpret_pointer_cast<hnswlib::HierarchicalNSW>(alg_hnsw_)->updatePoint(
+            old_id, new_id, new_base_vec);
+    } catch (const std::runtime_error& e) {
+        spdlog::warn("update error for replace id {} to new_id {}: {}", old_id, new_id, e.what());
+        return false;
+    }
+
+    return true;
+}
+
+tl::expected<bool, Error>
 HNSW::remove(int64_t id) {
     if (use_static_) {
         LOG_ERROR_AND_RETURNS(ErrorType::UNSUPPORTED_INDEX_OPERATION,

@@ -123,7 +123,7 @@ main(int argc, char** argv) {
     // search on the index
     auto pyramid_search_parameters = R"(
     {
-        "pyramid": {
+        "hnsw": {
             "ef_search": 100
         }
     }

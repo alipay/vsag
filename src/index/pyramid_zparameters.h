@@ -15,22 +15,26 @@
 
 #pragma once
 
-#include "typing.h"
-#include "index_common_param.h"
-#include "vsag/index.h"
 #include <functional>
 
+#include "index_common_param.h"
+#include "typing.h"
+#include "vsag/index.h"
+
 namespace vsag {
+
+using IndexBuildFunction = std::function<std::shared_ptr<Index>()>;
+
 struct PyramidParameters {
 public:
     static PyramidParameters
-    FromJson(JsonType& pyramid_param_obj, IndexCommonParam index_common_param);
+    FromJson(JsonType& pyramid_param_obj, const IndexCommonParam& index_common_param);
 
 public:
-    std::function<std::shared_ptr<Index>()> index_builder{nullptr};
+    IndexBuildFunction index_builder{nullptr};
 
 protected:
     PyramidParameters() = default;
 };
 
-}
+}  // namespace vsag

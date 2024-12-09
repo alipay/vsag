@@ -14,15 +14,29 @@
 // limitations under the License.
 
 #include "pyramid_zparameters.h"
-#include "hnsw_zparameters.h"
+
 #include "diskann_zparameters.h"
+#include "hnsw.h"
+#include "hnsw_zparameters.h"
 
 namespace vsag {
 
 PyramidParameters
-PyramidParameters::FromJson(JsonType& pyramid_param_obj, IndexCommonParam index_common_param) {
-
+PyramidParameters::FromJson(JsonType& pyramid_param_obj,
+                            const IndexCommonParam& index_common_param) {
+    PyramidParameters obj;
+    CHECK_ARGUMENT(
+        pyramid_param_obj.contains(PYRAMID_PARAMETER_SUBINDEX_TYPE),
+        fmt::format(
+            "parameters[{}] must contains {}", INDEX_PYRAMID, PYRAMID_PARAMETER_SUBINDEX_TYPE));
+    if (pyramid_param_obj[PYRAMID_PARAMETER_SUBINDEX_TYPE] == INDEX_HNSW) {
+        auto hnsw_param_obj =
+            HnswParameters::FromJson(pyramid_param_obj[INDEX_PARAM], index_common_param);
+        obj.index_builder = [hnsw_param_obj, index_common_param]() {
+            return std::make_shared<HNSW>(hnsw_param_obj, index_common_param);
+        };
+    }
+    return obj;
 }
 
-
-}
+}  // namespace vsag

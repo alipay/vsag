@@ -15,29 +15,38 @@
 
 #pragma once
 
-#include "vsag/vsag.h"
+#include "pyramid_zparameters.h"
+#include "safe_allocator.h"
 #include "typing.h"
+#include "vsag/vsag.h"
 
 namespace vsag {
 
 struct IndexNode {
     std::shared_ptr<Index> index{nullptr};
-    Vector<std::shared_ptr<IndexNode>> children;
-    IndexNode(Allocator* allocator): children(allocator) {
-
+    UnorderedMap<std::string, std::shared_ptr<IndexNode>> children;
+    IndexNode(Allocator* allocator, IndexBuildFunction func = nullptr) : children(allocator) {
+        if (nullptr != func) {
+            index = func();
+        }
     }
 };
 
-
 class Pyramid : public Index {
 public:
-    Pyramid() {
+    Pyramid(PyramidParameters pyramid_param, const IndexCommonParam commom_param)
+        : indexes_(commom_param.allocator_),
+          pyramid_param_(std::move(pyramid_param)),
+          commom_param_(std::move(commom_param)) {
     }
 
     ~Pyramid() = default;
 
     tl::expected<std::vector<int64_t>, Error>
     Build(const DatasetPtr& base) override;
+
+    tl::expected<std::vector<int64_t>, Error>
+    Add(const DatasetPtr& base) override;
 
     tl::expected<DatasetPtr, Error>
     KnnSearch(const DatasetPtr& query,
@@ -87,7 +96,9 @@ public:
     GetMemoryUsage() const override;
 
 private:
-    Vector<std::shared_ptr<IndexNode>> indexes_;
+    UnorderedMap<std::string, std::shared_ptr<IndexNode>> indexes_;
+    PyramidParameters pyramid_param_;
+    IndexCommonParam commom_param_;
 };
 
 }  // namespace vsag

@@ -36,7 +36,7 @@ using sum_type = float;
 template <MetricType metric = MetricType::METRIC_TYPE_L2SQR>
 class SQ4UniformQuantizer : public Quantizer<SQ4UniformQuantizer<metric>> {
 public:
-    explicit SQ4UniformQuantizer(int dim, Allocator* allocator);
+    explicit SQ4UniformQuantizer(int dim, SafeAllocator* allocator);
 
     explicit SQ4UniformQuantizer(const JsonType& quantization_param,
                                  const IndexCommonParam& common_param);
@@ -91,7 +91,7 @@ private:
 };
 
 template <MetricType metric>
-SQ4UniformQuantizer<metric>::SQ4UniformQuantizer(int dim, Allocator* allocator)
+SQ4UniformQuantizer<metric>::SQ4UniformQuantizer(int dim, SafeAllocator* allocator)
     : Quantizer<SQ4UniformQuantizer<metric>>(dim, allocator) {
     lower_bound_ = std::numeric_limits<DataType>::max();
     diff_ = std::numeric_limits<DataType>::lowest();
@@ -131,7 +131,7 @@ SQ4UniformQuantizer<metric>::SQ4UniformQuantizer(int dim, Allocator* allocator)
 template <MetricType metric>
 SQ4UniformQuantizer<metric>::SQ4UniformQuantizer(const JsonType& quantization_param,
                                                  const IndexCommonParam& common_param)
-    : SQ4UniformQuantizer<metric>(common_param.dim_, common_param.allocator_){};
+    : SQ4UniformQuantizer<metric>(common_param.dim_, common_param.allocator_.get()){};
 
 template <MetricType metric>
 bool

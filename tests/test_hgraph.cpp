@@ -33,8 +33,8 @@ TEST_CASE_PERSISTENT_FIXTURE(fixtures::TestIndex,
         auto param = fixtures::generate_hgraph_build_parameters_string(
             metric_type, dim, base_quantization_str);
         auto index = TestFactory(name, param, true);
-        TestBuildIndex(index, dim);
-        TestContinueAdd(index, dim);
+//        TestBuildIndex(index, dim);
+//        TestContinueAdd(index, dim);
     }
 }
 

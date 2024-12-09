@@ -19,19 +19,19 @@
 #include <random>
 #include <shared_mutex>
 
-#include "../utils.h"
 #include "ThreadPool.h"
 #include "algorithm/hnswlib/algorithm_interface.h"
 #include "algorithm/hnswlib/visited_list_pool.h"
 #include "common.h"
 #include "data_cell/flatten_interface.h"
 #include "data_cell/graph_interface.h"
-#include "index_common_param.h"
+#include "index/index_common_param.h"
 #include "typing.h"
+#include "utils.h"
 #include "vsag/index.h"
 
 namespace vsag {
-class HGraphIndex : public Index {
+class HGraph {
 public:
     struct CompareByFirst {
         constexpr bool
@@ -45,112 +45,10 @@ public:
                                         Vector<std::pair<float, InnerIdType>>,
                                         CompareByFirst>;
 
-    HGraphIndex(const JsonType& index_param, IndexCommonParam& common_param) noexcept;
+    HGraph(const JsonType& index_param, IndexCommonParam& common_param) noexcept;
 
     void
     Init();
-
-    tl::expected<std::vector<int64_t>, Error>
-    Build(const DatasetPtr& data) override {
-        SAFE_CALL(return this->build(data));
-    }
-
-    tl::expected<std::vector<int64_t>, Error>
-    Add(const DatasetPtr& data) override {
-        SAFE_CALL(return this->add(data));
-    }
-
-    tl::expected<DatasetPtr, Error>
-    KnnSearch(const DatasetPtr& query,
-              int64_t k,
-              const std::string& parameters,
-              BitsetPtr invalid = nullptr) const override {
-        auto func = [&invalid](int64_t id) -> bool {
-            if (invalid == nullptr) {
-                return false;
-            }
-            int64_t bit_index = id & ROW_ID_MASK;
-            return invalid->Test(bit_index);
-        };
-        SAFE_CALL(return this->knn_search(query, k, parameters, func));
-    }
-
-    tl::expected<DatasetPtr, Error>
-    KnnSearch(const DatasetPtr& query,
-              int64_t k,
-              const std::string& parameters,
-              const std::function<bool(int64_t)>& filter) const override {
-        SAFE_CALL(return this->knn_search(query, k, parameters, filter));
-    }
-
-    tl::expected<DatasetPtr, Error>
-    RangeSearch(const DatasetPtr& query,
-                float radius,
-                const std::string& parameters,
-                int64_t limited_size = -1) const override {
-        SAFE_CALL(return this->range_search(query, radius, parameters, nullptr, limited_size));
-    }
-
-    tl::expected<DatasetPtr, Error>
-    RangeSearch(const DatasetPtr& query,
-                float radius,
-                const std::string& parameters,
-                BitsetPtr invalid,
-                int64_t limited_size = -1) const override {
-        BitsetOrCallbackFilter filter(invalid);
-        SAFE_CALL(return this->range_search(query, radius, parameters, &filter, limited_size));
-    }
-
-    tl::expected<DatasetPtr, Error>
-    RangeSearch(const DatasetPtr& query,
-                float radius,
-                const std::string& parameters,
-                const std::function<bool(int64_t)>& filter,
-                int64_t limited_size) const override {
-        BitsetOrCallbackFilter callback(filter);
-        SAFE_CALL(return this->range_search(query, radius, parameters, &callback, limited_size));
-    }
-
-    tl::expected<float, Error>
-    CalcDistanceById(const float* vector, int64_t id) const override {
-        SAFE_CALL(return this->calc_distance_by_id(vector, id));
-    };
-
-    tl::expected<BinarySet, Error>
-    Serialize() const override {
-        SAFE_CALL(return this->serialize());
-    }
-
-    tl::expected<void, Error>
-    Serialize(std::ostream& out_stream) override {
-        SAFE_CALL(return this->serialize(out_stream));
-    }
-
-    tl::expected<void, Error>
-    Deserialize(std::istream& in_stream) override {
-        SAFE_CALL(return this->deserialize(in_stream));
-    }
-
-    tl::expected<void, Error>
-    Deserialize(const BinarySet& binary_set) override {
-        SAFE_CALL(return this->deserialize(binary_set));
-    };
-
-    tl::expected<void, Error>
-    Deserialize(const ReaderSet& reader_set) override {
-        SAFE_CALL(return this->deserialize(reader_set));
-    }
-
-    int64_t
-    GetNumElements() const override {
-        return this->basic_flatten_codes_->TotalCount();
-    }
-
-    // TODO(LHT): implement
-    int64_t
-    GetMemoryUsage() const override {
-        return 0;
-    }
 
     void
     SetBuildThreadsCount(uint64_t count) {
@@ -158,21 +56,6 @@ public:
         this->build_pool_->set_pool_size(count);
     }
 
-public:
-    FlattenInterfacePtr basic_flatten_codes_{nullptr};
-    FlattenInterfacePtr high_precise_codes_{nullptr};
-    Vector<GraphInterfacePtr> route_graphs_;
-    GraphInterfacePtr bottom_graph_{nullptr};
-
-    bool use_reorder_{false};
-
-    int64_t dim_{0};
-    MetricType metric_{MetricType::METRIC_TYPE_L2SQR};
-
-    const JsonType index_param_{};
-    IndexCommonParam common_param_;
-
-private:
     class InnerSearchParam {
     public:
         int topk_{0};
@@ -185,44 +68,49 @@ private:
     enum InnerSearchMode { KNN_SEARCH_MODE = 1, RANGE_SEARCH_MODE = 2 };
 
     tl::expected<std::vector<int64_t>, Error>
-    build(const DatasetPtr& data);
+    Build(const DatasetPtr& data);
 
     tl::expected<std::vector<int64_t>, Error>
-    add(const DatasetPtr& data);
+    Add(const DatasetPtr& data);
 
     tl::expected<DatasetPtr, Error>
-    knn_search(const DatasetPtr& query,
-               int64_t k,
-               const std::string& parameters,
-               const std::function<bool(int64_t)>& filter) const;
+    KnnSearch(const DatasetPtr& query,
+              int64_t k,
+              const std::string& parameters,
+              const std::function<bool(int64_t)>& filter) const;
 
     tl::expected<DatasetPtr, Error>
-    range_search(const DatasetPtr& query,
-                 float radius,
-                 const std::string& parameters,
-                 BaseFilterFunctor* filter_ptr,
-                 int64_t limited_size) const;
+    RangeSearch(const DatasetPtr& query,
+                float radius,
+                const std::string& parameters,
+                BaseFilterFunctor* filter_ptr,
+                int64_t limited_size) const;
 
     tl::expected<void, Error>
-    serialize(std::ostream& out_stream) const;
+    Serialize(std::ostream& out_stream) const;
 
     tl::expected<BinarySet, Error>
-    serialize() const;
+    Serialize() const;
 
     void
-    serialize(StreamWriter& writer) const;
+    Serialize(StreamWriter& writer) const;
 
     tl::expected<void, Error>
-    deserialize(const ReaderSet& reader_set);
+    Deserialize(const ReaderSet& reader_set);
 
     tl::expected<void, Error>
-    deserialize(const BinarySet& binary_set);
+    Deserialize(const BinarySet& binary_set);
 
     tl::expected<void, Error>
-    deserialize(std::istream& in_stream);
+    Deserialize(std::istream& in_stream);
 
     void
-    deserialize(StreamReader& reader);
+    Deserialize(StreamReader& reader);
+
+    int64_t
+    GetNumElements() const {
+        return this->basic_flatten_codes_->TotalCount();
+    }
 
     tl::expected<float, Error>
     calc_distance_by_id(const float* vector, int64_t id) const;
@@ -282,6 +170,19 @@ private:
     add_one_point(const float* data, int level, InnerIdType id);
 
 private:
+    FlattenInterfacePtr basic_flatten_codes_{nullptr};
+    FlattenInterfacePtr high_precise_codes_{nullptr};
+    Vector<GraphInterfacePtr> route_graphs_;
+    GraphInterfacePtr bottom_graph_{nullptr};
+
+    bool use_reorder_{false};
+
+    int64_t dim_{0};
+    MetricType metric_{MetricType::METRIC_TYPE_L2SQR};
+
+    const JsonType index_param_{};
+    IndexCommonParam common_param_;
+
     std::default_random_engine level_generator_{2021};
     double mult_{1.0};
 

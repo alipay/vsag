@@ -97,7 +97,7 @@ public:
     std::shared_ptr<Quantizer<QuantTmpl>> quantizer_{nullptr};
     std::shared_ptr<BasicIO<IOTmpl>> io_{nullptr};
 
-    Allocator* const allocator_{nullptr};
+    SafeAllocator* const allocator_{nullptr};
 
 private:
     inline void
@@ -124,7 +124,7 @@ template <typename QuantTmpl, typename IOTmpl>
 FlattenDataCell<QuantTmpl, IOTmpl>::FlattenDataCell(const JsonType& quantization_param,
                                                     const JsonType& io_param,
                                                     const IndexCommonParam& common_param)
-    : allocator_(common_param.allocator_) {
+    : allocator_(common_param.allocator_.get()) {
     this->quantizer_ = std::make_shared<QuantTmpl>(quantization_param, common_param);
     this->io_ = std::make_shared<IOTmpl>(io_param, common_param);
     this->code_size_ = quantizer_->GetCodeSize();

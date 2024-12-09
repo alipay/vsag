@@ -23,21 +23,18 @@ namespace vsag {
 
 class SafeAllocator : public Allocator {
 public:
-    explicit SafeAllocator(Allocator* raw_allocator) : raw_allocator_(raw_allocator) {
-    }
-
-    explicit SafeAllocator(std::shared_ptr<Allocator> owned_allocator)
-        : owned_allocator_(owned_allocator), raw_allocator_(owned_allocator.get()) {
+    explicit SafeAllocator(Allocator* allocator, bool owner = false)
+        : allocator_(allocator), owner_(owner) {
     }
 
     std::string
     Name() override {
-        return raw_allocator_->Name() + "_safewrapper";
+        return allocator_->Name() + "_safewrapper";
     }
 
     void*
     Allocate(size_t size) override {
-        auto ret = raw_allocator_->Allocate(size);
+        auto ret = allocator_->Allocate(size);
         if (not ret) {
             throw std::bad_alloc();
         }
@@ -46,12 +43,12 @@ public:
 
     void
     Deallocate(void* p) override {
-        raw_allocator_->Deallocate(p);
+        allocator_->Deallocate(p);
     }
 
     void*
     Reallocate(void* p, size_t size) override {
-        auto ret = raw_allocator_->Reallocate(p, size);
+        auto ret = allocator_->Reallocate(p, size);
         if (not ret) {
             throw std::bad_alloc();
         }
@@ -59,15 +56,24 @@ public:
     }
     Allocator*
     GetRawAllocator() {
-        return raw_allocator_;
+        return allocator_;
     }
 
 public:
-    ~SafeAllocator() override = default;
+    ~SafeAllocator() override {
+        if (owner_) {
+            delete allocator_;
+        }
+    };
+
+    SafeAllocator&
+    operator=(const SafeAllocator&) = delete;
+    SafeAllocator(const SafeAllocator&) = delete;
 
 private:
-    Allocator* const raw_allocator_ = nullptr;
-    std::shared_ptr<Allocator> owned_allocator_ = nullptr;
+    Allocator* const allocator_{nullptr};
+
+    bool owner_{false};
 };
 
 }  // namespace vsag

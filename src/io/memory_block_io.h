@@ -35,12 +35,12 @@ namespace vsag {
 
 class MemoryBlockIO : public BasicIO<MemoryBlockIO> {
 public:
-    explicit MemoryBlockIO(Allocator* allocator, uint64_t block_size = DEFAULT_BLOCK_SIZE)
+    explicit MemoryBlockIO(SafeAllocator* allocator, uint64_t block_size = DEFAULT_BLOCK_SIZE)
         : block_size_(block_size), allocator_(allocator), blocks_(0, allocator) {
     }
 
     MemoryBlockIO(const JsonType& io_param, const IndexCommonParam& common_param)
-        : allocator_(common_param.allocator_), blocks_(0, common_param.allocator_) {
+        : allocator_(common_param.allocator_.get()), blocks_(0, common_param.allocator_.get()) {
         if (io_param.contains(BLOCK_IO_BLOCK_SIZE_KEY)) {
             this->block_size_ =
                 io_param[BLOCK_IO_BLOCK_SIZE_KEY];  // TODO(LHT): trans str to uint64_t
@@ -106,7 +106,7 @@ private:
 
     Vector<uint8_t*> blocks_;
 
-    Allocator* const allocator_{nullptr};
+    SafeAllocator* const allocator_{nullptr};
 
     static const uint64_t DEFAULT_BLOCK_SIZE = 128 * 1024 * 1024;  // 128MB
 };
@@ -192,7 +192,8 @@ MemoryBlockIO::check_and_realloc(uint64_t size) {
     const uint64_t new_block_count = (size + this->block_size_ - 1) / block_size_;
     auto cur_block_size = this->blocks_.size();
     while (cur_block_size < new_block_count) {
-        this->blocks_.emplace_back((uint8_t*)(allocator_->Allocate(block_size_)));
+        auto* new_data = (uint8_t*)(allocator_->Allocate(block_size_));
+        this->blocks_.emplace_back(new_data);
         ++cur_block_size;
     }
 }

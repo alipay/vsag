@@ -181,3 +181,5 @@ data/
 /testresult/
 *.index
 
+/build-release/
+*.so.[0-9]*

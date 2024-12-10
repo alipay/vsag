@@ -76,7 +76,7 @@ build_pyvsag() {
         echo ""
         exit 1
     fi
-    find python/pyvsag -type f -name "*.so*" -exec patchelf --set-rpath '$$ORIGIN' {} \;
+    find python/pyvsag -type f -name "*.so*" -exec patchelf --set-rpath '$ORIGIN' {} \;
     find python/pyvsag -type f -name "*.so*" -exec sh -c "readelf -d {} | grep RUNPATH" \;
 
     # step 4: build wheel

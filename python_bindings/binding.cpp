@@ -53,20 +53,6 @@ readBinaryPOD(std::istream& in, T& podRef) {
     in.read((char*)&podRef, sizeof(T));
 }
 
-py::array_t<float>
-kmeans(py::array_t<float, py::array::c_style | py::array::forcecast>& datas,
-       int clusters,
-       const std::string& dis_type) {
-    auto data_shape = datas.shape();
-    py::ssize_t py_clusters(clusters);
-    auto data_size = data_shape[0];
-    auto dimension = data_shape[1];
-    auto centroids = py::array_t<float>(py::array::ShapeContainer{py_clusters, dimension});
-    vsag::kmeans_clustering(
-        dimension, data_size, clusters, datas.data(), centroids.mutable_data(), dis_type);
-    return centroids;
-}
-
 class Index {
 public:
     Index(std::string name, const std::string& parameters) {
@@ -175,7 +161,6 @@ private:
 };
 
 PYBIND11_MODULE(_pyvsag, m) {
-    m.def("kmeans", &kmeans, "Kmeans");
     m.def("set_logger_off", &SetLoggerOff, "SetLoggerOff");
     m.def("set_logger_info", &SetLoggerInfo, "SetLoggerInfo");
     m.def("set_logger_debug", &SetLoggerDebug, "SetLoggerDebug");

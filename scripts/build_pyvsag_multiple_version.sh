@@ -32,6 +32,8 @@ get_linked_libraries() {
 }
 
 build_pyvsag() {
+    set -e
+
     local PYTHON_PATH=$1
     local CMAKE_ARGS=$2
     local CMAKE_BUILD_ARGS=$3
@@ -41,10 +43,11 @@ build_pyvsag() {
     rm $CMAKE_BUILD_DIR/* -rf
 
     # step 1: compile
+    CMAKE_ARGS="$CMAKE_ARGS -DENABLE_INTEL_MKL=OFF -DPython3_EXECUTABLE=$PYTHON_PATH"
     debug_echo "build_pyvsag::python path: $PYTHON_PATH"
     debug_echo "build_pyvsag::cmake config args: $CMAKE_ARGS"
     debug_echo "build_pyvsag::cmake build args: $CMAKE_BUILD_ARGS"
-    cmake $CMAKE_ARGS -DENABLE_INTEL_MKL=OFF -DPython3_EXECUTABLE=$PYTHON_PATH
+    cmake $CMAKE_ARGS
     cmake $CMAKE_BUILD_ARGS
 
     # step 2: collect libraries

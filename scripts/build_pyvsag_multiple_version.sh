@@ -40,8 +40,8 @@ build_pyvsag() {
     local CMAKE_BUILD_DIR=$4
 
     # step 0: clean build dir
-    if [ -d $CMAKE_BUILD_DIR/ ]; then
-        rm $CMAKE_BUILD_DIR/* -r
+    if [ ! -z "${CMAKE_BUILD_DIR}" ]; then
+        rm $CMAKE_BUILD_DIR/* -rf
     fi
 
     # step 1: compile

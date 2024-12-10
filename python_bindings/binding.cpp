@@ -195,10 +195,5 @@ PYBIND11_MODULE(_pyvsag, m) {
              py::arg("threshold"),
              py::arg("parameters"))
         .def("save", &Index::Save, py::arg("filename"))
-        .def("load", &Index::Load, py::arg("filename"))
-        .def("batch_knn_search",
-             &Index::BatchKnnSearch,
-             py::arg("vector"),
-             py::arg("k"),
-             py::arg("parameters"));
+        .def("load", &Index::Load, py::arg("filename"));
 }

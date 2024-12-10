@@ -41,7 +41,7 @@ public:
     bool
     Serialize(char*& buffer, size_t cur_element_count);
 
-    bool
+    size_t
     Serialize(std::ostream& ofs, size_t cur_element_count);
 
     bool
@@ -57,7 +57,7 @@ public:
         return max_elements_ * size_data_per_element_;
     }
 
-    bool
+    size_t
     SerializeImpl(StreamWriter& writer, uint64_t cur_element_count);
 
     bool

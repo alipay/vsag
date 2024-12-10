@@ -67,9 +67,9 @@ IOStreamReader::GetCursor() const {
 BufferStreamReader::BufferStreamReader(StreamReader* reader,
                                        size_t max_size,
                                        vsag::Allocator* allocator)
-    : reader_impl_(reader), max_size_(max_size), buffer_(allocator), StreamReader() {
+    : reader_impl_(reader), max_size_(max_size), StreamReader() {
     buffer_size_ = std::min(max_size_, vsag::Options::Instance().block_size_limit());
-    buffer_.resize(buffer_size_);
+    buffer_ = std::allocate_shared<char[]>(vsag::AllocatorWrapper<char[]>(allocator), buffer_size_);
     buffer_cursor_ = buffer_size_;
     valid_size_ = buffer_size_;
 }
@@ -87,7 +87,7 @@ BufferStreamReader::Read(char* data, uint64_t size) {
         // If there is available data in buffer_, copy it to dest
         if (available_in_src > 0) {
             size_t bytes_to_copy = std::min(size - total_copied, available_in_src);
-            memcpy(data + total_copied, buffer_.data() + buffer_cursor_, bytes_to_copy);
+            memcpy(data + total_copied, buffer_.get() + buffer_cursor_, bytes_to_copy);
             total_copied += bytes_to_copy;
             buffer_cursor_ += bytes_to_copy;
         }
@@ -103,7 +103,7 @@ BufferStreamReader::Read(char* data, uint64_t size) {
             throw std::runtime_error(
                 "BufferStreamReader: The file size is smaller than the memory you want to read.");
         }
-        reader_impl_->Read(buffer_.data(), valid_size_);
+        reader_impl_->Read(buffer_.get(), valid_size_);
         cursor_ += valid_size_;
     }
 }

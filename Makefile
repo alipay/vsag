@@ -1,5 +1,5 @@
 
-CMAKE_GENERATOR ?= "'Unix Makefiles'"
+CMAKE_GENERATOR ?= "Unix Makefiles"
 CMAKE_INSTALL_PREFIX ?= "/usr/local/"
 COMPILE_JOBS ?= 4
 DEBUG_BUILD_DIR ?= "./build/"

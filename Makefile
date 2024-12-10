@@ -22,7 +22,7 @@ help:                    ## Show the help.
 
 .PHONY: debug
 debug:                   ## Build vsag with debug options.
-	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Debug -DENABLE_CCACHE=ON -DENABLE_ASAN=OFF
+	cmake ${VSAG_CMAKE_ARGS} -DCMAKE_BUILD_TYPE=Debug -DENABLE_CCACHE=ON -DENABLE_ASAN=OFF -DENABLE_EXAMPLES=ON
 	cmake --build build --parallel ${COMPILE_JOBS}
 
 .PHONY: release

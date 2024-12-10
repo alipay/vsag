@@ -14,10 +14,13 @@
 // limitations under the License.
 
 #include "pyramid.h"
-
-#include "logger.h"
-
+#include "../logger.h"
+#include <iostream>
 namespace vsag {
+
+
+template <typename T>
+using Deque = std::deque<T, vsag::AllocatorWrapper<T>>;
 
 constexpr static const char PART_SLASH = '/';
 std::vector<std::string>
@@ -61,6 +64,9 @@ Pyramid::Add(const DatasetPtr& base) {
     for (int i = 0; i < data_num; ++i) {
         std::string current_path = path[i];
         auto result = split(current_path, PART_SLASH);
+        if (indexes_.find(result[0]) == indexes_.end()) {
+            indexes_[result[0]] = std::make_shared<IndexNode>(commom_param_.allocator_);
+        }
         std::shared_ptr<IndexNode> node = indexes_.at(result[0]);
         DatasetPtr single_data = Dataset::Make();
         single_data->Owner(false)
@@ -73,16 +79,14 @@ Pyramid::Add(const DatasetPtr& base) {
                 node->index->Add(single_data);
             }
             if (node->children.find(result[i]) == node->children.end()) {
-                if (j == result.size() - 1) {
-                    node->children[result[i]] = std::make_shared<IndexNode>(
-                        commom_param_.allocator_, pyramid_param_.index_builder);
-                } else {
-                    node->children[result[i]] =
-                        std::make_shared<IndexNode>(commom_param_.allocator_);
-                }
+                node->children[result[i]] =
+                    std::make_shared<IndexNode>(commom_param_.allocator_);
             }
             node = node->children[result[i]];
         }
+        node->CreateIndex(pyramid_param_.index_builder);
+        node->index->Add(single_data);
+        std::cout << "insert:" <<  current_path << std::endl;
     }
     return {};
 }
@@ -93,10 +97,6 @@ Pyramid::KnnSearch(const DatasetPtr& query,
                    const std::string& parameters,
                    BitsetPtr invalid) const {
     auto path = query->GetPaths();
-    int64_t data_num = query->GetNumElements();
-    int64_t data_dim = query->GetDim();
-    auto data_ids = query->GetIds();
-    auto data_vectors = query->GetFloat32Vectors();
 
     std::string current_path = path[0];
     auto parsed_path = split(current_path, PART_SLASH);
@@ -109,6 +109,7 @@ Pyramid::KnnSearch(const DatasetPtr& query,
     std::shared_ptr<IndexNode> root = indexes_.at(parsed_path[0]);
     for (int j = 0; j < parsed_path.size(); ++j) {
         if (root->children.find(parsed_path[j]) == root->children.end()) {
+            std::cout << "search:" << current_path << std::endl;
             auto ret = Dataset::Make();
             ret->Dim(0)->NumElements(1);
             return ret;

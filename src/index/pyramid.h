@@ -16,19 +16,18 @@
 #pragma once
 
 #include "pyramid_zparameters.h"
-#include "safe_allocator.h"
-#include "typing.h"
-#include "vsag/vsag.h"
+#include "../safe_allocator.h"
 
 namespace vsag {
 
 struct IndexNode {
     std::shared_ptr<Index> index{nullptr};
     UnorderedMap<std::string, std::shared_ptr<IndexNode>> children;
-    IndexNode(Allocator* allocator, IndexBuildFunction func = nullptr) : children(allocator) {
-        if (nullptr != func) {
-            index = func();
-        }
+    IndexNode(Allocator* allocator) : children(allocator) {
+    }
+
+    void CreateIndex(IndexBuildFunction func) {
+        index = func();
     }
 };
 

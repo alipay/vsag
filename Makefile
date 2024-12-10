@@ -114,6 +114,11 @@ libcxx:                  ## Build vsag using libc++.
 install:                 ## Build and install the release version of vsag.
 	cmake --install ${RELEASE_BUILD_DIR}/
 
+
+PARAM1 := "${VSAG_CMAKE_ARGS} -B${RELEASE_BUILD_DIR} -DCMAKE_BUILD_TYPE=Release"
+PARAM2 := "--build ${RELEASE_BUILD_DIR} --parallel ${COMPILE_JOBS}"
+PARAM3 := "${RELEASE_BUILD_DIR}"
+
 .PHONY: pyvsag           ## Build pyvsag wheel
 pyvsag:
-	bash ./scripts/build_pyvsag_multiple_version.sh "${VSAG_CMAKE_ARGS} -B${RELEASE_BUILD_DIR} -DCMAKE_BUILD_TYPE=Release" "--build ${RELEASE_BUILD_DIR} --parallel ${COMPILE_JOBS}" "${RELEASE_BUILD_DIR}"
+	bash ./scripts/build_pyvsag_multiple_version.sh $(PARAM1) $(PARAM2) $(PARAM3)

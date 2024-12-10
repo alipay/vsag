@@ -89,12 +89,12 @@ build_pyvsag() {
     done
 }
 
-debug_echo ">> $1"
-debug_echo ">> $2"
-debug_echo ">> $3"
-CMAKE_ARGS=$1
-CMAKE_BUILD_ARGS=$2
-CMAKE_BUILD_DIR=$3
+CMAKE_ARGS="$1"
+CMAKE_BUILD_ARGS="$2"
+CMAKE_BUILD_DIR="$3"
+debug_echo ">> $CMAKE_ARGS"
+debug_echo ">> $CMAKE_BUILD_ARGS"
+debug_echo ">> $CMAKE_BUILD_DIR"
 check_env_python
 for p in "${AVAILABLE_PYTHON_PATHS[@]}"; do
     echo "compiling pyvsag for $p ..."

@@ -83,7 +83,7 @@ build_pyvsag() {
     cd python/ && python3 setup.py bdist_wheel && cd ../
 
     # step 5: clean workdir
-    python3 setup.py clean --all
+    cd python/ && python3 setup.py clean --all && cd ../
     for lib in $(find ./python/pyvsag -name *.so*); do
         rm $lib
     done

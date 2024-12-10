@@ -47,8 +47,8 @@ build_pyvsag() {
     debug_echo "build_pyvsag::python path: $PYTHON_PATH"
     debug_echo "build_pyvsag::cmake config args: $CMAKE_ARGS"
     debug_echo "build_pyvsag::cmake build args: $CMAKE_BUILD_ARGS"
-    cmake $CMAKE_ARGS
-    cmake $CMAKE_BUILD_ARGS
+    cmake "$CMAKE_ARGS"
+    cmake "$CMAKE_BUILD_ARGS"
 
     # step 2: collect libraries
     PYVSAG_CPYTHON_SO_COUNT=$(find $CMAKE_BUILD_DIR/ -name _pyvsag.cpython*.so | wc -l)

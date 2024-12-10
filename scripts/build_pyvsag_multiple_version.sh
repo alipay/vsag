@@ -80,10 +80,10 @@ build_pyvsag() {
     find python/pyvsag -type f -name "*.so*" -exec sh -c "readelf -d {} | grep RUNPATH" \;
 
     # step 4: build wheel
-    cd python/ && python3 setup.py bdist_wheel && cd ../
+    cd python/ && $PYTHON_PATH setup.py bdist_wheel && cd ../
 
     # step 5: clean workdir
-    cd python/ && python3 setup.py clean --all && cd ../
+    cd python/ && $PYTHON_PATH setup.py clean --all && cd ../
     for lib in $(find ./python/pyvsag -name *.so*); do
         rm $lib
     done

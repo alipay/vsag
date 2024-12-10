@@ -45,12 +45,12 @@ build_pyvsag() {
     fi
 
     # step 1: compile
-    CMAKE_ARGS="$CMAKE_ARGS -DENABLE_INTEL_MKL=OFF -DPython3_EXECUTABLE=$PYTHON_PATH"
+    CMAKE_ARGS=($CMAKE_ARGS -DENABLE_INTEL_MKL=OFF -DPython3_EXECUTABLE=$PYTHON_PATH)
     debug_echo "build_pyvsag::python path: $PYTHON_PATH"
-    debug_echo "build_pyvsag::cmake config args: $CMAKE_ARGS"
+    debug_echo "build_pyvsag::cmake config args: ${CMAKE_ARGS[@]}"
     debug_echo "build_pyvsag::cmake build args: $CMAKE_BUILD_ARGS"
-    cmake "$CMAKE_ARGS"
-    cmake "$CMAKE_BUILD_ARGS"
+    cmake "${CMAKE_ARGS[@]}"
+    cmake $CMAKE_BUILD_ARGS
 
     # step 2: collect libraries
     PYVSAG_CPYTHON_SO_COUNT=$(find $CMAKE_BUILD_DIR/ -name _pyvsag.cpython*.so | wc -l)
@@ -98,5 +98,6 @@ debug_echo ">> $CMAKE_BUILD_DIR"
 check_env_python
 for p in "${AVAILABLE_PYTHON_PATHS[@]}"; do
     echo "compiling pyvsag for $p ..."
-    build_pyvsag "$p" "$CMAKE_ARGS" "$CMAKE_BUILD_ARGS" "${CMAKE_BUILD_DIR}"
+    BP_ARGS=("$p" "$CMAKE_ARGS" "$CMAKE_BUILD_ARGS" "${CMAKE_BUILD_DIR}")
+    build_pyvsag "${BP_ARGS[@]}"
 done

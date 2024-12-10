@@ -1,5 +1,5 @@
 
-CMAKE_GENERATOR ?= "'Unix Makefiles'"
+CMAKE_GENERATOR ?= "Unix Makefiles"
 CMAKE_INSTALL_PREFIX ?= "/usr/local/"
 COMPILE_JOBS ?= 4
 DEBUG_BUILD_DIR ?= "./build/"
@@ -115,7 +115,7 @@ install:                 ## Build and install the release version of vsag.
 	cmake --install ${RELEASE_BUILD_DIR}/
 
 
-PARAM1 := "${VSAG_CMAKE_ARGS} -B${RELEASE_BUILD_DIR} -DCMAKE_BUILD_TYPE=Release"
+PARAM1 := "-DNUM_BUILDING_JOBS=${COMPILE_JOBS} -DENABLE_PYBINDS=1 -S. -B${RELEASE_BUILD_DIR} -DCMAKE_BUILD_TYPE=Release"
 PARAM2 := "--build ${RELEASE_BUILD_DIR} --parallel ${COMPILE_JOBS}"
 PARAM3 := "${RELEASE_BUILD_DIR}"
 

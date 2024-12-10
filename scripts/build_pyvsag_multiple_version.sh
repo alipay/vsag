@@ -40,7 +40,7 @@ build_pyvsag() {
     local CMAKE_BUILD_DIR=$4
 
     # step 0: clean build dir
-    rm $CMAKE_BUILD_DIR/* -rf
+    rm $CMAKE_BUILD_DIR/* -r
 
     # step 1: compile
     CMAKE_ARGS="$CMAKE_ARGS -DENABLE_INTEL_MKL=OFF -DPython3_EXECUTABLE=$PYTHON_PATH"
@@ -87,6 +87,9 @@ build_pyvsag() {
     done
 }
 
+debug_echo ">> $1"
+debug_echo ">> $2"
+debug_echo ">> $3"
 CMAKE_ARGS=$1
 CMAKE_BUILD_ARGS=$2
 CMAKE_BUILD_DIR=$3

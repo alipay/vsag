@@ -956,10 +956,10 @@ public:
 
     size_t
     calcSerializeSize() override {
-        std::stringstream out_stream;
-        IOStreamWriter writer(out_stream);
-        size_t size = SerializeImpl(writer);
-        return size;
+        auto calSizeFunc = [](uint64_t cursor, uint64_t size, void* buf) { return; };
+        WriteFuncStreamWriter writer(calSizeFunc, 0);
+        SerializeImpl(writer);
+        return writer.cursor_;
     }
 
     void

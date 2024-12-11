@@ -956,58 +956,10 @@ public:
 
     size_t
     calcSerializeSize() override {
-        // std::ofstream output(location, std::ios::binary);
-        // std::streampos position;
-        size_t size = 0;
-
-        // writeBinaryPOD(output, offsetLevel0_);
-        size += sizeof(offsetLevel0_);
-        // writeBinaryPOD(output, max_elements_);
-        size += sizeof(max_elements_);
-        // writeBinaryPOD(output, cur_element_count_);
-        size += sizeof(cur_element_count_);
-        // writeBinaryPOD(output, size_data_per_element_);
-        size += sizeof(size_data_per_element_);
-        // writeBinaryPOD(output, label_offset_);
-        size += sizeof(label_offset_);
-        // writeBinaryPOD(output, offsetData_);
-        size += sizeof(offsetData_);
-        // writeBinaryPOD(output, maxlevel_);
-        size += sizeof(maxlevel_);
-        // writeBinaryPOD(output, enterpoint_node_);
-        size += sizeof(enterpoint_node_);
-        // writeBinaryPOD(output, maxM_);
-        size += sizeof(maxM_);
-
-        // writeBinaryPOD(output, maxM0_);
-        size += sizeof(maxM0_);
-        // writeBinaryPOD(output, M_);
-        size += sizeof(M_);
-        // writeBinaryPOD(output, mult_);
-        size += sizeof(mult_);
-        // writeBinaryPOD(output, ef_construction_);
-        size += sizeof(ef_construction_);
-
-        // output.write(data_level0_memory_, cur_element_count_ * size_data_per_element_);
-        size += data_level0_memory_->GetSize();
-        size += maxM0_ * sizeof(uint32_t) * max_elements_;
-        for (size_t i = 0; i < cur_element_count_; i++) {
-            unsigned int link_list_size =
-                element_levels_[i] > 0 ? size_links_per_element_ * element_levels_[i] : 0;
-            // writeBinaryPOD(output, link_list_size);
-            size += sizeof(link_list_size);
-            if (link_list_size) {
-                // output.write(link_lists_[i], link_list_size);
-                size += link_list_size * 2;  // record the size of reversed link list
-            }
-        }
-
-        if (normalize_) {
-            size += max_elements_ * sizeof(float);
-        }
-
-        // output.close();
-        return size;
+        auto calSizeFunc = [](uint64_t cursor, uint64_t size, void* buf) { return; };
+        WriteFuncStreamWriter writer(calSizeFunc, 0);
+        SerializeImpl(writer);
+        return writer.cursor_;
     }
 
     void
@@ -1033,40 +985,45 @@ public:
 
     template <typename T>
     static void
-    WriteOne(StreamWriter& writer, T& value) {
+    WriteOne(StreamWriter& writer, T& value, size_t& cursor) {
         writer.Write(reinterpret_cast<char*>(&value), sizeof(value));
+        cursor += sizeof(value);
     }
 
-    void
+    size_t
     SerializeImpl(StreamWriter& writer) {
-        WriteOne(writer, offsetLevel0_);
-        WriteOne(writer, max_elements_);
-        WriteOne(writer, cur_element_count_);
-        WriteOne(writer, size_data_per_element_);
-        WriteOne(writer, label_offset_);
-        WriteOne(writer, offsetData_);
-        WriteOne(writer, maxlevel_);
-        WriteOne(writer, enterpoint_node_);
-        WriteOne(writer, maxM_);
+        size_t cursor = 0;
+        WriteOne(writer, offsetLevel0_, cursor);
+        WriteOne(writer, max_elements_, cursor);
+        WriteOne(writer, cur_element_count_, cursor);
+        WriteOne(writer, size_data_per_element_, cursor);
+        WriteOne(writer, label_offset_, cursor);
+        WriteOne(writer, offsetData_, cursor);
+        WriteOne(writer, maxlevel_, cursor);
+        WriteOne(writer, enterpoint_node_, cursor);
+        WriteOne(writer, maxM_, cursor);
 
-        WriteOne(writer, maxM0_);
-        WriteOne(writer, M_);
-        WriteOne(writer, mult_);
-        WriteOne(writer, ef_construction_);
+        WriteOne(writer, maxM0_, cursor);
+        WriteOne(writer, M_, cursor);
+        WriteOne(writer, mult_, cursor);
+        WriteOne(writer, ef_construction_, cursor);
 
-        data_level0_memory_->SerializeImpl(writer, cur_element_count_);
+        cursor += data_level0_memory_->SerializeImpl(writer, cur_element_count_);
 
         for (size_t i = 0; i < cur_element_count_; i++) {
             unsigned int link_list_size =
                 element_levels_[i] > 0 ? size_links_per_element_ * element_levels_[i] : 0;
-            WriteOne(writer, link_list_size);
+            WriteOne(writer, link_list_size, cursor);
             if (link_list_size) {
                 writer.Write(link_lists_[i], link_list_size);
+                cursor += link_list_size;
             }
         }
         if (normalize_) {
             writer.Write(reinterpret_cast<char*>(molds_), max_elements_ * sizeof(float));
+            cursor += max_elements_ * sizeof(float);
         }
+        return cursor;
     }
 
     template <typename T>

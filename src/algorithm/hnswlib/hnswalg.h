@@ -360,6 +360,9 @@ public:
     dealNoInEdge(InnerIdType id, int level, int m_curmax, int skip_c);
 
     void
+    updatePoint(LabelType old_label, LabelType new_label, const void* data_point);
+
+    void
     removePoint(LabelType label);
 
     InnerIdType

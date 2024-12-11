@@ -89,7 +89,7 @@ public:
         {
             std::unique_lock<std::mutex> lock(poolguard_);
             if (not pool_.empty()) {
-                rez = pool_.front();
+                rez = pool_.back();
                 pool_.pop_back();
             } else {
                 rez = std::make_shared<VisitedList>(max_element_count_, allocator_);

@@ -93,7 +93,7 @@ BlockManager::Serialize(char*& buffer, size_t cur_element_count) {
     return this->SerializeImpl(writer, cur_element_count);
 }
 
-bool
+size_t
 BlockManager::Serialize(std::ostream& ofs, size_t cur_element_count) {
     IOStreamWriter writer(ofs);
     return this->SerializeImpl(writer, cur_element_count);
@@ -113,7 +113,7 @@ BlockManager::Deserialize(std::istream& ifs, size_t cur_element_count) {
     return this->DeserializeImpl(reader, cur_element_count);
 }
 
-bool
+size_t
 BlockManager::SerializeImpl(StreamWriter& writer, uint64_t cur_element_count) {
     size_t store_size = cur_element_count * size_data_per_element_;
     try {
@@ -128,9 +128,9 @@ BlockManager::SerializeImpl(StreamWriter& writer, uint64_t cur_element_count) {
             }
         }
     } catch (const std::ios_base::failure&) {
-        return false;
+        throw std::runtime_error("fail to serialize block manager");
     }
-    return true;
+    return cur_element_count * size_data_per_element_;
 }
 
 bool

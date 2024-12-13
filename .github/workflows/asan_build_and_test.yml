@@ -34,6 +34,7 @@ jobs:
         run:
           export CC=`which gcc`
           export CXX=`which g++`
+          sh scripts/deps/install_deps_ubuntu.sh
           make clean asan
       - name: Save Test
         uses: actions/upload-artifact@v4

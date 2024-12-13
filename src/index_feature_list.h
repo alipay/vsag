@@ -13,10 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "hgraph_index.h"
+#pragma once
+
+#include <cstdint>
+#include <vector>
+
+#include "vsag/index_feature.h"
+
 namespace vsag {
-HGraphIndex::HGraphIndex(const vsag::JsonType& index_param,
-                         const vsag::IndexCommonParam& common_param) noexcept {
-    this->hgraph_ = std::make_unique<HGraph>(index_param, common_param);
-}
+class IndexFeatureList {
+public:
+    explicit IndexFeatureList();
+
+    bool
+    CheckFeature(IndexFeature feature);
+
+    void
+    SetFeature(IndexFeature feature, bool val = true);
+
+private:
+    std::vector<uint8_t> data_{};
+
+    const uint32_t feature_count_{0};
+};
 }  // namespace vsag

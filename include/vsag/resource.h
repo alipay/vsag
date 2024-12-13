@@ -13,10 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "hgraph_index.h"
+#pragma once
+
+#include <memory>
+
+#include "allocator.h"
+
 namespace vsag {
-HGraphIndex::HGraphIndex(const vsag::JsonType& index_param,
-                         const vsag::IndexCommonParam& common_param) noexcept {
-    this->hgraph_ = std::make_unique<HGraph>(index_param, common_param);
-}
+struct Resource {
+public:
+    explicit Resource(Allocator* allocator = nullptr);
+
+    virtual ~Resource() = default;
+
+public:
+    std::shared_ptr<Allocator> allocator;
+
+    // std::shared_ptr<> thread_pool;
+};
 }  // namespace vsag

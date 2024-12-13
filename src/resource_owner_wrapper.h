@@ -13,10 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "hgraph_index.h"
+#pragma once
+
+#include "vsag/resource.h"
+
 namespace vsag {
-HGraphIndex::HGraphIndex(const vsag::JsonType& index_param,
-                         const vsag::IndexCommonParam& common_param) noexcept {
-    this->hgraph_ = std::make_unique<HGraph>(index_param, common_param);
-}
+class ResourceOwnerWrapper : public Resource {
+public:
+    explicit ResourceOwnerWrapper(Resource* resource, bool owned = false)
+        : resource_(resource), owned_(owned) {
+    }
+
+    ~ResourceOwnerWrapper() override {
+        if (owned_) {
+            delete resource_;
+        }
+    }
+
+private:
+    Resource* resource_{nullptr};
+    bool owned_{false};
+};
 }  // namespace vsag

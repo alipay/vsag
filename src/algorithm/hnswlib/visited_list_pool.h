@@ -89,8 +89,8 @@ public:
         {
             std::unique_lock<std::mutex> lock(poolguard_);
             if (not pool_.empty()) {
-                rez = pool_.back();
-                pool_.pop_back();
+                rez = pool_.front();
+                pool_.pop_front();
             } else {
                 rez = std::make_shared<VisitedList>(max_element_count_, allocator_);
             }
@@ -102,11 +102,11 @@ public:
     void
     releaseVisitedList(VisitedListPtr vl) {
         std::unique_lock<std::mutex> lock(poolguard_);
-        pool_.emplace_back(vl);
+        pool_.push_back(vl);
     }
 
 private:
-    vsag::Vector<VisitedListPtr> pool_;
+    vsag::Deque<VisitedListPtr> pool_;
     std::mutex poolguard_;
     uint64_t max_element_count_;
     vsag::Allocator* allocator_;

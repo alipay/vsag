@@ -32,9 +32,9 @@ jobs:
           key: build-${{ hashFiles('./CMakeLists.txt') }}-${{ hashFiles('./.circleci/fresh_ci_cache.commit') }}
       - name: Make Asan
         run:
-          export CC=`which gcc`
-          export CXX=`which g++`
-          sh scripts/deps/install_deps_ubuntu.sh
+          export CC=`which gcc` &&
+          export CXX=`which g++` &&
+          sh scripts/deps/install_deps_ubuntu.sh &&
           make clean asan
       - name: Save Test
         uses: actions/upload-artifact@v4

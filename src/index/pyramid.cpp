@@ -14,10 +14,11 @@
 // limitations under the License.
 
 #include "pyramid.h"
-#include "../logger.h"
-#include <iostream>
-namespace vsag {
 
+#include <iostream>
+
+#include "../logger.h"
+namespace vsag {
 
 template <typename T>
 using Deque = std::deque<T, vsag::AllocatorWrapper<T>>;
@@ -51,7 +52,7 @@ split(const std::string& str, char delimiter) {
 
 tl::expected<std::vector<int64_t>, Error>
 Pyramid::Build(const DatasetPtr& base) {
-    return {};
+    return this->Add(base);
 }
 
 tl::expected<std::vector<int64_t>, Error>
@@ -78,15 +79,13 @@ Pyramid::Add(const DatasetPtr& base) {
             if (node->index) {
                 node->index->Add(single_data);
             }
-            if (node->children.find(result[i]) == node->children.end()) {
-                node->children[result[i]] =
-                    std::make_shared<IndexNode>(commom_param_.allocator_);
+            if (node->children.find(result[j]) == node->children.end()) {
+                node->children[result[j]] = std::make_shared<IndexNode>(commom_param_.allocator_);
             }
-            node = node->children[result[i]];
+            node = node->children.at(result[j]);
         }
         node->CreateIndex(pyramid_param_.index_builder);
         node->index->Add(single_data);
-        std::cout << "insert:" <<  current_path << std::endl;
     }
     return {};
 }
@@ -107,9 +106,9 @@ Pyramid::KnnSearch(const DatasetPtr& query,
         return ret;
     }
     std::shared_ptr<IndexNode> root = indexes_.at(parsed_path[0]);
-    for (int j = 0; j < parsed_path.size(); ++j) {
+    for (int j = 1; j < parsed_path.size(); ++j) {
         if (root->children.find(parsed_path[j]) == root->children.end()) {
-            std::cout << "search:" << current_path << std::endl;
+            std::cout << "search:" << parsed_path[j] << std::endl;
             auto ret = Dataset::Make();
             ret->Dim(0)->NumElements(1);
             return ret;

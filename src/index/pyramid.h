@@ -15,8 +15,8 @@
 
 #pragma once
 
-#include "pyramid_zparameters.h"
 #include "../safe_allocator.h"
+#include "pyramid_zparameters.h"
 
 namespace vsag {
 
@@ -26,7 +26,8 @@ struct IndexNode {
     IndexNode(Allocator* allocator) : children(allocator) {
     }
 
-    void CreateIndex(IndexBuildFunction func) {
+    void
+    CreateIndex(IndexBuildFunction func) {
         index = func();
     }
 };

@@ -64,7 +64,7 @@ int
 main(int argc, char** argv) {
     vsag::init();
 
-    int64_t num_vectors = 10000;
+    int64_t num_vectors = 100;
     int64_t dim = 128;
 
     // prepare ids and vectors
@@ -119,7 +119,7 @@ main(int argc, char** argv) {
         query_vector[i] = distrib_real(rng);
     }
     query_path[0] = create_random_string(false);
-
+    std::cout << "query_path:" << query_path[0] << std::endl;
     // search on the index
     auto pyramid_search_parameters = R"(
     {
@@ -136,7 +136,8 @@ main(int argc, char** argv) {
     // print the results
     std::cout << "results: " << std::endl;
     for (int64_t i = 0; i < result->GetDim(); ++i) {
-        std::cout << result->GetIds()[i] << ": " << result->GetDistances()[i] << std::endl;
+        std::cout << result->GetIds()[i] << ": " << result->GetDistances()[i]
+                  << "  path:" << paths[result->GetIds()[i]] << std::endl;
     }
 
     // free memory

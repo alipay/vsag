@@ -192,7 +192,9 @@ Pyramid::Add(const DatasetPtr& base) {
             }
             node = node->children.at(result[j]);
         }
-        node->CreateIndex(pyramid_param_.index_builder);
+        if (node->index == nullptr) {
+            node->CreateIndex(pyramid_param_.index_builder);
+        }
         node->index->Add(single_data);
     }
     return {};
@@ -231,7 +233,7 @@ Pyramid::KnnSearch(const DatasetPtr& query,
         auto node = candidate_indexes.front();
         candidate_indexes.pop_front();
         if (node->index) {
-            auto result = node->index->KnnSearch(query, k, parameters);
+            auto result = node->index->KnnSearch(query, k, parameters, invalid);
             if (result.has_value()) {
                 DatasetPtr r = result.value();
                 for (int i = 0; i < r->GetDim(); ++i) {
@@ -246,7 +248,7 @@ Pyramid::KnnSearch(const DatasetPtr& query,
                 candidate_indexes.emplace_back(item.second);
             }
         }
-        if (results.size() > k) {
+        while (results.size() > k) {
             results.pop();
         }
     }

@@ -58,6 +58,7 @@ reader_to_readerset(std::shared_ptr<Reader> reader);
 struct IndexNode {
     std::shared_ptr<Index> index{nullptr};
     UnorderedMap<std::string, std::shared_ptr<IndexNode>> children;
+    std::string name;
     IndexNode(Allocator* allocator) : children(allocator) {
     }
 

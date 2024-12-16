@@ -143,7 +143,7 @@ protected:
 
     template <typename T>
     static TestDatasetPtr
-    GenerateAndSetDataset(int64_t dim, int64_t count) {
+    GenerateAndSetDataset(int64_t dim, int64_t count, bool with_path = false) {
         std::string datatype = "float";
         if constexpr (std::is_same_v<T, int8_t>) {
             datatype = "int8";
@@ -152,9 +152,9 @@ protected:
         } else {
             // TODO throw;
         }
-        auto key = KeyGen(dim, count, datatype);
+        auto key = KeyGen(dim, count, datatype, "classic", with_path);
         if (datasets.find(key) == datasets.end()) {
-            datasets[key] = GenerateDataset<T>(dim, count);
+            datasets[key] = GenerateDataset<T>(dim, count, with_path);
         }
 
         return datasets[key];
@@ -162,11 +162,11 @@ protected:
 
     template <typename T>
     static TestDatasetPtr
-    GenerateDataset(int64_t dim, int64_t count) {
+    GenerateDataset(int64_t dim, int64_t count, bool with_path) {
         if constexpr (std::is_same_v<T, int8_t>) {
-            return GenerateDatasetInt8(dim, count);
+            return GenerateDatasetInt8(dim, count, with_path);
         } else if constexpr (std::is_same_v<T, float>) {
-            return GenerateDatasetFloat(dim, count);
+            return GenerateDatasetFloat(dim, count, with_path);
         } else {
             // TODO throw;
             return nullptr;
@@ -174,10 +174,10 @@ protected:
     }
 
     static TestDatasetPtr
-    GenerateDatasetFloat(int64_t dim, int64_t count);
+    GenerateDatasetFloat(int64_t dim, int64_t count, bool with_path);
 
     static TestDatasetPtr
-    GenerateDatasetInt8(int64_t dim, int64_t count) {
+    GenerateDatasetInt8(int64_t dim, int64_t count, bool with_path) {
         return nullptr;  // TODO
     };
 
@@ -185,9 +185,14 @@ protected:
     KeyGen(int64_t dim,
            uint64_t count,
            std::string datatype = "float",
-           std::string name = "classic") {
-        return fmt::format(
-            "[dim={}][count={}][type={}][dataset_name={}]", dim, count, datatype, name);
+           std::string name = "classic",
+           bool with_path = false) {
+        return fmt::format("[dim={}][count={}][type={}][dataset_name={}][with_path={}]",
+                           dim,
+                           count,
+                           datatype,
+                           name,
+                           with_path);
     }
 
     static std::string
@@ -195,8 +200,9 @@ protected:
                 uint64_t count,
                 std::string index_name,
                 std::string datatype = "float",
-                std::string dataset_name = "classic") {
-        auto str = KeyGen(dim, count, std::move(datatype), std::move(dataset_name));
+                std::string dataset_name = "classic",
+                bool with_path = false) {
+        auto str = KeyGen(dim, count, std::move(datatype), std::move(dataset_name), with_path);
         return str + fmt::format("[index_name={}]", index_name);
     }
 

@@ -287,7 +287,7 @@ CopyVector(const std::vector<T>& vec) {
 }
 
 TestDatasetPtr
-TestIndex::GenerateDatasetFloat(int64_t dim, int64_t count) {
+TestIndex::GenerateDatasetFloat(int64_t dim, int64_t count, bool with_path) {
     auto base = vsag::Dataset::Make();
     auto [ids, vectors] =
         generate_ids_and_vectors(count, dim, true, static_cast<int>(time(nullptr)));

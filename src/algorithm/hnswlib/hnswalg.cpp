@@ -1285,6 +1285,11 @@ HierarchicalNSW::addPoint(const void* data_point, LabelType label, int level) {
         if (level > 0)
             curlevel = level;
         element_levels_[cur_c] = curlevel;
+        memset(data_level0_memory_->GetElementPtr(cur_c, offsetLevel0_), 0, size_data_per_element_);
+
+        // Initialisation of the data and label
+        memcpy(getExternalLabeLp(cur_c), &label, sizeof(LabelType));
+        memcpy(getDataByInternalId(cur_c), data_point, data_size_);
     }
 
     std::shared_ptr<float[]> normalize_data;
@@ -1298,11 +1303,6 @@ HierarchicalNSW::addPoint(const void* data_point, LabelType label, int level) {
     int64_t currObj = enterpoint_node_;
     int64_t enterpoint_copy = enterpoint_node_;
 
-    memset(data_level0_memory_->GetElementPtr(cur_c, offsetLevel0_), 0, size_data_per_element_);
-
-    // Initialisation of the data and label
-    memcpy(getExternalLabeLp(cur_c), &label, sizeof(LabelType));
-    memcpy(getDataByInternalId(cur_c), data_point, data_size_);
     if (curlevel) {
         auto new_link_lists = (char*)allocator_->Reallocate(link_lists_[cur_c],
                                                             size_links_per_element_ * curlevel + 1);

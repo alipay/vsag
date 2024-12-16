@@ -20,6 +20,114 @@
 #include "../logger.h"
 namespace vsag {
 
+// Function to convert BinarySet to a Binary
+Binary
+binaryset_to_binary(const BinarySet binarySet) {
+    // 计算总大小
+    size_t totalSize = 0;
+    auto keys = binarySet.GetKeys();
+
+    for (const auto& key : keys) {
+        totalSize += sizeof(size_t) + key.size();  // key 的大小
+        totalSize += sizeof(size_t);               // Binary.size 的大小
+        totalSize += binarySet.Get(key).size;      // Binary.data 的大小
+    }
+
+    // 创建一个足够大的 Binary
+    Binary result;
+    result.data = std::shared_ptr<int8_t[]>(new int8_t[totalSize]);
+    result.size = totalSize;
+
+    size_t offset = 0;
+
+    // 编码 keys 和对应的 Binaries
+    for (const auto& key : keys) {
+        // 复制 key 大小和内容
+        size_t keySize = key.size();
+        memcpy(result.data.get() + offset, &keySize, sizeof(size_t));
+        offset += sizeof(size_t);
+        memcpy(result.data.get() + offset, key.data(), keySize);
+        offset += keySize;
+
+        // 获取 Binary 对象
+        Binary binary = binarySet.Get(key);
+        // 复制 Binary 大小和内容
+        memcpy(result.data.get() + offset, &binary.size, sizeof(size_t));
+        offset += sizeof(size_t);
+        memcpy(result.data.get() + offset, binary.data.get(), binary.size);
+        offset += binary.size;
+    }
+
+    return result;
+}
+
+// 从 Binary 解码恢复 BinarySet
+BinarySet
+binary_to_binaryset(const Binary binary) {
+    BinarySet binarySet;
+    size_t offset = 0;
+
+    while (offset < binary.size) {
+        // 读取 key 的大小
+        size_t keySize;
+        memcpy(&keySize, binary.data.get() + offset, sizeof(size_t));
+        offset += sizeof(size_t);
+
+        // 读取 key 的内容
+        std::string key(reinterpret_cast<const char*>(binary.data.get() + offset), keySize);
+        offset += keySize;
+
+        // 读取 Binary 大小
+        size_t binarySize;
+        memcpy(&binarySize, binary.data.get() + offset, sizeof(size_t));
+        offset += sizeof(size_t);
+
+        // 读取 Binary 数据
+        Binary newBinary;
+        newBinary.size = binarySize;
+        newBinary.data = std::shared_ptr<int8_t[]>(new int8_t[binarySize]);
+        memcpy(newBinary.data.get(), binary.data.get() + offset, binarySize);
+        offset += binarySize;
+
+        // 将新 Binary 放入 BinarySet
+        binarySet.Set(key, newBinary);
+    }
+
+    return binarySet;
+}
+
+ReaderSet
+reader_to_readerset(std::shared_ptr<Reader> reader) {
+    ReaderSet readerSet;
+    size_t offset = 0;
+
+    while (offset < reader->Size()) {
+        // 读取 key 的大小
+        size_t keySize;
+        reader->Read(offset, sizeof(size_t), &keySize);
+        offset += sizeof(size_t);
+        // 读取 key 的内容
+        std::shared_ptr<char[]> key_chars = std::shared_ptr<char[]>(new char[keySize]);
+        reader->Read(offset, keySize, key_chars.get());
+        std::string key(key_chars.get(), keySize);
+        offset += keySize;
+
+        // 读取 Binary 大小
+        size_t binarySize;
+        reader->Read(offset, sizeof(size_t), &binarySize);
+        offset += sizeof(size_t);
+
+        // 读取 Binary 数据
+        auto newReader = std::shared_ptr<SubReader>(new SubReader(reader, offset, binarySize));
+        offset += binarySize;
+
+        // 将新 Binary 放入 BinarySet
+        readerSet.Set(key, newReader);
+    }
+
+    return readerSet;
+}
+
 template <typename T>
 using Deque = std::deque<T, vsag::AllocatorWrapper<T>>;
 
@@ -201,11 +309,50 @@ Pyramid::RangeSearch(const DatasetPtr& query,
 
 tl::expected<BinarySet, Error>
 Pyramid::Serialize() const {
-    return {};
+    BinarySet binary_set;
+    for (const auto& root_index : indexes_) {
+        std::string path = root_index.first;
+        std::vector<std::pair<std::string, std::shared_ptr<IndexNode>>> need_serialize_indexes;
+        need_serialize_indexes.emplace_back(path, root_index.second);
+        while (not need_serialize_indexes.empty()) {
+            auto& [current_path, index_node] = need_serialize_indexes.back();
+            need_serialize_indexes.pop_back();
+            if (index_node->index) {
+                auto serialize_result = index_node->index->Serialize();
+                if (not serialize_result.has_value()) {
+                    return tl::unexpected(serialize_result.error());
+                }
+                binary_set.Set(current_path, binaryset_to_binary(serialize_result.value()));
+            }
+            for (const auto& sub_index_node : index_node->children) {
+                need_serialize_indexes.emplace_back(
+                    current_path + PART_SLASH + sub_index_node.first, sub_index_node.second);
+            }
+        }
+    }
+    return binary_set;
 }
 
 tl::expected<void, Error>
 Pyramid::Deserialize(const BinarySet& binary_set) {
+    auto keys = binary_set.GetKeys();
+    for (const auto& path : keys) {
+        const auto& binary = binary_set.Get(path);
+        auto parsed_path = split(path, PART_SLASH);
+        if (indexes_.find(parsed_path[0]) == indexes_.end()) {
+            indexes_[parsed_path[0]] = std::make_shared<IndexNode>(commom_param_.allocator_);
+        }
+        std::shared_ptr<IndexNode> node = indexes_.at(parsed_path[0]);
+        for (int j = 1; j < parsed_path.size(); ++j) {
+            if (node->children.find(parsed_path[j]) == node->children.end()) {
+                node->children[parsed_path[j]] =
+                    std::make_shared<IndexNode>(commom_param_.allocator_);
+            }
+            node = node->children.at(parsed_path[j]);
+        }
+        node->CreateIndex(pyramid_param_.index_builder);
+        node->index->Deserialize(binary_to_binaryset(binary));
+    }
     return {};
 }
 

@@ -46,11 +46,13 @@ public:
             allocator_->Deallocate((void*)this->GetDistances());
             allocator_->Deallocate((void*)this->GetInt8Vectors());
             allocator_->Deallocate((void*)this->GetFloat32Vectors());
+            allocator_->Deallocate((void*)this->GetPaths());
         } else {
             delete[] this->GetIds();
             delete[] this->GetDistances();
             delete[] this->GetInt8Vectors();
             delete[] this->GetFloat32Vectors();
+            delete[] this->GetPaths();
         }
     }
 

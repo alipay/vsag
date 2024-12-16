@@ -80,7 +80,7 @@ TestSerializeAndDeserializeMetricSQ4Uniform(uint64_t dim, int count, float error
         quantizer1, quantizer2, dim, count, error);
 }
 
-TEST_CASE("serialize&deserialize", "[ut][sq4_uniform_quantizer]") {
+TEST_CASE("serialize&deserialize", "[ut][SQ4UniformQuantizer]") {
     constexpr MetricType metrics[3] = {
         MetricType::METRIC_TYPE_L2SQR, MetricType::METRIC_TYPE_COSINE, MetricType::METRIC_TYPE_IP};
     for (auto dim : dims) {

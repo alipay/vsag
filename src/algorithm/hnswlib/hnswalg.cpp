@@ -936,7 +936,6 @@ HierarchicalNSW::getDataByLabel(LabelType label) const {
         throw std::runtime_error("Label not found");
     }
     InnerIdType internalId = search->second;
-    lock_table.unlock();
 
     char* data_ptrv = getDataByInternalId(internalId);
     auto* data_ptr = (float*)data_ptrv;
@@ -957,7 +956,6 @@ HierarchicalNSW::markDelete(LabelType label) {
     }
     InnerIdType internalId = search->second;
     label_lookup_.erase(search);
-    lock_table.unlock();
     markDeletedInternal(internalId);
 }
 

@@ -23,6 +23,8 @@
 #include "test_index.h"
 #include "vsag/vsag.h"
 
+const std::string tmp_dir = "/tmp/";
+
 namespace vsag {
 
 extern float
@@ -125,6 +127,52 @@ TEST_CASE("pyramid", "[ft][index][hnsw]") {
         ->Paths(paths)
         ->Owner(false);
     index->Build(base);
+
+    // Serialize(multi-file)
+    {
+        if (auto bs = index->Serialize(); bs.has_value()) {
+            index = nullptr;
+            auto keys = bs->GetKeys();
+            for (auto key : keys) {
+                vsag::Binary b = bs->Get(key);
+                std::ofstream file(tmp_dir + "pyramid.index." + key, std::ios::binary);
+                file.write((const char*)b.data.get(), b.size);
+                file.close();
+            }
+            std::ofstream metafile(tmp_dir + "pyramid.index._meta", std::ios::out);
+            for (auto key : keys) {
+                metafile << key << std::endl;
+            }
+            metafile.close();
+        } else if (bs.error().type == vsag::ErrorType::NO_ENOUGH_MEMORY) {
+            std::cerr << "no enough memory to serialize index" << std::endl;
+        }
+    }
+
+    // Deserialize(binaryset)
+    {
+        std::ifstream metafile(tmp_dir + "pyramid.index._meta", std::ios::in);
+        std::vector<std::string> keys;
+        std::string line;
+        while (std::getline(metafile, line)) {
+            keys.push_back(line);
+        }
+        metafile.close();
+
+        vsag::BinarySet bs;
+        for (auto key : keys) {
+            std::ifstream file(tmp_dir + "pyramid.index." + key, std::ios::in);
+            file.seekg(0, std::ios::end);
+            vsag::Binary b;
+            b.size = file.tellg();
+            b.data.reset(new int8_t[b.size]);
+            file.seekg(0, std::ios::beg);
+            file.read((char*)b.data.get(), b.size);
+            bs.Set(key, b);
+        }
+        index = vsag::Factory::CreateIndex("pyramid", pyramid_build_paramesters).value();
+        index->Deserialize(bs);
+    }
 
     // prepare a query vector
     // memory will be released by query the dataset since owner is set to true when creating the query.

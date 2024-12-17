@@ -132,6 +132,7 @@ template <typename T>
 using Deque = std::deque<T, vsag::AllocatorWrapper<T>>;
 
 constexpr static const char PART_SLASH = '/';
+constexpr static const char PART_OCTOTHORPE = '#';
 std::vector<std::string>
 split(const std::string& str, char delimiter) {
     std::vector<std::string> tokens;
@@ -317,7 +318,7 @@ Pyramid::Serialize() const {
         std::vector<std::pair<std::string, std::shared_ptr<IndexNode>>> need_serialize_indexes;
         need_serialize_indexes.emplace_back(path, root_index.second);
         while (not need_serialize_indexes.empty()) {
-            auto& [current_path, index_node] = need_serialize_indexes.back();
+            auto [current_path, index_node] = need_serialize_indexes.back();
             need_serialize_indexes.pop_back();
             if (index_node->index) {
                 auto serialize_result = index_node->index->Serialize();
@@ -328,7 +329,7 @@ Pyramid::Serialize() const {
             }
             for (const auto& sub_index_node : index_node->children) {
                 need_serialize_indexes.emplace_back(
-                    current_path + PART_SLASH + sub_index_node.first, sub_index_node.second);
+                    current_path + PART_OCTOTHORPE + sub_index_node.first, sub_index_node.second);
             }
         }
     }
@@ -340,7 +341,7 @@ Pyramid::Deserialize(const BinarySet& binary_set) {
     auto keys = binary_set.GetKeys();
     for (const auto& path : keys) {
         const auto& binary = binary_set.Get(path);
-        auto parsed_path = split(path, PART_SLASH);
+        auto parsed_path = split(path, PART_OCTOTHORPE);
         if (indexes_.find(parsed_path[0]) == indexes_.end()) {
             indexes_[parsed_path[0]] = std::make_shared<IndexNode>(commom_param_.allocator_);
         }

@@ -79,7 +79,8 @@ create_random_string(bool is_full) {
     return random_string;
 }
 
-TEST_CASE("pyramid", "[ft][index][hnsw]") {
+TEST_CASE("pyramid", "[ft][index][pyramid]") {
+    // TODO(inabao): Reconstruct the pyramid's tests using a new framework in the future.
     int64_t num_vectors = 1000;
     size_t dim = 128;
     int64_t topk = 10;

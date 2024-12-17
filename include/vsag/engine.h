@@ -13,10 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "hgraph_index.h"
+#pragma once
+
+#include <memory>
+
+#include "index.h"
+#include "resource.h"
+
 namespace vsag {
-HGraphIndex::HGraphIndex(const vsag::JsonType& index_param,
-                         const vsag::IndexCommonParam& common_param) noexcept {
-    this->hgraph_ = std::make_unique<HGraph>(index_param, common_param);
-}
+class Engine {
+public:
+    explicit Engine(Resource* resource = nullptr);
+
+    void
+    Shutdown();
+
+    tl::expected<std::shared_ptr<Index>, Error>
+    CreateIndex(const std::string& name, const std::string& parameters);
+
+private:
+    std::shared_ptr<Resource> resource_;
+};
 }  // namespace vsag

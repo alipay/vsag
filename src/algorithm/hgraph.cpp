@@ -97,6 +97,8 @@ HGraph::Init() {
         if (this->build_thread_count_ > 1) {
             this->build_pool_ = std::make_unique<progschj::ThreadPool>(this->build_thread_count_);
         }
+
+        this->init_features();
     } catch (const std::invalid_argument& e) {
         LOG_ERROR_AND_RETURNS(
             ErrorType::INVALID_ARGUMENT, "failed to init(invalid argument): ", e.what());
@@ -262,14 +264,14 @@ HGraph::hnsw_add(const DatasetPtr& data) {
             auto label = ids[i];
             auto inner_id = i + cur_count;
             {
-                std::unique_lock<std::shared_mutex> lock(this->label_lookup_mutex_);
+                std::lock_guard<std::shared_mutex> lock(this->label_lookup_mutex_);
                 this->label_lookup_[label] = inner_id;
                 this->labels_[inner_id] = label;
             }
 
             std::unique_lock<std::mutex> add_lock(add_mutex);
             if (level >= int64_t(this->max_level_) || bottom_graph_->TotalCount() == 0) {
-                std::unique_lock<std::shared_mutex> wlock(this->global_mutex_);
+                std::lock_guard<std::shared_mutex> wlock(this->global_mutex_);
                 for (int64_t j = max_level_; j <= level; ++j) {
                     this->route_graphs_.emplace_back(this->generate_one_route_graph());
                 }
@@ -548,7 +550,7 @@ HGraph::mutually_connect_new_element(InnerIdType cur_c,
     }
 
     for (auto selectedNeighbor : selected_neighbors) {
-        std::unique_lock<std::shared_mutex> lock(neighbors_mutex_[selectedNeighbor]);
+        std::lock_guard<std::shared_mutex> lock(neighbors_mutex_[selectedNeighbor]);
 
         Vector<InnerIdType> neighbors(allocator_);
         graph->GetNeighbors(selectedNeighbor, neighbors);
@@ -775,6 +777,8 @@ HGraph::add_one_point(const float* data, int level, InnerIdType inner_id) {
         .is_id_allowed_ = nullptr,
     };
 
+    std::lock_guard cur_lock(this->neighbors_mutex_[inner_id]);
+
     for (auto j = max_level_ - 1; j > level; --j) {
         result = search_one_graph(data, route_graphs_[j], basic_flatten_codes_, param);
         param.ep_ = result.top().second;
@@ -808,7 +812,52 @@ HGraph::resize(uint64_t new_size) {
         vsag::Vector<std::shared_mutex>(new_size, allocator_).swap(this->neighbors_mutex_);
         pool_ = std::make_shared<hnswlib::VisitedListPool>(new_size, allocator_);
         labels_.resize(new_size);
+        bottom_graph_->Resize(new_size);
         this->max_capacity_ = new_size;
+    }
+}
+void
+HGraph::init_features() {
+    // Common Init
+    feature_list_.SetFeatures({IndexFeature::SUPPORT_BUILD,
+                               IndexFeature::SUPPORT_BUILD_WITH_MULTI_THREAD,
+                               IndexFeature::SUPPORT_ADD_AFTER_BUILD,
+                               IndexFeature::SUPPORT_KNN_SEARCH,
+                               IndexFeature::SUPPORT_RANGE_SEARCH,
+                               IndexFeature::SUPPORT_KNN_SEARCH_WITH_ID_FILTER,
+                               IndexFeature::SUPPORT_RANGE_SEARCH_WITH_ID_FILTER,
+                               IndexFeature::SUPPORT_SEARCH_CONCURRENT,
+                               IndexFeature::SUPPORT_DESERIALIZE_BINARY_SET,
+                               IndexFeature::SUPPORT_DESERIALIZE_FILE,
+                               IndexFeature::SUPPORT_DESERIALIZE_READER_SET,
+                               IndexFeature::SUPPORT_SERIALIZE_BINARY_SET,
+                               IndexFeature::SUPPORT_SERIALIZE_FILE});
+
+    // About Train
+    auto name = this->basic_flatten_codes_->GetQuantizerName();
+    if (name != QUANTIZATION_TYPE_VALUE_FP32) {
+        feature_list_.SetFeature(IndexFeature::NEED_TRAIN);
+    } else {
+        feature_list_.SetFeature(IndexFeature::SUPPORT_CAL_DISTANCE_BY_ID);
+    }
+
+    // metric
+    if (metric_ == MetricType::METRIC_TYPE_IP) {
+        feature_list_.SetFeature(IndexFeature::SUPPORT_METRIC_TYPE_INNER_PRODUCT);
+    } else if (metric_ == MetricType::METRIC_TYPE_L2SQR) {
+        feature_list_.SetFeature(IndexFeature::SUPPORT_METRIC_TYPE_L2);
+    } else if (metric_ == MetricType::METRIC_TYPE_COSINE) {
+        feature_list_.SetFeature(IndexFeature::SUPPORT_METRIC_TYPE_COSINE);
+    }
+}
+
+tl::expected<bool, Error>
+HGraph::CheckFeature(IndexFeature feature) const {
+    try {
+        return this->feature_list_.CheckFeature(feature);
+    } catch (const std::invalid_argument& e) {
+        LOG_ERROR_AND_RETURNS(
+            ErrorType::INVALID_ARGUMENT, "[HGraph] failed to CheckFeature: ", e.what());
     }
 }
 

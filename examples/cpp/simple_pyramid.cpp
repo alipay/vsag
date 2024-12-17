@@ -38,17 +38,17 @@ create_random_string(bool is_full) {
         selected_levels.push_back(level2[rand() % level2.size()]);
         selected_levels.push_back(level3[rand() % level3.size()]);
     } else {
-        std::uniform_int_distribution<> dist(1, 3);
+        std::uniform_int_distribution<int> dist(1, 3);
         int num_levels = dist(mt);
 
         if (num_levels >= 1) {
-            selected_levels.push_back(level1[rand() % level1.size()]);
+            selected_levels.emplace_back(level1[rand() % level1.size()]);
         }
         if (num_levels >= 2) {
-            selected_levels.push_back(level2[rand() % level2.size()]);
+            selected_levels.emplace_back(level2[rand() % level2.size()]);
         }
         if (num_levels == 3) {
-            selected_levels.push_back(level3[rand() % level3.size()]);
+            selected_levels.emplace_back(level3[rand() % level3.size()]);
         }
     }
 
@@ -74,7 +74,7 @@ main(int argc, char** argv) {
 
     std::mt19937 rng;
     rng.seed(47);
-    std::uniform_real_distribution<> distrib_real;
+    std::uniform_real_distribution<float> distrib_real;
     for (int64_t i = 0; i < num_vectors; ++i) {
         ids[i] = i;
     }

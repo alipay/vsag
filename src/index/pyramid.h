@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include "vsag/vsag.h"
+#include "vsag/index.h"
 
 namespace vsag {
 
@@ -24,7 +24,7 @@ public:
     Pyramid() {
     }
 
-    ~Pyramid() = default;
+    ~Pyramid() override = default;
 
     tl::expected<std::vector<int64_t>, Error>
     Build(const DatasetPtr& base) override;
@@ -75,8 +75,6 @@ public:
 
     int64_t
     GetMemoryUsage() const override;
-
-private:
 };
 
 }  // namespace vsag

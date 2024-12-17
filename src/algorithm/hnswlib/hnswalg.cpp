@@ -1264,6 +1264,8 @@ InnerIdType
 HierarchicalNSW::addPoint(const void* data_point, LabelType label, int level) {
     InnerIdType cur_c = 0;
     int curlevel;
+    std::shared_ptr<float[]> normalize_data;
+    normalizeVector(data_point, normalize_data);
     {
         // Checking if the element with the same label already exists
         // if so, updating it *instead* of creating a new element.
@@ -1291,9 +1293,6 @@ HierarchicalNSW::addPoint(const void* data_point, LabelType label, int level) {
         memcpy(getExternalLabeLp(cur_c), &label, sizeof(LabelType));
         memcpy(getDataByInternalId(cur_c), data_point, data_size_);
     }
-
-    std::shared_ptr<float[]> normalize_data;
-    normalizeVector(data_point, normalize_data);
 
     std::shared_lock resize_lock(resize_mutex_);
     std::unique_lock lock(global_);

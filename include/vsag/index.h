@@ -1,3 +1,4 @@
+
 // Copyright 2024-present the vsag project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,11 +22,13 @@
 #include <stdexcept>
 
 #include "bitset.h"
+#include "features.h"
 #include "vsag/binaryset.h"
 #include "vsag/bitset.h"
 #include "vsag/dataset.h"
 #include "vsag/errors.h"
 #include "vsag/expected.hpp"
+#include "vsag/index_feature.h"
 #include "vsag/readerset.h"
 
 namespace vsag {
@@ -220,6 +223,11 @@ public:
     CalcDistanceById(const float* vector, int64_t id) const {
         throw std::runtime_error("Index doesn't support get distance by id");
     };
+
+    virtual tl::expected<bool, Error>
+    CheckFeature(IndexFeature feature) const {
+        throw std::runtime_error("Index doesn't support check feature");
+    }
 
 public:
     // [serialize/deserialize with binaryset]

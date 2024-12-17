@@ -20,3 +20,4 @@
 #include "sq4_quantizer.h"
 #include "sq4_uniform_quantizer.h"
 #include "sq8_quantizer.h"
+#include "sq8_uniform_quantizer.h"

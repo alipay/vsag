@@ -15,43 +15,35 @@
 
 #include "pyramid.h"
 
-#include <iostream>
-
 #include "../logger.h"
 namespace vsag {
 
 // Function to convert BinarySet to a Binary
 Binary
 binaryset_to_binary(const BinarySet binarySet) {
-    // 计算总大小
     size_t totalSize = 0;
     auto keys = binarySet.GetKeys();
 
     for (const auto& key : keys) {
-        totalSize += sizeof(size_t) + key.size();  // key 的大小
-        totalSize += sizeof(size_t);               // Binary.size 的大小
-        totalSize += binarySet.Get(key).size;      // Binary.data 的大小
+        totalSize += sizeof(size_t) + key.size();
+        totalSize += sizeof(size_t);
+        totalSize += binarySet.Get(key).size;
     }
 
-    // 创建一个足够大的 Binary
     Binary result;
     result.data = std::shared_ptr<int8_t[]>(new int8_t[totalSize]);
     result.size = totalSize;
 
     size_t offset = 0;
 
-    // 编码 keys 和对应的 Binaries
     for (const auto& key : keys) {
-        // 复制 key 大小和内容
         size_t keySize = key.size();
         memcpy(result.data.get() + offset, &keySize, sizeof(size_t));
         offset += sizeof(size_t);
         memcpy(result.data.get() + offset, key.data(), keySize);
         offset += keySize;
 
-        // 获取 Binary 对象
         Binary binary = binarySet.Get(key);
-        // 复制 Binary 大小和内容
         memcpy(result.data.get() + offset, &binary.size, sizeof(size_t));
         offset += sizeof(size_t);
         memcpy(result.data.get() + offset, binary.data.get(), binary.size);
@@ -61,35 +53,29 @@ binaryset_to_binary(const BinarySet binarySet) {
     return result;
 }
 
-// 从 Binary 解码恢复 BinarySet
 BinarySet
 binary_to_binaryset(const Binary binary) {
     BinarySet binarySet;
     size_t offset = 0;
 
     while (offset < binary.size) {
-        // 读取 key 的大小
         size_t keySize;
         memcpy(&keySize, binary.data.get() + offset, sizeof(size_t));
         offset += sizeof(size_t);
 
-        // 读取 key 的内容
         std::string key(reinterpret_cast<const char*>(binary.data.get() + offset), keySize);
         offset += keySize;
 
-        // 读取 Binary 大小
         size_t binarySize;
         memcpy(&binarySize, binary.data.get() + offset, sizeof(size_t));
         offset += sizeof(size_t);
 
-        // 读取 Binary 数据
         Binary newBinary;
         newBinary.size = binarySize;
         newBinary.data = std::shared_ptr<int8_t[]>(new int8_t[binarySize]);
         memcpy(newBinary.data.get(), binary.data.get() + offset, binarySize);
         offset += binarySize;
 
-        // 将新 Binary 放入 BinarySet
         binarySet.Set(key, newBinary);
     }
 
@@ -102,26 +88,21 @@ reader_to_readerset(std::shared_ptr<Reader> reader) {
     size_t offset = 0;
 
     while (offset < reader->Size()) {
-        // 读取 key 的大小
         size_t keySize;
         reader->Read(offset, sizeof(size_t), &keySize);
         offset += sizeof(size_t);
-        // 读取 key 的内容
         std::shared_ptr<char[]> key_chars = std::shared_ptr<char[]>(new char[keySize]);
         reader->Read(offset, keySize, key_chars.get());
         std::string key(key_chars.get(), keySize);
         offset += keySize;
 
-        // 读取 Binary 大小
         size_t binarySize;
         reader->Read(offset, sizeof(size_t), &binarySize);
         offset += sizeof(size_t);
 
-        // 读取 Binary 数据
         auto newReader = std::shared_ptr<SubReader>(new SubReader(reader, offset, binarySize));
         offset += binarySize;
 
-        // 将新 Binary 放入 BinarySet
         readerSet.Set(key, newReader);
     }
 
@@ -219,7 +200,6 @@ Pyramid::KnnSearch(const DatasetPtr& query,
     std::shared_ptr<IndexNode> root = indexes_.at(parsed_path[0]);
     for (int j = 1; j < parsed_path.size(); ++j) {
         if (root->children.find(parsed_path[j]) == root->children.end()) {
-            std::cout << "search:" << parsed_path[j] << std::endl;
             auto ret = Dataset::Make();
             ret->Dim(0)->NumElements(1);
             return ret;

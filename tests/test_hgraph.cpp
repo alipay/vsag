@@ -198,6 +198,9 @@ TEST_CASE_PERSISTENT_FIXTURE(fixtures::HgraphTestIndex,
                 TestContinueAdd(index, dataset, true);
                 if (index->CheckFeature(vsag::SUPPORT_KNN_SEARCH)) {
                     TestKnnSearch(index, dataset, search_param, recall, true);
+                    if (index->CheckFeature(vsag::SUPPORT_SEARCH_CONCURRENT)) {
+                        TestConcurrentKnnSearch(index, dataset, search_param, recall, true);
+                    }
                 }
                 if (index->CheckFeature(vsag::SUPPORT_RANGE_SEARCH)) {
                     TestRangeSearch(index, dataset, search_param, recall, 10, true);
@@ -230,6 +233,9 @@ TEST_CASE_PERSISTENT_FIXTURE(fixtures::HgraphTestIndex, "HGraph Build", "[ft][hg
                 TestBuildIndex(index, dataset, true);
                 if (index->CheckFeature(vsag::SUPPORT_KNN_SEARCH)) {
                     TestKnnSearch(index, dataset, search_param, recall, true);
+                    if (index->CheckFeature(vsag::SUPPORT_SEARCH_CONCURRENT)) {
+                        TestConcurrentKnnSearch(index, dataset, search_param, recall, true);
+                    }
                 }
                 if (index->CheckFeature(vsag::SUPPORT_RANGE_SEARCH)) {
                     TestRangeSearch(index, dataset, search_param, recall, 10, true);
@@ -262,6 +268,9 @@ TEST_CASE_PERSISTENT_FIXTURE(fixtures::HgraphTestIndex, "HGraph Add", "[ft][hgra
                 TestAddIndex(index, dataset, true);
                 if (index->CheckFeature(vsag::SUPPORT_KNN_SEARCH)) {
                     TestKnnSearch(index, dataset, search_param, recall, true);
+                    if (index->CheckFeature(vsag::SUPPORT_SEARCH_CONCURRENT)) {
+                        TestConcurrentKnnSearch(index, dataset, search_param, recall, true);
+                    }
                 }
                 if (index->CheckFeature(vsag::SUPPORT_RANGE_SEARCH)) {
                     TestRangeSearch(index, dataset, search_param, recall, 10, true);

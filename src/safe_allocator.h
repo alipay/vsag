@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <memory>
 #include <new>
 
 #include "vsag/allocator.h"

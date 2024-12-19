@@ -31,6 +31,8 @@
 #include "index/hnsw.h"
 #include "index/hnsw_zparameters.h"
 #include "index/index_common_param.h"
+#include "index/pyramid.h"
+#include "index/pyramid_zparameters.h"
 #include "vsag/vsag.h"
 
 namespace vsag {
@@ -83,6 +85,18 @@ Factory::CreateIndex(const std::string& origin_name,
                 std::make_shared<HGraphIndex>(hgraph_param.GetJson(), index_common_params);
             hgraph_index->Init();
             return hgraph_index;
+        } else if (name == INDEX_PYRAMID) {
+            if (allocator == nullptr) {
+                index_common_params.allocator_ = DefaultAllocator::Instance().get();
+            }
+            // read parameters from json, throw exception if not exists
+            CHECK_ARGUMENT(parsed_params.contains(INDEX_PARAM),
+                           fmt::format("parameters must contains {}", INDEX_PARAM));
+            auto& pyramid_param_obj = parsed_params[INDEX_PARAM];
+            auto pyramid_params =
+                PyramidParameters::FromJson(pyramid_param_obj, index_common_params);
+            logger::debug("created a pyramid index");
+            return std::make_shared<Pyramid>(pyramid_params, index_common_params);
         } else {
             LOG_ERROR_AND_RETURNS(
                 ErrorType::UNSUPPORTED_INDEX, "failed to create index(unsupported): ", name);
